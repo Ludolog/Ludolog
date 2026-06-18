@@ -1,0 +1,58 @@
+{
+  "name": "gamevalue-radar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GameValue Radar - decision support system for PC game purchases.",
+  "scripts": {
+    "dev": "next dev",
+    "dev:detached": "node scripts/start-dev-detached.mjs",
+    "postinstall": "prisma generate",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "mobile:dev": "npm --prefix mobile run dev",
+    "mobile:build": "npm --prefix mobile run build",
+    "mobile:build:dev": "npm --prefix mobile run build:dev",
+    "mobile:build:prod": "npm --prefix mobile run build:prod",
+    "mobile:sync": "npm --prefix mobile run sync",
+    "mobile:sync:prod": "npm run mobile:build:prod && npm --prefix mobile run sync",
+    "android:open": "npm --prefix mobile run android:open",
+    "android:run": "npm --prefix mobile run android:run",
+    "android:build": "npm --prefix mobile run android:build",
+    "android:build:debug": "npm run mobile:build:dev && npm run mobile:sync && npm --prefix mobile run android:build",
+    "android:build:release": "npm run mobile:sync:prod && npm --prefix mobile run android:build:release",
+    "prisma:generate": "prisma generate",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "lucide-react": "^0.468.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^2.13.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.0.0",
+    "postcss": "^8.4.49",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

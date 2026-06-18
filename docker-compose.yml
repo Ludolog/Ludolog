@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gamevalue-radar-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gamevalue
+      POSTGRES_PASSWORD: gamevalue
+      POSTGRES_DB: gamevalue_radar
+    ports:
+      - "5432:5432"
+    volumes:
+      - gamevalue_postgres:/var/lib/postgresql/data
+
+volumes:
+  gamevalue_postgres:

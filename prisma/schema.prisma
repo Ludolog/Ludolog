@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum DataSource {
+  mock
+  steam_api
+  price_api
+  prisma
+}
+
+enum Recommendation {
+  buy_now
+  wait
+  weak_deal
+}
+
+enum IntegrationLevel {
+  info
+  warning
+  error
+}
+
+enum IntegrationService {
+  steam
+  price
+  search
+  snapshot
+  alerts
+}
+
+model Game {
+  id                   String                @id
+  steamAppId           Int                   @unique
+  title                String
+  slug                 String                @unique
+  platform             String
+  description          String
+  coverUrl             String
+  genres               String[]
+  developer            String
+  publisher            String
+  releaseDate          DateTime
+  reviewScore          Int
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  offers               StoreOffer[]
+  priceSnapshots       GamePriceSnapshot[]
+  playerCountSnapshots PlayerCountSnapshot[]
+  watchlistItems       Watchlist[]
+  priceAlerts          PriceAlert[]
+  scoreSnapshots       DealScoreSnapshot[]
+}
+
+model StoreOffer {
+  id              String     @id
+  gameId          String
+  game            Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  storeName       String
+  price           Decimal    @db.Decimal(10, 2)
+  currency        String
+  discountPercent Int
+  url             String
+  isOfficial      Boolean
+  drm             String
+  source          DataSource @default(mock)
+  updatedAt       DateTime
+
+  @@index([gameId])
+}
+
+model GamePriceSnapshot {
+  id              String     @id
+  gameId          String
+  game            Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  price           Decimal    @db.Decimal(10, 2)
+  historicalLow   Decimal    @db.Decimal(10, 2)
+  basePrice       Decimal    @db.Decimal(10, 2)
+  discountPercent Int
+  storeName       String
+  currency        String
+  capturedAt      DateTime
+  source          DataSource @default(mock)
+
+  @@index([gameId, capturedAt])
+}
+
+model PlayerCountSnapshot {
+  id            String     @id
+  gameId        String
+  game          Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  steamAppId    Int
+  playersOnline Int
+  capturedAt    DateTime
+  source        DataSource @default(mock)
+
+  @@index([gameId, capturedAt])
+  @@index([steamAppId])
+}
+
+model DealScoreSnapshot {
+  id             String         @id
+  gameId         String
+  game           Game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  score          Int
+  recommendation Recommendation
+  factors        Json
+  reason         String
+  capturedAt     DateTime
+
+  @@index([gameId, capturedAt])
+}
+
+model User {
+  id             String       @id
+  email          String       @unique
+  name           String
+  createdAt      DateTime     @default(now())
+  watchlistItems Watchlist[]
+  priceAlerts    PriceAlert[]
+}
+
+model Watchlist {
+  id           String   @id
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameId       String
+  game         Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  targetPrice  Decimal? @db.Decimal(10, 2)
+  alertEnabled Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, gameId])
+  @@index([gameId])
+}
+
+model PriceAlert {
+  id             String    @id
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameId         String
+  game           Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  thresholdPrice Decimal   @db.Decimal(10, 2)
+  isActive       Boolean   @default(true)
+  triggeredAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId])
+  @@index([gameId])
+}
+
+model IntegrationLog {
+  id        String             @id
+  service   IntegrationService
+  level     IntegrationLevel
+  message   String
+  createdAt DateTime           @default(now())
+}
