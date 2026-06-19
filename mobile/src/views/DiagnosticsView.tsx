@@ -78,6 +78,8 @@ export function DiagnosticsView(): React.ReactElement {
 }
 
 function DiagnosticsHeader({ ok }: { ok: boolean }): React.ReactElement {
+  const runtime = apiClient.getRuntimeInfo();
+
   return (
     <section className="surface rounded-lg p-4">
       <div className="flex items-center gap-3">
@@ -95,6 +97,13 @@ function DiagnosticsHeader({ ok }: { ok: boolean }): React.ReactElement {
           <p className="text-sm text-slate-400">API base URL: {apiClient.baseUrl}</p>
           <p className="text-xs text-slate-500">Status backendu: {ok ? "OK" : "blad polaczenia"}</p>
         </div>
+      </div>
+      <div className="mt-4 space-y-2 text-xs text-slate-400">
+        <Detail label="window.location.origin" value={runtime.origin} />
+        <Detail label="window.location.href" value={runtime.href} />
+        <Detail label="navigator.userAgent" value={runtime.userAgent} />
+        <Detail label="Capacitor platform" value={runtime.platform} />
+        <Detail label="HTTP transport" value={runtime.transport} />
       </div>
     </section>
   );

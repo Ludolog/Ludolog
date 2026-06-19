@@ -3,12 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 const devAllowedOrigins = [
   "capacitor://localhost",
   "http://localhost",
+  "https://localhost",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://10.0.2.2:5173"
 ];
 
-const mobileRuntimeOrigins = ["capacitor://localhost", "http://localhost"];
+const mobileRuntimeOrigins = [
+  "capacitor://localhost",
+  "http://localhost",
+  "https://localhost",
+  "https://apka-seven.vercel.app"
+];
 
 function configuredOrigins(): string[] {
   const configured = process.env.MOBILE_ALLOWED_ORIGINS;
@@ -42,8 +48,8 @@ function corsHeaders(origin: string | null): HeadersInit {
 
   return {
     ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin } : {}),
-    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Accept, Content-Type, Authorization",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin"
   };
