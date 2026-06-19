@@ -41,6 +41,14 @@ export function getGGDealsApiBaseUrl(): string {
   return getOptionalEnv("GGDEALS_API_BASE_URL") ?? "https://gg.deals/api/prices/by-steam-app-id/";
 }
 
+export function getGGDealsRegion(): string {
+  return getOptionalEnv("GGDEALS_REGION") ?? "pl";
+}
+
+export function getGGDealsCurrency(): string {
+  return getOptionalEnv("GGDEALS_CURRENCY") ?? "PLN";
+}
+
 export function getAdminApiSecret(): string | undefined {
   return getOptionalEnv("ADMIN_API_SECRET");
 }

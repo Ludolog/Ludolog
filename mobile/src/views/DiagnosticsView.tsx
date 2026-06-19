@@ -63,6 +63,8 @@ export function DiagnosticsView(): React.ReactElement {
         <Metric label="Price provider" value={status.priceProvider} />
         <Metric label="Price mode" value={status.priceMode.toUpperCase()} />
         <Metric label="GG.deals key" value={status.hasGGDealsApiKey ? "SET" : "MISSING"} />
+        <Metric label="GG.deals status" value={formatStatus(status.ggdealsStatus)} />
+        <Metric label="Last GG.deals check" value={status.lastGGDealsCheck ? formatShortDate(status.lastGGDealsCheck) : "n/a"} />
         <Metric label="Price snapshots" value={formatNumber(status.priceSnapshotCount)} />
         <Metric label="Real price snaps" value={formatNumber(status.realPriceSnapshots)} />
         <Metric label="Mock price snaps" value={formatNumber(status.mockPriceSnapshots)} />
@@ -103,6 +105,10 @@ function dataModeLabel(mode: ApiStatsOverview["mode"] | undefined): string {
     return "Mixed data";
   }
   return "Mock fallback";
+}
+
+function formatStatus(status: string): string {
+  return status.replace(/_/g, " ").toUpperCase();
 }
 
 function DiagnosticsHeader({ ok }: { ok: boolean }): React.ReactElement {

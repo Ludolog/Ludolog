@@ -14,6 +14,28 @@ export type StoreType = "official" | "keyshop" | "marketplace" | "unknown";
 
 export type Recommendation = "buy_now" | "wait" | "weak_deal";
 
+export type GGDealsProviderStatus =
+  | "ok"
+  | "not_configured"
+  | "missing_key"
+  | "blocked_by_cloudflare"
+  | "invalid_key"
+  | "invalid_response"
+  | "no_price_data"
+  | "network_error"
+  | "timeout"
+  | "api_error";
+
+export type GGDealsErrorType =
+  | "missing_api_key"
+  | "blocked_by_cloudflare"
+  | "invalid_api_key"
+  | "invalid_json_response"
+  | "no_price_data"
+  | "network_error"
+  | "timeout"
+  | "api_http_error";
+
 export type ApiGame = {
   id: string;
   steamAppId: number;
@@ -185,6 +207,7 @@ export type ApiStatsOverview = {
   };
   updatedAt: DateString;
   mode: StatsDataMode;
+  ggdealsStatus: GGDealsProviderStatus;
 };
 
 export type ApiGameProfile = ApiGameSummary & {
@@ -240,6 +263,8 @@ export type ApiAdminStatus = {
   priceProvider: PriceProviderName;
   priceMode: PriceMode;
   hasGGDealsApiKey: boolean;
+  ggdealsStatus: GGDealsProviderStatus;
+  lastGGDealsCheck: DateString | null;
   lastPriceRefresh: DateString | null;
   realPriceSnapshots: number;
   mockPriceSnapshots: number;
@@ -254,6 +279,7 @@ export type ApiPriceRefreshError = {
   input: string;
   steamAppId?: number;
   message: string;
+  errorType?: GGDealsErrorType;
 };
 
 export type ApiPriceRefreshResult = {
@@ -272,12 +298,52 @@ export type ApiPriceRefreshResult = {
 export type ApiPriceRefreshResponse = {
   mode: "imported" | "best" | "explicit";
   dryRun: boolean;
+  provider: PriceProviderName | string;
+  providerStatus: GGDealsProviderStatus | null;
+  fallbackUsed: boolean;
+  message: string | null;
   requested: number;
   refreshed: number;
   skipped: number;
   failed: number;
   errors: ApiPriceRefreshError[];
   results: ApiPriceRefreshResult[];
+};
+
+export type ApiPriceProviderDiagnosticsAttempt = {
+  provider: "ggdeals";
+  steamAppId: number;
+  baseUrl: string;
+  requestUrl: string;
+  httpStatus: number | null;
+  ok: boolean;
+  contentType: string | null;
+  responseKind: "json" | "html" | "text" | "empty" | "network";
+  cloudflareDetected: boolean;
+  apiErrorDetected: boolean;
+  errorType: GGDealsErrorType | null;
+  providerStatus: GGDealsProviderStatus;
+  message: string;
+  safePreview: string | null;
+};
+
+export type ApiPriceProviderDiagnosticsRequest = {
+  provider?: "ggdeals";
+  steamAppIds?: number[];
+  dryRun?: boolean;
+};
+
+export type ApiPriceProviderDiagnosticsResponse = {
+  provider: "ggdeals";
+  configured: boolean;
+  dryRun: boolean;
+  hasApiKey: boolean;
+  region: string;
+  currency: string;
+  status: GGDealsProviderStatus;
+  lastCheckedAt: DateString;
+  attempts: ApiPriceProviderDiagnosticsAttempt[];
+  recommendation: string;
 };
 
 export type ApiGamePricesResponse = {

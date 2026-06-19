@@ -61,6 +61,7 @@ export function StatsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
           <MiniMetric label="Mock prices" value={formatNumber(overview.sourceCounts.mockPriceSnapshots)} />
           <MiniMetric label="Real snaps" value={formatNumber(overview.sourceCounts.realPlayerSnapshots)} />
           <MiniMetric label="Mock snaps" value={formatNumber(overview.sourceCounts.mockPlayerSnapshots)} />
+          <MiniMetric label="GG.deals" value={formatStatus(overview.ggdealsStatus)} />
         </div>
       </section>
 
@@ -97,6 +98,10 @@ function modeLabel(mode: ApiStatsOverview["mode"]): string {
     return "Mixed data";
   }
   return "Mock fallback";
+}
+
+function formatStatus(status: string): string {
+  return status.replace(/_/g, " ").toUpperCase();
 }
 
 function MiniMetric({ label, value }: { label: string; value: string }): React.ReactElement {

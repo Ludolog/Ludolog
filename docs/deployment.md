@@ -29,6 +29,8 @@ CRON_SECRET=
 PRICE_PROVIDER=ggdeals
 PRICE_MODE=api
 GGDEALS_API_KEY=
+GGDEALS_REGION=pl
+GGDEALS_CURRENCY=PLN
 ```
 
 Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT_URL`. Replace `TWOJE_HASLO` only inside Vercel settings or local ignored env files.
@@ -90,6 +92,8 @@ CRON_SECRET=
 PRICE_PROVIDER=ggdeals
 PRICE_MODE=api
 GGDEALS_API_KEY=
+GGDEALS_REGION=pl
+GGDEALS_CURRENCY=PLN
 # Legacy fallbacks:
 PRICE_API_PROVIDER=mock
 PRICE_API_KEY=
@@ -104,8 +108,9 @@ Notes:
 - `MOBILE_ALLOWED_ORIGINS` should be explicit in production. Do not use `*`.
 - `STEAM_WEB_API_KEY` is backend-only. It enables real Steam catalog sync and real current-player refreshes.
 - `GGDEALS_API_KEY` is backend-only. It enables real price refreshes through `PRICE_PROVIDER=ggdeals` and `PRICE_MODE=api`.
-- GG.deals price refreshes use `https://gg.deals/api/prices/by-steam-app-id/` by default with `key` and `ids=<steamAppId>`. Only set `GGDEALS_API_BASE_URL` if GG.deals gives you a custom endpoint.
+- GG.deals price refreshes use `https://gg.deals/api/prices/by-steam-app-id/` by default with backend-only `key`, `ids=<steamAppId>`, `region` and `currency`. Only set `GGDEALS_API_BASE_URL` if GG.deals gives you a custom endpoint.
 - Free GG.deals API access is for personal/hobby use. Any UI that displays GG.deals data must credit GG.deals with an active hyperlink, and stored GG.deals referral/affiliate URLs must be preserved.
+- If GG.deals returns a Cloudflare challenge from Vercel, the backend reports `blocked_by_cloudflare`, keeps price writes off/fallback-safe and does not store raw HTML. Do not bypass it with browser sessions, cookies, Playwright/Puppeteer or HTML scraping; use provider diagnostics and contact GG.deals for API-safe access.
 - `ADMIN_API_SECRET` protects manual admin POST endpoints through the `x-admin-secret` header.
 - `CRON_SECRET` protects `/api/cron/refresh-player-counts` in production. Do not expose it to mobile.
 - Mobile public config uses `VITE_API_BASE_URL`; secrets must never use the `VITE_` prefix.
@@ -303,7 +308,21 @@ $body = @{
 } | ConvertTo-Json -Compress
 ```
 
-GG.deals responses are normalized into official/keyshop/marketplace/unknown store types when the provider exposes enough metadata. Missing keys or `PRICE_MODE=mock` keep the application on mock/fallback prices and write an integration log instead of breaking the UI.
+Provider diagnostics:
+
+```powershell
+$body = @{
+  provider = "ggdeals"
+  steamAppIds = @(570, 730)
+  dryRun = $true
+} | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/provider-diagnostics" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
+The diagnostics response masks the API key in request URLs and classifies failures as `blocked_by_cloudflare`, `invalid_key`, `invalid_response`, `network_error`, `timeout`, `no_price_data` or `api_error`. It must not include raw Cloudflare HTML.
+
+GG.deals responses are normalized into official/keyshop/marketplace/unknown store types when the provider exposes enough metadata. Missing keys, `PRICE_MODE=mock` or provider errors keep the application on mock/fallback prices and write a sanitized integration log instead of breaking the UI.
 
 Starter import from the already synced Steam catalog. Keep this as a small, intentional batch; it does not run a full catalog import:
 

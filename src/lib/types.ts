@@ -12,6 +12,18 @@ export type StoreType = "official" | "keyshop" | "marketplace" | "unknown";
 
 export type Recommendation = "buy_now" | "wait" | "weak_deal";
 
+export type GGDealsProviderStatus =
+  | "ok"
+  | "not_configured"
+  | "missing_key"
+  | "blocked_by_cloudflare"
+  | "invalid_key"
+  | "invalid_response"
+  | "no_price_data"
+  | "network_error"
+  | "timeout"
+  | "api_error";
+
 export type Game = {
   id: string;
   steamAppId: number;
@@ -214,6 +226,8 @@ export type AdminStatus = {
   priceProvider: PriceProviderName;
   priceMode: PriceMode;
   hasGGDealsApiKey: boolean;
+  ggdealsStatus: GGDealsProviderStatus;
+  lastGGDealsCheck: Date | null;
   lastPriceRefresh: Date | null;
   realPriceSnapshots: number;
   mockPriceSnapshots: number;

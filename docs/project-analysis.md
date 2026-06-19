@@ -165,6 +165,10 @@ Provider responses are normalized into offers with `provider`, `storeType`, curr
 
 Official stores, keyshops and marketplaces are preserved as `storeType` when the provider exposes that distinction. This is important because future scoring can weigh store trust differently without changing Android DTOs.
 
+The GG.deals adapter now has explicit diagnostics. `POST /api/admin/prices/provider-diagnostics` is admin-protected, masks API keys in URLs and classifies failures as `blocked_by_cloudflare`, `invalid_key`, `invalid_response`, `no_price_data`, `network_error`, `timeout` or `api_error`. If Vercel receives a Cloudflare challenge, the application reports `blocked_by_cloudflare`, keeps price writes fallback-safe, and does not store raw HTML or bypass the challenge with browser sessions, cookies, Playwright/Puppeteer or scraping.
+
+GG.deals free API access is treated as personal/hobby use. Whenever GG.deals data is displayed, the UI keeps visible attribution with an active hyperlink and preserves stored GG.deals referral or affiliate URLs.
+
 `StatsService` builds analytical sections from `PlayerCountSnapshot`, price snapshots and GameValue Score:
 
 - top current players,

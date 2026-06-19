@@ -14,6 +14,7 @@ describe("GET /api/stats/overview", () => {
     expect(Array.isArray(body.categories)).toBe(true);
     expect(typeof body.updatedAt).toBe("string");
     expect(["mock", "mixed", "real"]).toContain(body.mode);
+    expect(typeof body.ggdealsStatus).toBe("string");
     expect(body.sourceCounts).toMatchObject({
       importedGames: expect.any(Number),
       steamCatalogEntries: expect.any(Number),

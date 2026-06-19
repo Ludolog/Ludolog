@@ -86,6 +86,8 @@ ADMIN_API_SECRET=""
 PRICE_PROVIDER="mock"
 PRICE_MODE="mock"
 GGDEALS_API_KEY=""
+GGDEALS_REGION="pl"
+GGDEALS_CURRENCY="PLN"
 # Legacy fallbacks:
 PRICE_API_PROVIDER="mock"
 PRICE_API_KEY=""
@@ -130,6 +132,7 @@ CRON_SECRET=""
 - `POST /api/admin/games/bulk-import`
 - `POST /api/admin/prices/refresh`
 - `POST /api/admin/prices/refresh-best`
+- `POST /api/admin/prices/provider-diagnostics`
 - `POST /api/admin/player-counts/refresh`
 - `POST /api/games/:id/refresh-players`
 - `POST /api/cron/refresh-player-counts`
@@ -159,9 +162,11 @@ Price data flows through `PriceProviderService`. The active provider is selected
 - `PRICE_MODE=api`
 - `GGDEALS_API_KEY=...`
 
-The default GG.deals endpoint is `https://gg.deals/api/prices/by-steam-app-id/` and the adapter sends `key` plus `ids=<steamAppId>`. Use `GGDEALS_API_BASE_URL` only if GG.deals provides a project-specific endpoint.
+The default GG.deals endpoint is `https://gg.deals/api/prices/by-steam-app-id/` and the adapter sends backend-only `key`, `ids=<steamAppId>`, `region` and `currency` query parameters. Use `GGDEALS_API_BASE_URL` only if GG.deals provides a project-specific endpoint.
 
-If `PRICE_MODE=mock`, `PRICE_PROVIDER=mock` or the GG.deals key is missing, the backend falls back to `MockPriceProvider` and records an integration log. The key is backend-only: do not commit it and do not expose it through `VITE_` mobile variables. Android and Web call only our API.
+If `PRICE_MODE=mock`, `PRICE_PROVIDER=mock`, the GG.deals key is missing, or the provider returns a blocked/non-JSON/API error response, the backend keeps the UI on mock/fallback prices and records a sanitized integration log. The key is backend-only: do not commit it and do not expose it through `VITE_` mobile variables. Android and Web call only our API.
+
+If Vercel receives a GG.deals Cloudflare challenge (`blocked_by_cloudflare`), the app does not bypass it with browser sessions, cookies, Playwright/Puppeteer or HTML scraping. Use `POST /api/admin/prices/provider-diagnostics` with `x-admin-secret`, then contact GG.deals support with the sanitized output and ask for API access that works from the backend host.
 
 GG.deals API terms require personal/hobby use only for free access, visible attribution with an active GG.deals hyperlink wherever GG.deals data is displayed, and preserving GG.deals referral/affiliate links. The UI attribution components link to the stored provider URL when available, falling back to `https://gg.deals/`.
 
@@ -179,6 +184,11 @@ curl -X POST https://apka-seven.vercel.app/api/admin/prices/refresh \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"steamAppIds\":[570,730],\"limit\":2}"
+
+curl -X POST https://apka-seven.vercel.app/api/admin/prices/provider-diagnostics \
+  -H "Content-Type: application/json" \
+  -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
+  -d "{\"provider\":\"ggdeals\",\"steamAppIds\":[570,730],\"dryRun\":true}"
 ```
 
 ITAD and CheapShark are intentionally not active providers yet, but the provider interface is ready for additional adapters.

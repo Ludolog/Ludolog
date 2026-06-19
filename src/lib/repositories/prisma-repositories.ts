@@ -13,6 +13,7 @@ import type {
   WatchlistRepository
 } from "@/lib/repositories/contracts";
 import { calculateGameValueScore } from "@/lib/services/deal-score-service";
+import { resolveGGDealsStatusFromLogs } from "@/lib/services/ggdeals-diagnostics";
 import type {
   AdminStatus,
   DataSource,
@@ -766,6 +767,18 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
         prisma.priceAlert.count(),
         this.listIntegrationLogs()
       ]);
+    const realPriceSnapshots =
+      (await new PrismaSnapshotRepository().countPriceSnapshotsBySource("ggdeals")) +
+      (await new PrismaSnapshotRepository().countPriceSnapshotsBySource("price-api"));
+    const realOffers =
+      (await new PrismaGameRepository().countOffersBySource("ggdeals")) +
+      (await new PrismaGameRepository().countOffersBySource("price-api"));
+    const ggdealsRuntime = resolveGGDealsStatusFromLogs({
+      hasApiKey: Boolean(getGGDealsApiKey()),
+      logs: integrationLogs,
+      realOffers,
+      realPriceSnapshots
+    });
 
     return {
       mode: getDataMode(),
@@ -782,14 +795,12 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
       priceProvider: getPriceProvider(),
       priceMode: getPriceMode(),
       hasGGDealsApiKey: Boolean(getGGDealsApiKey()),
+      ggdealsStatus: ggdealsRuntime.status,
+      lastGGDealsCheck: ggdealsRuntime.lastCheckedAt,
       lastPriceRefresh: await new PrismaSnapshotRepository().latestPriceRefresh(),
-      realPriceSnapshots:
-        (await new PrismaSnapshotRepository().countPriceSnapshotsBySource("ggdeals")) +
-        (await new PrismaSnapshotRepository().countPriceSnapshotsBySource("price-api")),
+      realPriceSnapshots,
       mockPriceSnapshots: await new PrismaSnapshotRepository().countPriceSnapshotsBySource("mock"),
-      realOffers:
-        (await new PrismaGameRepository().countOffersBySource("ggdeals")) +
-        (await new PrismaGameRepository().countOffersBySource("price-api")),
+      realOffers,
       mockOffers: await new PrismaGameRepository().countOffersBySource("mock"),
       realPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("steam-api"),
       mockPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("mock"),

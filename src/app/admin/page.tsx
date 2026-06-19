@@ -55,6 +55,7 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <StatusCard icon={<ShoppingCart size={18} />} label="Price provider" value={status.priceProvider.toUpperCase()} />
         <StatusCard icon={<ShoppingCart size={18} />} label="PRICE_MODE" value={status.priceMode.toUpperCase()} />
         <StatusCard icon={<ShoppingCart size={18} />} label="GG.deals key" value={status.hasGGDealsApiKey ? "SET" : "MISSING"} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="GG.deals status" value={formatGGDealsStatus(status.ggdealsStatus)} />
         <StatusCard icon={<ShoppingCart size={18} />} label="Real price snaps" value={String(status.realPriceSnapshots)} />
         <StatusCard icon={<ShoppingCart size={18} />} label="Real offers" value={String(status.realOffers)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Player snapshots" value={String(status.playerSnapshotCount)} />
@@ -71,10 +72,16 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           <InlineStatus icon={<ShoppingCart size={18} />} label="Provider" value={status.priceProvider} />
           <InlineStatus icon={<ShoppingCart size={18} />} label="Mode" value={status.priceMode} />
           <InlineStatus icon={<ShoppingCart size={18} />} label="GG.deals key" value={status.hasGGDealsApiKey ? "configured" : "missing"} />
+          <InlineStatus icon={<AlertTriangle size={18} />} label="GG.deals status" value={formatGGDealsStatus(status.ggdealsStatus)} />
           <InlineStatus
             icon={<RefreshCw size={18} />}
             label="Last price refresh"
             value={status.lastPriceRefresh ? formatDate(status.lastPriceRefresh) : "n/a"}
+          />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Last GG.deals check"
+            value={status.lastGGDealsCheck ? formatDate(status.lastGGDealsCheck) : "n/a"}
           />
           <InlineStatus icon={<Database size={18} />} label="Real price snaps" value={String(status.realPriceSnapshots)} />
           <InlineStatus icon={<Database size={18} />} label="Mock price snaps" value={String(status.mockPriceSnapshots)} />
@@ -100,7 +107,23 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             body={{ mode: "best", limit: 10 }}
             requireSecret
           />
+          <AdminActionButton
+            endpoint="/api/admin/prices/provider-diagnostics"
+            label="Diagnose GG.deals API"
+            body={{ provider: "ggdeals", steamAppIds: [570, 730], dryRun: true }}
+            requireSecret
+          />
         </div>
+        {status.ggdealsStatus === "blocked_by_cloudflare" ? (
+          <div className="mt-4 rounded-md border border-radar-amber/30 bg-radar-amber/10 p-4 text-sm leading-6 text-radar-amber">
+            <p className="font-semibold text-white">GG.deals API access is blocked by Cloudflare from the backend host.</p>
+            <p className="mt-2">
+              Contact GG.deals support with the sanitized diagnostics output. Mention that GameValue Radar uses only the
+              official JSON API from a Vercel backend, keeps the API key server-side, displays GG.deals attribution links,
+              and does not scrape HTML or use browser sessions.
+            </p>
+          </div>
+        ) : null}
       </section>
 
       <section className="surface rounded-lg p-5">
@@ -287,5 +310,9 @@ function InlineStatus({
       <p className="mt-1 break-words text-lg font-semibold text-white">{value}</p>
     </div>
   );
+}
+
+function formatGGDealsStatus(status: string): string {
+  return status.replace(/_/g, " ").toUpperCase();
 }
 

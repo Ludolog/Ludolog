@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { priceAlertCreateSchema, priceRefreshSchema, searchQuerySchema, watchlistCreateSchema } from "@/lib/validation";
+import {
+  priceAlertCreateSchema,
+  priceProviderDiagnosticsSchema,
+  priceRefreshSchema,
+  searchQuerySchema,
+  watchlistCreateSchema
+} from "@/lib/validation";
 
 describe("validation schemas", () => {
   it("rejects empty search queries", () => {
@@ -24,5 +30,14 @@ describe("validation schemas", () => {
     expect(payload.mode).toBe("imported");
     expect(payload.steamAppIds).toEqual([570, 730]);
     expect(payload.dryRun).toBe(true);
+  });
+
+  it("accepts bounded GG.deals provider diagnostics input", () => {
+    const payload = priceProviderDiagnosticsSchema.parse({ steamAppIds: [570, 730] });
+
+    expect(payload.provider).toBe("ggdeals");
+    expect(payload.dryRun).toBe(true);
+    expect(payload.steamAppIds).toEqual([570, 730]);
+    expect(() => priceProviderDiagnosticsSchema.parse({ steamAppIds: [1, 2, 3, 4, 5, 6] })).toThrow();
   });
 });

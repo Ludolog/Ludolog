@@ -25,6 +25,7 @@ The Android app is a client only. It never talks to Steam, Neon or Prisma direct
 - `ADMIN_API_SECRET`: backend-only secret required by manual admin POST endpoints via `x-admin-secret`.
 - `CRON_SECRET`: backend-only secret required by cron refresh endpoints in production.
 - `GGDEALS_API_KEY`: backend-only GG.deals key for price refreshes.
+- `GGDEALS_REGION`, `GGDEALS_CURRENCY`: backend-only GG.deals market preferences.
 - `PRICE_PROVIDER`: `mock` or `ggdeals`; future adapters can add `itad` or `cheapshark`.
 - `PRICE_MODE`: `mock` or `api`.
 - `DATA_MODE`: `mock` uses deterministic fixtures; `api` enables API-oriented adapters with fallback logging.
@@ -84,12 +85,14 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 1. Admin calls `POST /api/admin/prices/refresh` or `POST /api/admin/prices/refresh-best` with `x-admin-secret`.
 2. The body accepts `mode: "imported"`, explicit `steamAppIds`, `limit` and optional `dryRun`.
 3. `PriceProviderService` selects `GGDealsPriceProvider` when `DATA_MODE=api`, `PRICE_MODE=api`, `PRICE_PROVIDER=ggdeals` and `GGDEALS_API_KEY` exists.
-4. GG.deals requests use `https://gg.deals/api/prices/by-steam-app-id/` with backend-only `key` and `ids=<steamAppId>` query parameters.
-5. If the key or API mode is missing, `MockPriceProvider` is used and the fallback is logged.
-6. Provider responses are normalized into `provider`, `storeType`, `price`, `regularPrice`, `discountPercent`, `currency`, URL, historical-low metadata and raw provider id.
-7. Successful refreshes upsert `StoreOffer` rows and append `GamePriceSnapshot` rows. One failed Steam App ID does not roll back the rest.
-8. Web and mobile show a GG.deals attribution hyperlink whenever GG.deals prices are displayed, using the provider URL when available.
-9. ITAD and CheapShark can be added later as additional `PriceProvider` implementations without changing Android contracts.
+4. GG.deals requests use `https://gg.deals/api/prices/by-steam-app-id/` with backend-only `key`, `ids=<steamAppId>`, `region` and `currency` query parameters.
+5. `POST /api/admin/prices/provider-diagnostics` tests the configured provider with `x-admin-secret`, masks the key in URLs and reports statuses such as `ok`, `missing_key`, `blocked_by_cloudflare`, `invalid_key`, `invalid_response`, `no_price_data`, `network_error`, `timeout` or `api_error`.
+6. If the key or API mode is missing, `MockPriceProvider` is used and the fallback is logged.
+7. If GG.deals returns Cloudflare HTML or another non-JSON/API failure, the backend returns a sanitized status and keeps price writes fallback-safe. It does not store raw HTML and does not bypass Cloudflare with browser sessions, cookies or scraping.
+8. Provider responses are normalized into `provider`, `storeType`, `price`, `regularPrice`, `discountPercent`, `currency`, URL, historical-low metadata and raw provider id.
+9. Successful refreshes upsert `StoreOffer` rows and append `GamePriceSnapshot` rows. One failed Steam App ID does not roll back the rest.
+10. Web and mobile show a GG.deals attribution hyperlink whenever GG.deals prices are displayed, using the provider URL when available.
+11. ITAD and CheapShark can be added later as additional `PriceProvider` implementations without changing Android contracts.
 
 ## Stats overview flow
 
@@ -97,18 +100,20 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 2. `StatsService` loads game profiles, watchlists, catalog status and price/player snapshot counts.
 3. It calculates top players, trending, drops, best value, watchlist popularity, hidden gems and categories.
 4. It returns `mode: "real" | "mixed" | "mock"` based on real/mock player and price snapshot counts.
-5. Home and Stats screens display `updatedAt`, source counts, player source badges, price source badges and category sections.
+5. The overview includes `ggdealsStatus` so clients can distinguish real price data from mock fallback.
+6. Home and Stats screens display `updatedAt`, source counts, player source badges, price source badges and category sections.
 
 ## Android diagnostics flow
 
 1. Mobile reads runtime info from `apiClient.getRuntimeInfo()`.
 2. Diagnostics calls `GET /api/admin/status` and `GET /api/stats/overview`.
-3. It shows API base URL, HTTP transport, backend status, data mode, price provider/mode/key boolean, catalog count, imported count, real/mock price and player snapshot counts, last sync, last price/player refresh and Capacitor platform.
+3. It shows API base URL, HTTP transport, backend status, data mode, price provider/mode/key boolean, GG.deals status, catalog count, imported count, real/mock price and player snapshot counts, last sync, last price/provider/player refresh and Capacitor platform.
 
 ## Fallback model
 
 - `DATA_MODE=mock`: everything works from deterministic fixtures.
 - `DATA_MODE=api` with missing Steam key: Steam calls are skipped, warnings are logged and cached/mock data is used.
+- `PRICE_PROVIDER=ggdeals` with Cloudflare blocking: status becomes `blocked_by_cloudflare`, diagnostics stay sanitized and mock/fallback prices keep the UI usable.
 - `REPOSITORY_PROVIDER=mock`: no Neon required.
 - `REPOSITORY_PROVIDER=prisma`: API routes persist to Neon and use Prisma migrations/schema.
 
@@ -116,6 +121,7 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 
 - Do not put `STEAM_WEB_API_KEY`, `ADMIN_API_SECRET`, `CRON_SECRET`, `DATABASE_URL` or `DIRECT_URL` into mobile env files.
 - Do not put `GGDEALS_API_KEY` into mobile env files; only Vercel/backend receives it.
+- Do not bypass GG.deals Cloudflare challenges with browser automation, cookies, fake sessions or HTML scraping. Use diagnostics and contact GG.deals for API-safe access.
 - Do not run a full Steam catalog sync automatically or from user traffic.
 - Start with `dryRun: true`, `maxPages: 1`, `maxResults: 100`.
 - Use `startAfterAppId` or the status cursor for controlled follow-up batches.

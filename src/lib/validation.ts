@@ -58,6 +58,12 @@ export const priceRefreshSchema = z.object({
   dryRun: z.boolean().default(false)
 });
 
+export const priceProviderDiagnosticsSchema = z.object({
+  provider: z.literal("ggdeals").default("ggdeals"),
+  steamAppIds: z.array(z.number().int().positive()).max(5).default([570]),
+  dryRun: z.boolean().default(true)
+});
+
 export const priceAlertCreateSchema = z.object({
   gameId: z.string().trim().min(1),
   thresholdPrice: z.number().positive().max(9999)

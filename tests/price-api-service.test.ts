@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { POST as diagnosePriceProvider } from "@/app/api/admin/prices/provider-diagnostics/route";
 import { POST as refreshPrices } from "@/app/api/admin/prices/refresh/route";
 import { repositories } from "@/lib/repositories";
 import { priceApiService } from "@/lib/services/price-api-service";
+import { classifyGGDealsResponse } from "@/lib/services/ggdeals-diagnostics";
 import {
+  GGDealsProviderError,
   GGDealsPriceProvider,
   normalizeGGDealsOffers,
   priceProviderService
@@ -12,6 +15,7 @@ import {
 describe("PriceApiService", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("returns mock offers for a configured game", async () => {
@@ -93,6 +97,8 @@ describe("PriceApiService", () => {
     expect(`${requestUrl.origin}${requestUrl.pathname}`).toBe("https://gg.deals/api/prices/by-steam-app-id/");
     expect(requestUrl.searchParams.get("key")).toBe("test-key");
     expect(requestUrl.searchParams.get("ids")).toBe("570");
+    expect(requestUrl.searchParams.get("region")).toBe("pl");
+    expect(requestUrl.searchParams.get("currency")).toBe("PLN");
     expect(offers[0]).toMatchObject({
       provider: "ggdeals",
       steamAppId: 570,
@@ -102,6 +108,40 @@ describe("PriceApiService", () => {
       regularPrice: 199.99,
       currency: "PLN"
     });
+  });
+
+  it("classifies GG.deals Cloudflare HTML without exposing raw HTML", () => {
+    const classification = classifyGGDealsResponse({
+      body: "<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>",
+      contentType: "text/html; charset=UTF-8",
+      ok: false,
+      status: 403
+    });
+
+    expect(classification.providerStatus).toBe("blocked_by_cloudflare");
+    expect(classification.errorType).toBe("blocked_by_cloudflare");
+    expect(classification.safePreview).toBeNull();
+    expect(classification.message).not.toContain("<html");
+  });
+
+  it("throws a sanitized provider error for Cloudflare challenges", async () => {
+    const fetcher = vi.fn(async () => {
+      return new Response("<!DOCTYPE html><html><title>Just a moment...</title></html>", {
+        status: 403,
+        headers: { "content-type": "text/html; charset=UTF-8" }
+      });
+    });
+    const provider = new GGDealsPriceProvider({
+      apiKey: "test-key",
+      baseUrl: "https://gg.deals/api/prices/by-steam-app-id/",
+      fetcher
+    });
+
+    await expect(provider.getPricesBySteamAppId(570)).rejects.toMatchObject({
+      errorType: "blocked_by_cloudflare",
+      providerStatus: "blocked_by_cloudflare"
+    } satisfies Partial<GGDealsProviderError>);
+    await expect(provider.getPricesBySteamAppId(570)).rejects.not.toThrow(/<html|Just a moment/i);
   });
 
   it("falls back to mock provider when GG.deals is selected without a key", async () => {
@@ -151,6 +191,88 @@ describe("PriceApiService", () => {
     expect(body.refreshed).toBe(1);
     expect(offers.length).toBeGreaterThan(0);
     expect(afterSnapshots.length).toBeGreaterThan(beforeSnapshots.length);
+  });
+
+  it("does not store price data when GG.deals is blocked by Cloudflare", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    vi.stubEnv("DATA_MODE", "api");
+    vi.stubEnv("PRICE_MODE", "api");
+    vi.stubEnv("PRICE_PROVIDER", "ggdeals");
+    vi.stubEnv("GGDEALS_API_KEY", "test-ggdeals-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response("<!DOCTYPE html><html><title>Just a moment...</title></html>", {
+          status: 403,
+          headers: { "content-type": "text/html; charset=UTF-8" }
+        });
+      })
+    );
+    const beforeSnapshots = await repositories.snapshots.listPrices("cyberpunk-2077");
+
+    const response = await refreshPrices(
+      new Request("http://localhost/api/admin/prices/refresh", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ steamAppIds: [1091500], limit: 1, dryRun: false })
+      })
+    );
+    const body = await response.json();
+    const afterSnapshots = await repositories.snapshots.listPrices("cyberpunk-2077");
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      provider: "ggdeals",
+      providerStatus: "blocked_by_cloudflare",
+      fallbackUsed: true,
+      refreshed: 0,
+      failed: 1
+    });
+    expect(JSON.stringify(body)).not.toContain("<html");
+    expect(JSON.stringify(body)).not.toContain("Just a moment");
+    expect(afterSnapshots.length).toBe(beforeSnapshots.length);
+  });
+
+  it("returns masked GG.deals provider diagnostics", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    vi.stubEnv("DATA_MODE", "api");
+    vi.stubEnv("PRICE_MODE", "api");
+    vi.stubEnv("PRICE_PROVIDER", "ggdeals");
+    vi.stubEnv("GGDEALS_API_KEY", "test-ggdeals-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response("<!DOCTYPE html><html><title>Just a moment...</title></html>", {
+          status: 403,
+          headers: { "content-type": "text/html; charset=UTF-8" }
+        });
+      })
+    );
+
+    const response = await diagnosePriceProvider(
+      new Request("http://localhost/api/admin/prices/provider-diagnostics", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ provider: "ggdeals", steamAppIds: [570], dryRun: true })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe("blocked_by_cloudflare");
+    expect(body.attempts[0]).toMatchObject({
+      requestUrl: expect.stringContaining("key=redacted"),
+      providerStatus: "blocked_by_cloudflare",
+      safePreview: null
+    });
+    expect(JSON.stringify(body)).not.toContain("test-ggdeals-key");
+    expect(JSON.stringify(body)).not.toContain("<html");
   });
 
   it("/api/deals/best summaries use real offers when they exist", async () => {

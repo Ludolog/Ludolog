@@ -10,6 +10,7 @@ describe("StatsService", () => {
 
     expect(overview.topPlayers.length).toBeGreaterThan(0);
     expect(overview.topPlayers[0].currentPlayers).toBeGreaterThanOrEqual(overview.topPlayers.at(-1)?.currentPlayers ?? 0);
+    expect(typeof overview.ggdealsStatus).toBe("string");
   });
 
   it("calculates percentage trends", async () => {

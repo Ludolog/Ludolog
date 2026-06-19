@@ -28,6 +28,7 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
 
   const { game, latestPrice, latestPlayers, bestOffer, score } = profile;
   const factors = Object.entries(score.factors);
+  const priceSource = latestPrice?.source ?? bestOffer?.source ?? "mock";
   const hasGGDealsPrice =
     latestPrice?.source === "ggdeals" ||
     bestOffer?.source === "ggdeals" ||
@@ -81,6 +82,11 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
               <p className="mt-2 text-sm text-slate-400">
                 Current discount: {latestPrice?.discountPercent ?? 0}% from base price.
               </p>
+              {priceSource === "mock" ? (
+                <p className="mt-3 rounded-md border border-radar-amber/30 bg-radar-amber/10 px-3 py-2 text-xs leading-5 text-radar-amber">
+                  Price data is using mock fallback while the real price provider is unavailable.
+                </p>
+              ) : null}
               {hasGGDealsPrice ? <GGDealsAttribution className="mt-3" href={ggDealsUrl} /> : null}
             </div>
           </div>

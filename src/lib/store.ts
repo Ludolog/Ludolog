@@ -9,6 +9,7 @@ import {
   mockWatchlistItems
 } from "@/lib/mock-data";
 import { calculateGameValueScore } from "@/lib/services/deal-score-service";
+import { resolveGGDealsStatusFromLogs } from "@/lib/services/ggdeals-diagnostics";
 import type {
   AdminStatus,
   Game,
@@ -474,6 +475,13 @@ export function listUsers(): User[] {
 export function getAdminStatus(): AdminStatus {
   const realPriceSnapshots = countPriceSnapshotsBySource("ggdeals") + countPriceSnapshotsBySource("price-api");
   const realOffers = countOffersBySource("ggdeals") + countOffersBySource("price-api");
+  const integrationLogs = listIntegrationLogs();
+  const ggdealsRuntime = resolveGGDealsStatusFromLogs({
+    hasApiKey: Boolean(getGGDealsApiKey()),
+    logs: integrationLogs,
+    realOffers,
+    realPriceSnapshots
+  });
 
   return {
     mode: getDataMode(),
@@ -490,6 +498,8 @@ export function getAdminStatus(): AdminStatus {
     priceProvider: getPriceProvider(),
     priceMode: getPriceMode(),
     hasGGDealsApiKey: Boolean(getGGDealsApiKey()),
+    ggdealsStatus: ggdealsRuntime.status,
+    lastGGDealsCheck: ggdealsRuntime.lastCheckedAt,
     lastPriceRefresh: getLatestPriceRefresh(),
     realPriceSnapshots,
     mockPriceSnapshots: countPriceSnapshotsBySource("mock"),
@@ -497,6 +507,6 @@ export function getAdminStatus(): AdminStatus {
     mockOffers: countOffersBySource("mock"),
     realPlayerSnapshots: countPlayerSnapshotsBySource("steam-api"),
     mockPlayerSnapshots: countPlayerSnapshotsBySource("mock"),
-    integrationLogs: listIntegrationLogs()
+    integrationLogs
   };
 }

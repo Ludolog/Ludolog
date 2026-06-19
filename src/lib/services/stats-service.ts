@@ -1,4 +1,6 @@
 import { repositories } from "@/lib/repositories";
+import { getGGDealsApiKey } from "@/lib/config";
+import { resolveGGDealsStatusFromLogs } from "@/lib/services/ggdeals-diagnostics";
 import type { GameProfile } from "@/lib/types";
 import type { ApiStatsCategory, ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
 
@@ -24,7 +26,8 @@ export class StatsService {
       mockOffers,
       importedGames,
       latestPlayerRefresh,
-      latestPriceRefresh
+      latestPriceRefresh,
+      integrationLogs
     ] = await Promise.all([
       repositories.steamCatalog.status(),
       repositories.snapshots.countPlayerSnapshotsBySource("steam-api"),
@@ -41,8 +44,15 @@ export class StatsService {
       repositories.games.countOffersBySource("mock"),
       repositories.games.listImported(500),
       repositories.snapshots.latestPlayerRefresh(),
-      repositories.snapshots.latestPriceRefresh()
+      repositories.snapshots.latestPriceRefresh(),
+      repositories.diagnostics.listIntegrationLogs()
     ]);
+    const ggdealsRuntime = resolveGGDealsStatusFromLogs({
+      hasApiKey: Boolean(getGGDealsApiKey()),
+      logs: integrationLogs,
+      realOffers,
+      realPriceSnapshots
+    });
     const watchlistCounts = new Map<string, number>();
 
     for (const item of watchlist) {
@@ -89,7 +99,8 @@ export class StatsService {
         mockPlayerSnapshots
       },
       updatedAt: new Date().toISOString(),
-      mode: resolveStatsMode({ mockPlayerSnapshots, mockPriceSnapshots, realPlayerSnapshots, realPriceSnapshots })
+      mode: resolveStatsMode({ mockPlayerSnapshots, mockPriceSnapshots, realPlayerSnapshots, realPriceSnapshots }),
+      ggdealsStatus: ggdealsRuntime.status
     };
   }
 }
