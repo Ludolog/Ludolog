@@ -67,8 +67,14 @@ function sourceConfidenceLabel(confidence: string, source: string | null, source
   if (source === "gog" || sourceName === "gog") {
     return "GameValue / GOG store API";
   }
+  if (source === "steam-store" || sourceName === "steam-store") {
+    return "GameValue / Steam Store";
+  }
   if (confidence === "internal-real") {
     return "GameValue internal";
+  }
+  if (confidence === "experimental-store-api") {
+    return "Experimental store API";
   }
   if (confidence === "internal-mock") {
     return "Demo/mock seed";

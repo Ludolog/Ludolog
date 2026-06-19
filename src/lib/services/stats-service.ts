@@ -35,21 +35,24 @@ export class StatsService {
       repositories.snapshots.countPlayerSnapshotsBySource("mock"),
       Promise.all([
         repositories.snapshots.countPriceSnapshotsBySource("manual"),
-        repositories.snapshots.countPriceSnapshotsBySource("gog")
-      ]).then(([manual, gog]) => manual + gog),
+        repositories.snapshots.countPriceSnapshotsBySource("gog"),
+        repositories.snapshots.countPriceSnapshotsBySource("steam-store")
+      ]).then(([manual, gog, steamStore]) => manual + gog + steamStore),
       Promise.all([
         repositories.snapshots.countPriceSnapshotsBySource("manual"),
         repositories.snapshots.countPriceSnapshotsBySource("gog"),
+        repositories.snapshots.countPriceSnapshotsBySource("steam-store"),
         repositories.snapshots.countPriceSnapshotsBySource("ggdeals"),
         repositories.snapshots.countPriceSnapshotsBySource("price-api")
-      ]).then(([manual, gog, ggdeals, priceApi]) => manual + gog + ggdeals + priceApi),
+      ]).then(([manual, gog, steamStore, ggdeals, priceApi]) => manual + gog + steamStore + ggdeals + priceApi),
       repositories.snapshots.countPriceSnapshotsBySource("mock"),
       Promise.all([
         repositories.games.countOffersBySource("manual"),
         repositories.games.countOffersBySource("gog"),
+        repositories.games.countOffersBySource("steam-store"),
         repositories.games.countOffersBySource("ggdeals"),
         repositories.games.countOffersBySource("price-api")
-      ]).then(([manual, gog, ggdeals, priceApi]) => manual + gog + ggdeals + priceApi),
+      ]).then(([manual, gog, steamStore, ggdeals, priceApi]) => manual + gog + steamStore + ggdeals + priceApi),
       repositories.games.countOffersBySource("mock"),
       repositories.games.listImported(500),
       repositories.snapshots.latestPlayerRefresh(),

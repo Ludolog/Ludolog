@@ -131,6 +131,23 @@ export const gogPriceRefreshSchema = z.object({
   limit: z.number().int().positive().max(10).default(10)
 });
 
+export const mockPriceCleanupRunSchema = z.object({
+  confirm: z.literal("DELETE_MOCK_PRICE_DATA_ONLY")
+});
+
+export const steamStorePriceTestSchema = z.object({
+  steamAppId: z.number().int().positive(),
+  countryCode: z.string().trim().min(2).max(2).optional(),
+  currency: z.string().trim().min(3).max(3).optional()
+});
+
+export const steamStorePriceRefreshSchema = z.object({
+  steamAppIds: z.array(z.number().int().positive()).max(50).optional(),
+  gameIds: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
+  limit: z.number().int().positive().max(50).optional(),
+  dryRun: z.boolean().default(true)
+});
+
 export function parseJsonBody<T>(schema: z.ZodType<T>, value: unknown): T {
   return schema.parse(value);
 }

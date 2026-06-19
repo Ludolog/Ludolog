@@ -1,4 +1,4 @@
-﻿import { BookOpen, Database, Gauge, ShieldCheck } from "lucide-react";
+import { BookOpen, Database, Gauge, ShieldCheck } from "lucide-react";
 
 import { getDataMode } from "@/lib/config";
 
@@ -7,25 +7,25 @@ const sections = [
     title: "Cel aplikacji",
     icon: BookOpen,
     body:
-      "GameValue Radar wspiera decyzje zakupowe graczy PC przez zestawienie ceny, aktywnoĹ›ci spoĹ‚ecznoĹ›ci, historii snapshotĂłw i wĹ‚asnego wskaĹşnika opĹ‚acalnoĹ›ci."
+      "GameValue Radar wspiera decyzje zakupowe graczy PC przez zestawienie ceny, aktywności społeczności, historii snapshotów i własnego wskaźnika opłacalności."
   },
   {
-    title: "ĹąrĂłdĹ‚a danych",
+    title: "Źródła danych",
     icon: Database,
     body:
-      "MVP dziaĹ‚a w trybie mock, a adaptery oddzielajÄ… UI od przyszĹ‚ych integracji Steam Web API, IsThereAnyDeal lub innych dozwolonych API cenowych."
+      "MVP działa w trybie mock, a adaptery oddzielają UI od przyszłych integracji Steam Web API, GOG, Steam Store lub innych dozwolonych API cenowych."
   },
   {
     title: "GameValue Score",
     icon: Gauge,
     body:
-      "Score waĹĽy cenÄ™ wzglÄ™dem historycznego minimum, rabat, liczbÄ™ graczy, trend popularnoĹ›ci oraz dostÄ™pnoĹ›Ä‡ ofert. Wynik jest jawny i deterministyczny."
+      "Score waży cenę względem historycznego minimum, rabat, liczbę graczy, trend popularności oraz dostępność ofert. Wynik jest jawny i deterministyczny."
   },
   {
     title: "Ograniczenia",
     icon: ShieldCheck,
     body:
-      "Aplikacja nie wykonuje scrapingu SteamDB, GG.deals ani Steam Store HTML. Klucze API sÄ… obsĹ‚ugiwane wyĹ‚Ä…cznie przez zmienne Ĺ›rodowiskowe."
+      "Aplikacja nie wykonuje scrapingu SteamDB, GG.deals ani Steam Store HTML. Klucze API są obsługiwane wyłącznie przez zmienne środowiskowe."
   }
 ];
 
@@ -36,8 +36,8 @@ export default function AboutPage(): React.ReactElement {
         <p className="mb-2 text-sm font-semibold text-radar-cyan">Engineering thesis context</p>
         <h1 className="text-3xl font-semibold text-white">System wspomagania decyzji zakupowych dla gier PC</h1>
         <p className="mt-4 max-w-4xl text-sm leading-6 text-slate-300">
-          Projekt pokazuje integracjÄ™ wielu ĹşrĂłdeĹ‚ danych, projekt bazy, cykliczne snapshoty, scoring domenowy,
-          walidacjÄ™ API, warstwÄ™ adapterĂłw oraz interfejs analityczny moĹĽliwy do rozbudowy po MVP.
+          Projekt pokazuje integrację wielu źródeł danych, projekt bazy, cykliczne snapshoty, scoring domenowy,
+          walidację API, warstwę adapterów oraz interfejs analityczny możliwy do rozbudowy po MVP.
         </p>
       </section>
 
@@ -65,10 +65,9 @@ export default function AboutPage(): React.ReactElement {
         </div>
         <p className="mt-4 text-sm text-slate-400">
           Aktualny tryb danych: <span className="font-semibold text-radar-green">{getDataMode().toUpperCase()}</span>.
-          Tryb `api` zachowuje fallback do mockĂłw, aby awaria integracji nie blokowaĹ‚a dziaĹ‚ania aplikacji.
+          Tryb `api` zachowuje fallback do mocków, aby awaria integracji nie blokowała działania aplikacji.
         </p>
       </section>
     </div>
   );
 }
-

@@ -59,8 +59,7 @@ function calculateTrend(playerHistory: PlayerCountSnapshot[]): number {
   const sorted = [...playerHistory].sort((a, b) => a.capturedAt.getTime() - b.capturedAt.getTime());
   const latest = sorted.at(-1)?.playersOnline ?? 0;
   const previousWindow = sorted.slice(0, Math.max(1, sorted.length - 1));
-  const average =
-    previousWindow.reduce((total, snapshot) => total + snapshot.playersOnline, 0) / previousWindow.length;
+  const average = previousWindow.reduce((total, snapshot) => total + snapshot.playersOnline, 0) / previousWindow.length;
 
   if (average <= 0) {
     return latest > 0 ? 75 : 45;
@@ -75,10 +74,11 @@ function calculateOfferAvailability(offers: StoreOffer[]): number {
     return 0;
   }
 
-  const officialBonus = offers.some((offer) => offer.isOfficial) ? 18 : 0;
+  const officialBonus = offers.some((offer) => offer.isOfficialStore || offer.isOfficial) ? 18 : 0;
+  const trustedStoreApiBonus = offers.some((offer) => offer.sourceConfidence === "experimental-store-api") ? 8 : 0;
   const competition = clamp(offers.length * 18, 18, 70);
   const bestDiscount = Math.max(...offers.map((offer) => offer.discountPercent));
-  return clamp(competition + officialBonus + bestDiscount * 0.2);
+  return clamp(competition + officialBonus + trustedStoreApiBonus + bestDiscount * 0.2);
 }
 
 function recommendationFor(score: number, latestPrice: GamePriceSnapshot | null): Recommendation {

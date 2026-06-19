@@ -293,10 +293,11 @@ export class GogService {
   private readonly mapper = new GogProductMapper();
 
   async status() {
-    const [repositoryStatus, logs, gogOfferCount, lastGogPriceRefresh] = await Promise.all([
+    const [repositoryStatus, logs, gogOfferCount, gogPriceSnapshotCount, lastGogPriceRefresh] = await Promise.all([
       repositories.gog.status(),
       repositories.diagnostics.listIntegrationLogs(30),
       repositories.games.countOffersBySource("gog"),
+      repositories.snapshots.countPriceSnapshotsBySource("gog"),
       latestGogPriceRefresh()
     ]);
     const gogLogs = logs.filter((log) => log.service === "gog");
@@ -305,13 +306,17 @@ export class GogService {
       gogEnabled: isGogEnabled(),
       gogCatalogEntries: repositoryStatus.gogCatalogEntries,
       gogMappings: repositoryStatus.gogMappings,
+      gogMappedGames: repositoryStatus.gogMappings,
       lastGogSync: repositoryStatus.lastGogSync,
+      lastGogCatalogSearch: repositoryStatus.lastGogCatalogSearch,
       lastGogError: gogLogs.find((log) => log.level === "error") ?? null,
       requestLimitPerHour: getGogRequestLimitPerHour(),
       countryCode: getGogCountryCode(),
       currency: getGogCurrency(),
       gogOfferCount,
+      gogPriceSnapshotCount,
       lastGogPriceRefresh,
+      statusMessage: isGogEnabled() ? null : "GOG connector disabled by environment.",
       integrationLogs: gogLogs
     };
   }

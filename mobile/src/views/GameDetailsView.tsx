@@ -54,6 +54,7 @@ export function GameDetailsView({
   if (error || !profile) {
     return <ErrorState message={error ?? "Brak danych profilu."} onRetry={load} />;
   }
+
   const bestPrice = profile.bestOffer ?? null;
   const latestPrice = profile.latestPrice ?? null;
   const priceSource = latestPrice?.sourceConfidence ?? bestPrice?.sourceConfidence ?? "no-price-data";
@@ -61,6 +62,7 @@ export function GameDetailsView({
   const priceSourceName = latestPrice?.sourceName ?? bestPrice?.sourceName ?? null;
   const storeType = bestPrice?.storeType ?? latestPrice?.storeType ?? "unknown";
   const isGogPrice = priceDataSource === "gog" || priceSourceName === "gog" || bestPrice?.storeName === "GOG";
+  const isSteamStorePrice = priceDataSource === "steam-store" || priceSourceName === "steam-store";
 
   return (
     <div className="space-y-5">
@@ -116,6 +118,11 @@ export function GameDetailsView({
               GOG DRM-free
             </span>
           ) : null}
+          {isSteamStorePrice ? (
+            <span className="rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2.5 py-1 text-xs font-semibold text-radar-cyan">
+              Steam Store
+            </span>
+          ) : null}
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-400">
           Best offer: {formatPrice(bestPrice?.price ?? latestPrice?.price, bestPrice?.currency ?? latestPrice?.currency ?? "PLN")}
@@ -125,6 +132,7 @@ export function GameDetailsView({
           Discount: {bestPrice?.discountPercent ?? latestPrice?.discountPercent ?? 0}%
         </p>
         {isGogPrice ? <p className="mt-1 text-xs text-slate-500">Source: GameValue / GOG store API</p> : null}
+        {isSteamStorePrice ? <p className="mt-1 text-xs text-slate-500">Source: GameValue / Steam Store</p> : null}
         <p className="mt-1 text-xs text-slate-500">
           Last price refresh:{" "}
           {latestPrice?.fetchedAt ?? latestPrice?.capturedAt ?? bestPrice?.fetchedAt ?? bestPrice?.updatedAt
@@ -194,6 +202,7 @@ export function GameDetailsView({
               <p className="mt-1 text-sm text-slate-400">
                 {offer.discountPercent}% · {offer.drm} · {offer.isOfficial ? "official" : "adapter-ready"}
                 {offer.source === "gog" || offer.sourceName === "gog" ? " · GameValue / GOG store API" : ""}
+                {offer.source === "steam-store" || offer.sourceName === "steam-store" ? " · GameValue / Steam Store" : ""}
               </p>
             </div>
           ))}
@@ -221,8 +230,14 @@ function priceSourceLabel(
   if (source === "gog" || sourceName === "gog") {
     return "GameValue / GOG store API";
   }
+  if (source === "steam-store" || sourceName === "steam-store") {
+    return "GameValue / Steam Store";
+  }
   if (confidence === "internal-real") {
     return "GameValue internal";
+  }
+  if (confidence === "experimental-store-api") {
+    return "Experimental store API";
   }
   if (confidence === "internal-mock") {
     return "Mock fallback";
@@ -236,6 +251,9 @@ function priceSourceLabel(
 function priceSourceClass(source: PriceSourceConfidence | undefined): string {
   if (source === "internal-real") {
     return "border-radar-green/30 bg-radar-green/10 text-radar-green";
+  }
+  if (source === "experimental-store-api") {
+    return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
   }
   if (source === "internal-mock") {
     return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";

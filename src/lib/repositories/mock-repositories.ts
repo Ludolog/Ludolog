@@ -35,6 +35,8 @@ import {
   listPriceAlerts,
   listWatchlist,
   recordIntegrationLog,
+  previewMockPriceCleanup,
+  runMockPriceCleanup,
   removeWatchlistItem,
   searchGames,
   searchGogCatalogEntries,
@@ -54,6 +56,7 @@ import type {
   GameRepository,
   GogRepository,
   PriceRepository,
+  PriceDataSource,
   SnapshotRepository,
   SteamCatalogRepository,
   SteamCatalogUpsertInput,
@@ -110,7 +113,7 @@ class MockGameRepository implements GameRepository {
     upsertStoreOffers(gameId, offers);
   }
 
-  async countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog") {
+  async countOffersBySource(source: PriceDataSource) {
     return countOffersBySource(source);
   }
 }
@@ -138,22 +141,38 @@ class MockPriceRepository implements PriceRepository {
         countOffersBySource("mock") +
         countOffersBySource("manual") +
         countOffersBySource("gog") +
+        countOffersBySource("steam-store") +
         countOffersBySource("ggdeals") +
         countOffersBySource("price-api"),
       priceSnapshotCount:
         countPriceSnapshotsBySource("mock") +
         countPriceSnapshotsBySource("manual") +
         countPriceSnapshotsBySource("gog") +
+        countPriceSnapshotsBySource("steam-store") +
         countPriceSnapshotsBySource("ggdeals") +
         countPriceSnapshotsBySource("price-api"),
       storeCount: listStores().length,
       priceSourceCount: listPriceSources().length,
       lastPriceSnapshot: getLatestPriceRefresh(),
-      realInternalPriceSnapshots: countPriceSnapshotsBySource("manual") + countPriceSnapshotsBySource("gog"),
+      realInternalPriceSnapshots:
+        countPriceSnapshotsBySource("manual") +
+        countPriceSnapshotsBySource("gog") +
+        countPriceSnapshotsBySource("steam-store"),
       mockPriceSnapshots: countPriceSnapshotsBySource("mock"),
-      realOffers: countOffersBySource("manual") + countOffersBySource("gog"),
-      mockOffers: countOffersBySource("mock")
+      realOffers:
+        countOffersBySource("manual") + countOffersBySource("gog") + countOffersBySource("steam-store"),
+      mockOffers: countOffersBySource("mock"),
+      steamStoreOfferCount: countOffersBySource("steam-store"),
+      steamStorePriceSnapshotCount: countPriceSnapshotsBySource("steam-store")
     };
+  }
+
+  async previewMockCleanup() {
+    return previewMockPriceCleanup();
+  }
+
+  async runMockCleanup() {
+    return runMockPriceCleanup();
   }
 }
 
@@ -258,7 +277,7 @@ class MockSnapshotRepository implements SnapshotRepository {
     return getLatestPriceRefresh();
   }
 
-  async countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog") {
+  async countPriceSnapshotsBySource(source: PriceDataSource) {
     return countPriceSnapshotsBySource(source);
   }
 

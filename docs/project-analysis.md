@@ -162,10 +162,15 @@ The internal price layer adds:
 - extended `StoreOffer` rows for current tracked offers.
 - extended `GamePriceSnapshot` rows for durable price history.
 - `GogCatalogEntry` and `GameExternalMapping` for manual Steam/GameValue-to-GOG product mapping.
+- experimental `steam-store` price records from the Steam Store JSON `appdetails` endpoint.
 
-`GameValuePriceService` validates admin inputs, creates stores and sources when needed, upserts offers and appends snapshots. `sourceConfidence` distinguishes `internal-real`, `internal-mock`, `external-legacy` and `no-price-data`, which lets web and Android show clear badges without exposing technical provider failures.
+`GameValuePriceService` validates admin inputs, creates stores and sources when needed, upserts offers and appends snapshots. `sourceConfidence` distinguishes `internal-real`, `experimental-store-api`, `internal-mock`, `external-legacy` and `no-price-data`, which lets web and Android show clear badges without exposing technical provider failures.
 
 `GogService` is the first real store connector in that layer. It is disabled by default, uses public GOG JSON endpoints only, respects small admin batches and writes official DRM-free `source=gog` offers after manual mapping approval. It rejects HTML/non-JSON responses and never stores Cloudflare or page HTML as a price record.
+
+`SteamStorePriceService` is the second real/experimental connector. It is disabled by default, uses Steam Store `appdetails` JSON only, keeps admin batches small and writes `source=steam-store` offers/snapshots only when explicitly invoked. It rejects non-JSON responses and never stores HTML.
+
+Mock price cleanup is separated from general database maintenance. `GET /api/admin/prices/mock-cleanup/preview` reports affected mock offers, mock snapshots and mock price sources; `POST /api/admin/prices/mock-cleanup/run` requires `DELETE_MOCK_PRICE_DATA_ONLY` and does not delete games, catalogs, external mappings or player snapshots.
 
 Legacy `PriceProviderService` and GG.deals diagnostics remain as disabled safety code, but `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` no longer call external aggregators.
 

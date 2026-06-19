@@ -82,13 +82,15 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 ## GameValue Price API flow
 
 1. Public clients read internal price data through `GET /api/prices/status`, `GET /api/games/:id/prices`, `GET /api/deals/best`, `GET /api/stats/best-value` and `GET /api/stats/overview`.
-2. Admin writes use `POST /api/admin/prices/manual-offer`, `POST /api/admin/prices/import-json`, `POST /api/admin/prices/import-csv`, `POST /api/admin/prices/snapshot` and `POST /api/admin/prices/recalculate` with `x-admin-secret`.
+2. Admin writes use `POST /api/admin/prices/manual-offer`, `POST /api/admin/prices/import-json`, `POST /api/admin/prices/import-csv`, `POST /api/admin/prices/snapshot`, `POST /api/admin/prices/recalculate`, GOG admin routes and Steam Store price routes with `x-admin-secret`.
 3. `GameValuePriceService` validates input, creates `Store` and `PriceSource` records when needed, upserts `StoreOffer` rows and appends `GamePriceSnapshot` rows.
-4. Internal source names include `manual-admin`, `json-import`, `csv-import`, `partner-feed-placeholder`, `mock-seed` and `gog`.
-5. `sourceConfidence` separates `internal-real`, `internal-mock`, `external-legacy` and `no-price-data` for UI badges and analytics.
+4. Internal source names include `manual-admin`, `json-import`, `csv-import`, `mock-seed`, `gog` and experimental `steam-store`.
+5. `sourceConfidence` separates `internal-real`, `experimental-store-api`, `internal-mock`, `external-legacy` and `no-price-data` for UI badges and analytics.
 6. Legacy `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` return disabled responses and do not call external aggregators.
 7. GG.deals, ITAD and CheapShark are not active providers. GG.deals was disabled after Vercel received Cloudflare challenge HTML instead of API JSON. The app does not bypass Cloudflare, scrape protected pages, use Playwright/Puppeteer, cookies, proxies or browser sessions.
 8. The GOG connector is admin/backend-only, disabled by default and writes official DRM-free offers only after a manual `GameExternalMapping` exists.
+9. The Steam Store price connector is admin/backend-only, disabled by default and writes official Steam offers only from JSON `appdetails` responses.
+10. `GET /api/admin/prices/mock-cleanup/preview` reports old mock/demo price rows. `POST /api/admin/prices/mock-cleanup/run` requires `confirm=DELETE_MOCK_PRICE_DATA_ONLY` and deletes only mock price offers, mock price snapshots and mock price sources.
 
 ## Stats overview flow
 
@@ -109,8 +111,9 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 
 - `DATA_MODE=mock`: everything works from deterministic fixtures.
 - `DATA_MODE=api` with missing Steam key: Steam calls are skipped, warnings are logged and cached/mock data is used.
-- Legacy external price providers disabled: price reads continue from GameValue internal offers, snapshots and mock seed data.
-- GOG connector disabled: public price reads continue from existing internal offers and mock seed data.
+- Legacy external price providers disabled: price reads continue from GameValue internal offers, GOG, Steam Store, snapshots and mock seed data.
+- GOG connector disabled: public price reads continue from existing internal offers, Steam Store and existing stored data.
+- Steam Store connector disabled: public price reads continue from existing internal offers, GOG and existing stored data.
 - `REPOSITORY_PROVIDER=mock`: no Neon required.
 - `REPOSITORY_PROVIDER=prisma`: API routes persist to Neon and use Prisma migrations/schema.
 
@@ -122,4 +125,6 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 - Do not run a full Steam catalog sync automatically or from user traffic.
 - Start with `dryRun: true`, `maxPages: 1`, `maxResults: 100`.
 - Use `startAfterAppId` or the status cursor for controlled follow-up batches.
+- Always run mock price cleanup preview before cleanup run.
+- Keep Steam Store price refreshes as `dryRun=true` until status/test output confirms valid JSON-derived prices.
 - Keep admin secrets in local form state or terminal environment only; do not commit them.

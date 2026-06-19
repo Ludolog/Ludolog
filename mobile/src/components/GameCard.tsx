@@ -63,8 +63,14 @@ function priceSourceLabel(confidence: PriceSourceConfidence, source: DataSource 
   if (source === "gog" || sourceName === "gog") {
     return "GameValue / GOG";
   }
+  if (source === "steam-store" || sourceName === "steam-store") {
+    return "GameValue / Steam";
+  }
   if (confidence === "internal-real") {
     return "GameValue internal";
+  }
+  if (confidence === "experimental-store-api") {
+    return "Experimental store API";
   }
   if (confidence === "internal-mock") {
     return "Mock price";
@@ -78,6 +84,9 @@ function priceSourceLabel(confidence: PriceSourceConfidence, source: DataSource 
 function priceSourceClass(source: PriceSourceConfidence): string {
   if (source === "internal-real") {
     return "border-radar-green/30 bg-radar-green/10 text-radar-green";
+  }
+  if (source === "experimental-store-api") {
+    return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
   }
   if (source === "internal-mock") {
     return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";

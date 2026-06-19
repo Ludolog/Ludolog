@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }): React.Rea
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
 
       <footer className="border-t border-white/10 px-4 py-5 text-center text-xs text-slate-500">
-        GameValue Radar jest edukacyjnym projektem inĹĽynierskim i nie jest oficjalnie powiÄ…zany ze Steam, Valve,
+        GameValue Radar jest edukacyjnym projektem inżynierskim i nie jest oficjalnie powiązany ze Steam, Valve,
         GG.deals ani SteamDB.
       </footer>
     </div>

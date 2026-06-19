@@ -29,7 +29,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
             </span>
             <div>
               <h1 className="text-2xl font-semibold text-white sm:text-3xl">GameValue Radar</h1>
-              <p className="text-sm text-slate-400">Aktualne okazje, aktywnoĹ›Ä‡ graczy i scoring zakupowy w jednym panelu.</p>
+              <p className="text-sm text-slate-400">Aktualne okazje, aktywność graczy i scoring zakupowy w jednym panelu.</p>
             </div>
           </div>
           <Suspense fallback={<div className="h-16 rounded-lg bg-radar-panel" />}>

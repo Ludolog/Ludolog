@@ -2,9 +2,9 @@ export type DataMode = "mock" | "api";
 
 export type StatsDataMode = "real" | "mixed" | "mock";
 
-export type DataSource = "mock" | "steam-api" | "price-api" | "prisma" | "ggdeals" | "manual" | "gog";
+export type DataSource = "mock" | "steam-api" | "steam-store" | "price-api" | "prisma" | "ggdeals" | "manual" | "gog";
 
-export type PriceProviderName = "gamevalue" | "mock" | "ggdeals" | "itad" | "cheapshark" | "gog";
+export type PriceProviderName = "gamevalue" | "mock" | "ggdeals" | "itad" | "cheapshark" | "gog" | "steam-store";
 
 export type PriceMode = "internal" | "mock" | "api";
 
@@ -12,9 +12,14 @@ export type StoreType = "official" | "keyshop" | "marketplace" | "unknown";
 
 export type Recommendation = "buy_now" | "wait" | "weak_deal";
 
-export type PriceSourceType = "manual" | "csv" | "json" | "partner" | "mock" | "store-api";
+export type PriceSourceType = "manual" | "csv" | "json" | "partner" | "mock" | "store-api" | "store-api-experimental";
 
-export type PriceSourceConfidence = "internal-real" | "internal-mock" | "external-legacy" | "no-price-data";
+export type PriceSourceConfidence =
+  | "internal-real"
+  | "experimental-store-api"
+  | "internal-mock"
+  | "external-legacy"
+  | "no-price-data";
 
 export type PriceSource = {
   id: string;
@@ -57,6 +62,7 @@ export type GogRepositoryStatus = {
   gogCatalogEntries: number;
   gogMappings: number;
   lastGogSync: Date | null;
+  lastGogCatalogSearch: Date | null;
 };
 
 export type Store = {
@@ -240,7 +246,7 @@ export type PriceAlert = {
 
 export type IntegrationLog = {
   id: string;
-  service: "steam" | "ggdeals" | "gog" | "price" | "search" | "snapshot" | "alerts";
+  service: "steam" | "steam-store" | "ggdeals" | "gog" | "price" | "price-cleanup" | "search" | "snapshot" | "alerts";
   level: "info" | "warning" | "error";
   message: string;
   createdAt: Date;
@@ -317,12 +323,25 @@ export type AdminStatus = {
   gogEnabled: boolean;
   gogCatalogEntries: number;
   gogMappings: number;
+  gogMappedGames: number;
   gogOfferCount: number;
+  gogPriceSnapshotCount: number;
   lastGogSync: Date | null;
+  lastGogCatalogSearch: Date | null;
   lastGogError: IntegrationLog | null;
   lastGogPriceRefresh: Date | null;
   gogCountryCode: string;
   gogCurrency: string;
+  gogStatusMessage: string | null;
+  steamStorePriceEnabled: boolean;
+  steamStoreCountryCode: string;
+  steamStoreCurrency: string;
+  steamStoreMaxPerRun: number;
+  steamStoreCacheTtlMinutes: number;
+  steamStoreOfferCount: number;
+  steamStorePriceSnapshotCount: number;
+  lastSteamStorePriceRefresh: Date | null;
+  lastSteamStorePriceError: IntegrationLog | null;
   realPlayerSnapshots: number;
   mockPlayerSnapshots: number;
   integrationLogs: IntegrationLog[];

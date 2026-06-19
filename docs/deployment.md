@@ -301,6 +301,20 @@ GameValue Price API status:
 Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/prices/status" | ConvertFrom-Json
 ```
 
+Mock price cleanup preview. Run this before any destructive cleanup and review the counts/examples:
+
+```powershell
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/preview" -Headers $headers | ConvertFrom-Json
+```
+
+The destructive cleanup endpoint requires the exact confirmation phrase. Do not run it until the preview report is approved:
+
+```powershell
+$body = @{ confirm = "DELETE_MOCK_PRICE_DATA_ONLY" } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/run" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
 Manual offer for Dota 2:
 
 ```powershell
@@ -347,6 +361,29 @@ Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/import-js
 ```
 
 Use `POST /api/admin/prices/snapshot` to append a snapshot from current tracked offers and `POST /api/admin/prices/recalculate` to rebuild snapshots for imported games. Legacy `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` return disabled responses and do not call external aggregators.
+
+Experimental Steam Store price connector envs. Keep it disabled until ready to test:
+
+```text
+STEAM_STORE_PRICE_ENABLED=false
+STEAM_STORE_API_BASE_URL=https://store.steampowered.com/api
+STEAM_STORE_COUNTRY=PL
+STEAM_STORE_CURRENCY=PLN
+STEAM_STORE_PRICE_CACHE_TTL_MINUTES=360
+STEAM_STORE_PRICE_MAX_PER_RUN=20
+```
+
+Steam Store status and Dota 2 dry run:
+
+```powershell
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/status" | ConvertFrom-Json
+
+$body = @{ steamAppIds = @(570); limit = 1; dryRun = $true } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
+Do not set `dryRun=false` until `STEAM_STORE_PRICE_ENABLED=true` is deployed and the dry run shows valid JSON-derived price data.
 
 Starter import from the already synced Steam catalog. Keep this as a small, intentional batch; it does not run a full catalog import:
 

@@ -1,5 +1,6 @@
 import { getPriceMode, getPriceProvider, areLegacyPriceProvidersEnabled } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
+import { trustedOffersOnly } from "@/lib/services/price-source-utils";
 import type { Game, GamePriceSnapshot, PriceSource, PriceSourceType, Store, StoreOffer, StoreType } from "@/lib/types";
 import type {
   ApiManualOfferRequest,
@@ -32,7 +33,9 @@ export class GameValuePriceService {
       realInternalPriceSnapshots: status.realInternalPriceSnapshots,
       mockPriceSnapshots: status.mockPriceSnapshots,
       realOffers: status.realOffers,
-      mockOffers: status.mockOffers
+      mockOffers: status.mockOffers,
+      steamStoreOfferCount: status.steamStoreOfferCount,
+      steamStorePriceSnapshotCount: status.steamStorePriceSnapshotCount
     };
   }
 
@@ -230,7 +233,7 @@ export class GameValuePriceService {
   }
 
   private async appendSnapshot(game: Game, source: PriceSource): Promise<GamePriceSnapshot | null> {
-    const offers = (await repositories.games.listOffers(game.id)).filter((offer) => offer.available);
+    const offers = trustedOffersOnly(await repositories.games.listOffers(game.id));
     const bestOffer = offers[0] ?? null;
     if (!bestOffer) {
       return null;
@@ -244,8 +247,8 @@ export class GameValuePriceService {
       id: `price-${game.id}-gamevalue-${now.getTime()}`,
       gameId: game.id,
       steamAppId: game.steamAppId,
-      sourceId: source.id,
-      provider: "gamevalue",
+      sourceId: bestOffer.sourceId ?? source.id,
+      provider: bestOffer.provider,
       storeType: bestOffer.storeType,
       price,
       bestPrice: price,
@@ -262,8 +265,10 @@ export class GameValuePriceService {
       fetchedAt: bestOffer.fetchedAt ?? now,
       capturedAt: now,
       createdAt: now,
-      source: "manual",
-      sourceConfidence: "internal-real"
+      source: bestOffer.source,
+      sourceConfidence: bestOffer.sourceConfidence,
+      sourceName: bestOffer.sourceName ?? source.name,
+      sourceType: bestOffer.sourceType ?? source.type
     };
     await repositories.snapshots.appendPrice(snapshot);
     return snapshot;

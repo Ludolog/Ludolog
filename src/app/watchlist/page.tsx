@@ -51,8 +51,8 @@ export default async function WatchlistPage(): Promise<React.ReactElement> {
                         {summary.game.title}
                       </Link>
                       <p className="mt-1 text-sm text-slate-400">
-                        Target: {formatPrice(item.targetPrice)} Â· Current:{" "}
-                        {formatPrice(summary.bestOffer?.price ?? summary.latestPrice?.price)} Â· Low:{" "}
+                        Target: {formatPrice(item.targetPrice)} · Current:{" "}
+                        {formatPrice(summary.bestOffer?.price ?? summary.latestPrice?.price)} · Low:{" "}
                         {formatPrice(summary.latestPrice?.historicalLow)}
                       </p>
                     </div>
@@ -82,7 +82,7 @@ export default async function WatchlistPage(): Promise<React.ReactElement> {
             <div key={alert.id} className="rounded-lg border border-white/10 bg-black/20 p-4">
               <p className="font-semibold text-white">{alert.gameId}</p>
               <p className="mt-1 text-sm text-slate-400">
-                Threshold: {formatPrice(alert.thresholdPrice)} Â· {alert.isActive ? "Active" : "Triggered"}
+                Threshold: {formatPrice(alert.thresholdPrice)} · {alert.isActive ? "Active" : "Triggered"}
               </p>
             </div>
           ))}

@@ -1,20 +1,24 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
+
+import { ADMIN_SECRET_STORAGE_KEY, ADMIN_SECRET_UPDATED_EVENT } from "@/components/forms/admin-secret-panel";
 
 export function AdminActionButton({
   body,
   editableBody = false,
   endpoint,
   label,
+  method = "POST",
   requireSecret = false
 }: {
   body?: unknown;
   editableBody?: boolean;
   endpoint: string;
   label: string;
+  method?: "GET" | "POST";
   requireSecret?: boolean;
 }): React.ReactElement {
   const router = useRouter();
@@ -22,6 +26,22 @@ export function AdminActionButton({
   const [result, setResult] = useState<string | null>(null);
   const [secret, setSecret] = useState("");
   const [bodyText, setBodyText] = useState(body === undefined ? "" : JSON.stringify(body, null, 2));
+
+  useEffect(() => {
+    if (!requireSecret) {
+      return undefined;
+    }
+    const refreshSecret = (): void => {
+      setSecret(window.localStorage.getItem(ADMIN_SECRET_STORAGE_KEY) ?? "");
+    };
+    refreshSecret();
+    window.addEventListener(ADMIN_SECRET_UPDATED_EVENT, refreshSecret);
+    window.addEventListener("storage", refreshSecret);
+    return () => {
+      window.removeEventListener(ADMIN_SECRET_UPDATED_EVENT, refreshSecret);
+      window.removeEventListener("storage", refreshSecret);
+    };
+  }, [requireSecret]);
 
   async function run(): Promise<void> {
     setLoading(true);
@@ -34,9 +54,9 @@ export function AdminActionButton({
       const requestBody = editableBody ? parseBodyText(bodyText) : body;
 
       const response = await fetch(endpoint, {
-        method: "POST",
+        method,
         headers,
-        body: requestBody === undefined ? undefined : JSON.stringify(requestBody)
+        body: method === "GET" || requestBody === undefined ? undefined : JSON.stringify(requestBody)
       });
       const payload = (await response.json()) as unknown;
       setResult(response.ok ? compactJson(payload) : `Error ${response.status}: ${compactJson(payload)}`);
@@ -51,13 +71,9 @@ export function AdminActionButton({
   return (
     <div className="space-y-2">
       {requireSecret ? (
-        <input
-          type="password"
-          value={secret}
-          onChange={(event) => setSecret(event.target.value)}
-          placeholder="x-admin-secret"
-          className="min-h-10 w-full rounded-md border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-radar-cyan"
-        />
+        <p className="rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400">
+          {secret.trim() ? "Using shared admin secret." : "Set the shared admin secret above to enable this action."}
+        </p>
       ) : null}
       {editableBody ? (
         <textarea

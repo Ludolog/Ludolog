@@ -23,6 +23,7 @@ import type {
 } from "@/lib/types";
 
 export type RepositoryProvider = "mock" | "prisma";
+export type PriceDataSource = "mock" | "ggdeals" | "price-api" | "manual" | "gog" | "steam-store";
 
 export type WatchlistWithSummary = WatchlistItem & {
   summary: GameSummary | null;
@@ -41,7 +42,7 @@ export interface GameRepository {
   mostActive(limit?: number): Promise<GameSummary[]>;
   listOffers(gameId: string): Promise<StoreOffer[]>;
   upsertOffers(gameId: string, offers: StoreOffer[]): Promise<void>;
-  countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): Promise<number>;
+  countOffersBySource(source: PriceDataSource): Promise<number>;
 }
 
 export type PriceStoreInput = {
@@ -66,6 +67,41 @@ export type PricesStatus = {
   mockPriceSnapshots: number;
   realOffers: number;
   mockOffers: number;
+  steamStoreOfferCount: number;
+  steamStorePriceSnapshotCount: number;
+};
+
+export type MockPriceCleanupGame = {
+  gameId: string;
+  steamAppId: number;
+  title: string;
+  mockOfferCount: number;
+  mockPriceSnapshotCount: number;
+};
+
+export type MockPriceCleanupExample = {
+  kind: "offer" | "price-snapshot" | "price-source";
+  id: string;
+  gameId?: string | null;
+  steamAppId?: number | null;
+  title?: string | null;
+  storeName?: string | null;
+  sourceName?: string | null;
+};
+
+export type MockPriceCleanupPreview = {
+  mockStoreOfferCount: number;
+  mockPriceSnapshotCount: number;
+  mockPriceSourceCount: number;
+  affectedGameCount: number;
+  affectedGames: MockPriceCleanupGame[];
+  examples: MockPriceCleanupExample[];
+};
+
+export type MockPriceCleanupRun = MockPriceCleanupPreview & {
+  deletedStoreOffers: number;
+  deletedPriceSnapshots: number;
+  deletedPriceSources: number;
 };
 
 export interface PriceRepository {
@@ -74,6 +110,8 @@ export interface PriceRepository {
   listStores(): Promise<Store[]>;
   listPriceSources(): Promise<PriceSource[]>;
   status(): Promise<PricesStatus>;
+  previewMockCleanup(): Promise<MockPriceCleanupPreview>;
+  runMockCleanup(): Promise<MockPriceCleanupRun>;
 }
 
 export type SteamCatalogUpsertInput = Omit<SteamCatalogEntry, "createdAt" | "updatedAt">;
@@ -133,7 +171,7 @@ export interface SnapshotRepository {
   latestPlayerRefresh(): Promise<Date | null>;
   countPlayerSnapshotsBySource(source: "mock" | "steam-api"): Promise<number>;
   latestPriceRefresh(): Promise<Date | null>;
-  countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): Promise<number>;
+  countPriceSnapshotsBySource(source: PriceDataSource): Promise<number>;
   appendPrice(snapshot: GamePriceSnapshot): Promise<void>;
   appendPlayers(snapshot: PlayerCountSnapshot): Promise<void>;
 }

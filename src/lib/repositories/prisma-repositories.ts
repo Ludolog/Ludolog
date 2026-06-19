@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type IntegrationService as PrismaIntegrationService } from "@prisma/client";
 
 import {
   DEMO_USER_ID,
@@ -6,8 +6,13 @@ import {
   getGGDealsApiKey,
   getGogCountryCode,
   getGogCurrency,
+  getSteamStoreCountryCode,
+  getSteamStoreCurrency,
+  getSteamStorePriceCacheTtlMinutes,
+  getSteamStorePriceMaxPerRun,
   getPriceMode,
   getPriceProvider,
+  isSteamStorePriceEnabled,
   isGogEnabled
 } from "@/lib/config";
 import { prisma } from "@/lib/repositories/prisma-client";
@@ -17,7 +22,10 @@ import type {
   DiagnosticsRepository,
   GameRepository,
   GogRepository,
+  MockPriceCleanupPreview,
+  MockPriceCleanupRun,
   PriceRepository,
+  PriceDataSource,
   SnapshotRepository,
   SteamCatalogRepository,
   SteamCatalogUpsertInput,
@@ -25,6 +33,12 @@ import type {
 } from "@/lib/repositories/contracts";
 import { calculateGameValueScore } from "@/lib/services/deal-score-service";
 import { resolveGGDealsStatusFromLogs } from "@/lib/services/ggdeals-diagnostics";
+import {
+  compareTrustedOffers,
+  isTrustedPriceSource,
+  sourceConfidenceForDataSource,
+  trustedOffersOnly
+} from "@/lib/services/price-source-utils";
 import type {
   AdminStatus,
   DataSource,
@@ -64,20 +78,48 @@ function sourceFromPrisma(source: string): DataSource {
   if (source === "steam_api") {
     return "steam-api";
   }
+  if (source === "steam_store") {
+    return "steam-store";
+  }
   if (source === "price_api") {
     return "price-api";
   }
   return source as DataSource;
 }
 
-function sourceToPrisma(source: DataSource): "mock" | "steam_api" | "price_api" | "prisma" | "ggdeals" | "manual" | "gog" {
+function sourceToPrisma(
+  source: DataSource
+): "mock" | "steam_api" | "steam_store" | "price_api" | "prisma" | "ggdeals" | "manual" | "gog" {
   if (source === "steam-api") {
     return "steam_api";
+  }
+  if (source === "steam-store") {
+    return "steam_store";
   }
   if (source === "price-api") {
     return "price_api";
   }
   return source;
+}
+
+function logServiceFromPrisma(service: string): IntegrationLog["service"] {
+  if (service === "steam_store") {
+    return "steam-store";
+  }
+  if (service === "price_cleanup") {
+    return "price-cleanup";
+  }
+  return service as IntegrationLog["service"];
+}
+
+function logServiceToPrisma(service: IntegrationLog["service"]): string {
+  if (service === "steam-store") {
+    return "steam_store";
+  }
+  if (service === "price-cleanup") {
+    return "price_cleanup";
+  }
+  return service;
 }
 
 function mapGame(game: PrismaGame): Game {
@@ -239,16 +281,7 @@ function mapPriceSource(source: PrismaPriceSource): PriceSource {
 }
 
 function sourceConfidence(source: DataSource): StoreOffer["sourceConfidence"] {
-  if (source === "mock") {
-    return "internal-mock";
-  }
-  if (source === "manual" || source === "prisma" || source === "gog") {
-    return "internal-real";
-  }
-  if (source === "ggdeals" || source === "price-api") {
-    return "external-legacy";
-  }
-  return "no-price-data";
+  return sourceConfidenceForDataSource(source);
 }
 
 function sourceName(source: DataSource): string {
@@ -257,6 +290,9 @@ function sourceName(source: DataSource): string {
   }
   if (source === "gog") {
     return "gog";
+  }
+  if (source === "steam-store") {
+    return "steam-store";
   }
   if (source === "ggdeals") {
     return "ggdeals";
@@ -277,6 +313,9 @@ function sourceType(source: DataSource): StoreOffer["sourceType"] {
   if (source === "gog" || source === "ggdeals") {
     return "store-api";
   }
+  if (source === "steam-store") {
+    return "store-api-experimental";
+  }
   if (source === "mock") {
     return "mock";
   }
@@ -284,28 +323,7 @@ function sourceType(source: DataSource): StoreOffer["sourceType"] {
 }
 
 function compareOffers(a: StoreOffer, b: StoreOffer): number {
-  const priceDiff = a.price - b.price;
-  if (priceDiff !== 0) {
-    return priceDiff;
-  }
-  const confidenceDiff = sourceConfidenceRank(a.sourceConfidence) - sourceConfidenceRank(b.sourceConfidence);
-  if (confidenceDiff !== 0) {
-    return confidenceDiff;
-  }
-  return b.updatedAt.getTime() - a.updatedAt.getTime();
-}
-
-function sourceConfidenceRank(source: StoreOffer["sourceConfidence"]): number {
-  if (source === "internal-real") {
-    return 0;
-  }
-  if (source === "external-legacy") {
-    return 1;
-  }
-  if (source === "internal-mock") {
-    return 2;
-  }
-  return 3;
+  return compareTrustedOffers(a, b);
 }
 
 function slugify(value: string): string {
@@ -355,10 +373,128 @@ function mapAlert(alert: PrismaAlert): PriceAlert {
 function mapLog(log: PrismaLog): IntegrationLog {
   return {
     id: log.id,
-    service: log.service,
+    service: logServiceFromPrisma(log.service),
     level: log.level,
     message: log.message,
     createdAt: log.createdAt
+  };
+}
+
+async function findPrismaMockPriceSourceIds(): Promise<string[]> {
+  const sources = await prisma.priceSource.findMany({
+    where: {
+      OR: [{ type: "mock" }, { name: { contains: "mock", mode: "insensitive" } }]
+    },
+    select: { id: true }
+  });
+  return sources.map((source) => source.id);
+}
+
+function mockOfferWhere(mockSourceIds: string[]): Prisma.StoreOfferWhereInput {
+  return {
+    OR: [
+      { source: "mock" },
+      { provider: "mock" },
+      ...(mockSourceIds.length > 0 ? [{ sourceId: { in: mockSourceIds } }] : [])
+    ]
+  };
+}
+
+function mockSnapshotWhere(mockSourceIds: string[]): Prisma.GamePriceSnapshotWhereInput {
+  return {
+    OR: [
+      { source: "mock" },
+      { provider: "mock" },
+      ...(mockSourceIds.length > 0 ? [{ sourceId: { in: mockSourceIds } }] : [])
+    ]
+  };
+}
+
+async function buildPrismaMockCleanupPreview(): Promise<MockPriceCleanupPreview> {
+  const mockSourceIds = await findPrismaMockPriceSourceIds();
+  const offerWhere = mockOfferWhere(mockSourceIds);
+  const snapshotWhere = mockSnapshotWhere(mockSourceIds);
+  const [mockOffers, mockSnapshots, mockSources] = await Promise.all([
+    prisma.storeOffer.findMany({
+      where: offerWhere,
+      include: { game: { select: { id: true, steamAppId: true, title: true } } },
+      orderBy: { updatedAt: "desc" }
+    }),
+    prisma.gamePriceSnapshot.findMany({
+      where: snapshotWhere,
+      include: { game: { select: { id: true, steamAppId: true, title: true } } },
+      orderBy: { capturedAt: "desc" }
+    }),
+    prisma.priceSource.findMany({
+      where: { id: { in: mockSourceIds } },
+      orderBy: { updatedAt: "desc" }
+    })
+  ]);
+  const byGame = new Map<string, MockPriceCleanupPreview["affectedGames"][number]>();
+
+  for (const offer of mockOffers) {
+    const current = byGame.get(offer.gameId) ?? {
+      gameId: offer.gameId,
+      steamAppId: offer.game.steamAppId,
+      title: offer.game.title,
+      mockOfferCount: 0,
+      mockPriceSnapshotCount: 0
+    };
+    current.mockOfferCount += 1;
+    byGame.set(offer.gameId, current);
+  }
+
+  for (const snapshot of mockSnapshots) {
+    const current = byGame.get(snapshot.gameId) ?? {
+      gameId: snapshot.gameId,
+      steamAppId: snapshot.game.steamAppId,
+      title: snapshot.game.title,
+      mockOfferCount: 0,
+      mockPriceSnapshotCount: 0
+    };
+    current.mockPriceSnapshotCount += 1;
+    byGame.set(snapshot.gameId, current);
+  }
+
+  const affectedGames = [...byGame.values()].sort(
+    (a, b) => b.mockOfferCount + b.mockPriceSnapshotCount - (a.mockOfferCount + a.mockPriceSnapshotCount)
+  );
+
+  return {
+    mockStoreOfferCount: mockOffers.length,
+    mockPriceSnapshotCount: mockSnapshots.length,
+    mockPriceSourceCount: mockSources.length,
+    affectedGameCount: affectedGames.length,
+    affectedGames,
+    examples: [
+      ...mockOffers.slice(0, 3).map((offer) => ({
+        kind: "offer" as const,
+        id: offer.id,
+        gameId: offer.gameId,
+        steamAppId: offer.steamAppId,
+        title: offer.title,
+        storeName: offer.storeName,
+        sourceName: sourceName(sourceFromPrisma(offer.source))
+      })),
+      ...mockSnapshots.slice(0, 3).map((snapshot) => ({
+        kind: "price-snapshot" as const,
+        id: snapshot.id,
+        gameId: snapshot.gameId,
+        steamAppId: snapshot.steamAppId,
+        title: snapshot.game.title,
+        storeName: snapshot.storeName,
+        sourceName: sourceName(sourceFromPrisma(snapshot.source))
+      })),
+      ...mockSources.slice(0, 3).map((source) => ({
+        kind: "price-source" as const,
+        id: source.id,
+        gameId: null,
+        steamAppId: null,
+        title: null,
+        storeName: null,
+        sourceName: source.name
+      }))
+    ].slice(0, 8)
   };
 }
 
@@ -690,7 +826,7 @@ class PrismaGameRepository implements GameRepository {
     }
   }
 
-  async countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): Promise<number> {
+  async countOffersBySource(source: PriceDataSource): Promise<number> {
     return prisma.storeOffer.count({ where: { source: sourceToPrisma(source) } });
   }
 
@@ -701,9 +837,11 @@ class PrismaGameRepository implements GameRepository {
       snapshotRepository.listPlayers(game.id),
       this.listOffers(game.id)
     ]);
-    const latestPrice = await latestByGame(priceHistory);
+    const trustedPriceHistory = priceHistory.filter((snapshot) => isTrustedPriceSource(snapshot.source));
+    const trustedOffers = trustedOffersOnly(offers);
+    const latestPrice = await latestByGame(trustedPriceHistory);
     const latestPlayers = await latestByGame(playerHistory);
-    const bestOffer = offers[0] ?? null;
+    const bestOffer = trustedOffers[0] ?? null;
 
     return {
       game,
@@ -712,10 +850,10 @@ class PrismaGameRepository implements GameRepository {
       bestOffer,
       score: calculateGameValueScore({
         latestPrice,
-        priceHistory,
+        priceHistory: trustedPriceHistory,
         latestPlayers,
         playerHistory,
-        offers,
+        offers: trustedOffers,
         reviewScore: game.reviewScore
       })
     };
@@ -923,15 +1061,20 @@ class PrismaGogRepository implements GogRepository {
   }
 
   async status() {
-    const [gogCatalogEntries, gogMappings, latest] = await Promise.all([
+    const [gogCatalogEntries, gogMappings, latest, lastSearchLog] = await Promise.all([
       prisma.gogCatalogEntry.count(),
       prisma.gameExternalMapping.count({ where: { provider: "gog" } }),
-      prisma.gogCatalogEntry.findFirst({ orderBy: { syncedAt: "desc" } })
+      prisma.gogCatalogEntry.findFirst({ orderBy: { syncedAt: "desc" } }),
+      prisma.integrationLog.findFirst({
+        where: { service: "gog", message: { startsWith: "GOG catalog search" } },
+        orderBy: { createdAt: "desc" }
+      })
     ]);
     return {
       gogCatalogEntries,
       gogMappings,
-      lastGogSync: latest?.syncedAt ?? null
+      lastGogSync: latest?.syncedAt ?? null,
+      lastGogCatalogSearch: lastSearchLog?.createdAt ?? null
     };
   }
 }
@@ -1050,7 +1193,7 @@ class PrismaSnapshotRepository implements SnapshotRepository {
     return snapshot?.capturedAt ?? null;
   }
 
-  async countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): Promise<number> {
+  async countPriceSnapshotsBySource(source: PriceDataSource): Promise<number> {
     return prisma.gamePriceSnapshot.count({ where: { source: sourceToPrisma(source) } });
   }
 
@@ -1165,9 +1308,11 @@ class PrismaPriceRepository implements PriceRepository {
       latestPriceSnapshot,
       manualPriceSnapshots,
       gogPriceSnapshots,
+      steamStorePriceSnapshots,
       mockPriceSnapshots,
       manualOffers,
       gogOffers,
+      steamStoreOffers,
       mockOffers
     ] = await Promise.all([
       prisma.storeOffer.count(),
@@ -1177,13 +1322,15 @@ class PrismaPriceRepository implements PriceRepository {
       new PrismaSnapshotRepository().latestPriceRefresh(),
       new PrismaSnapshotRepository().countPriceSnapshotsBySource("manual"),
       new PrismaSnapshotRepository().countPriceSnapshotsBySource("gog"),
+      new PrismaSnapshotRepository().countPriceSnapshotsBySource("steam-store"),
       new PrismaSnapshotRepository().countPriceSnapshotsBySource("mock"),
       new PrismaGameRepository().countOffersBySource("manual"),
       new PrismaGameRepository().countOffersBySource("gog"),
+      new PrismaGameRepository().countOffersBySource("steam-store"),
       new PrismaGameRepository().countOffersBySource("mock")
     ]);
-    const realInternalPriceSnapshots = manualPriceSnapshots + gogPriceSnapshots;
-    const realOffers = manualOffers + gogOffers;
+    const realInternalPriceSnapshots = manualPriceSnapshots + gogPriceSnapshots + steamStorePriceSnapshots;
+    const realOffers = manualOffers + gogOffers + steamStoreOffers;
     return {
       offerCount,
       priceSnapshotCount,
@@ -1193,7 +1340,33 @@ class PrismaPriceRepository implements PriceRepository {
       realInternalPriceSnapshots,
       mockPriceSnapshots,
       realOffers,
-      mockOffers
+      mockOffers,
+      steamStoreOfferCount: steamStoreOffers,
+      steamStorePriceSnapshotCount: steamStorePriceSnapshots
+    };
+  }
+
+  async previewMockCleanup(): Promise<MockPriceCleanupPreview> {
+    return buildPrismaMockCleanupPreview();
+  }
+
+  async runMockCleanup(): Promise<MockPriceCleanupRun> {
+    const preview = await buildPrismaMockCleanupPreview();
+    const mockSourceIds = await findPrismaMockPriceSourceIds();
+    const offerWhere = mockOfferWhere(mockSourceIds);
+    const snapshotWhere = mockSnapshotWhere(mockSourceIds);
+
+    const [deletedOffers, deletedSnapshots, deletedSources] = await prisma.$transaction([
+      prisma.storeOffer.deleteMany({ where: offerWhere }),
+      prisma.gamePriceSnapshot.deleteMany({ where: snapshotWhere }),
+      prisma.priceSource.deleteMany({ where: { id: { in: mockSourceIds } } })
+    ]);
+
+    return {
+      ...preview,
+      deletedStoreOffers: deletedOffers.count,
+      deletedPriceSnapshots: deletedSnapshots.count,
+      deletedPriceSources: deletedSources.count
     };
   }
 }
@@ -1203,7 +1376,7 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
     const entry = await prisma.integrationLog.create({
       data: {
         id: `log-${Date.now()}`,
-        service: log.service,
+        service: logServiceToPrisma(log.service) as PrismaIntegrationService,
         level: log.level,
         message: log.message
       }
@@ -1247,7 +1420,8 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
       ]);
     const manualPriceSnapshots = await new PrismaSnapshotRepository().countPriceSnapshotsBySource("manual");
     const gogPriceSnapshots = await new PrismaSnapshotRepository().countPriceSnapshotsBySource("gog");
-    const realInternalPriceSnapshots = manualPriceSnapshots + gogPriceSnapshots;
+    const steamStorePriceSnapshots = await new PrismaSnapshotRepository().countPriceSnapshotsBySource("steam-store");
+    const realInternalPriceSnapshots = manualPriceSnapshots + gogPriceSnapshots + steamStorePriceSnapshots;
     const realPriceSnapshots =
       realInternalPriceSnapshots +
       (await new PrismaSnapshotRepository().countPriceSnapshotsBySource("ggdeals")) +
@@ -1255,14 +1429,18 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
     const realOffers =
       (await new PrismaGameRepository().countOffersBySource("manual")) +
       (await new PrismaGameRepository().countOffersBySource("gog")) +
+      (await new PrismaGameRepository().countOffersBySource("steam-store")) +
       (await new PrismaGameRepository().countOffersBySource("ggdeals")) +
       (await new PrismaGameRepository().countOffersBySource("price-api"));
-    const [gogStatus, gogOfferCount, lastGogPriceRefresh] = await Promise.all([
+    const [gogStatus, gogOfferCount, steamStoreOfferCount, lastGogPriceRefresh, lastSteamStorePriceRefresh] = await Promise.all([
       new PrismaGogRepository().status(),
       new PrismaGameRepository().countOffersBySource("gog"),
-      prisma.gamePriceSnapshot.findFirst({ where: { source: "gog" }, orderBy: { capturedAt: "desc" } })
+      new PrismaGameRepository().countOffersBySource("steam-store"),
+      prisma.gamePriceSnapshot.findFirst({ where: { source: "gog" }, orderBy: { capturedAt: "desc" } }),
+      prisma.gamePriceSnapshot.findFirst({ where: { source: "steam_store" }, orderBy: { capturedAt: "desc" } })
     ]);
     const gogLogs = integrationLogs.filter((log) => log.service === "gog");
+    const steamStoreLogs = integrationLogs.filter((log) => log.service === "steam-store");
     const ggdealsRuntime = resolveGGDealsStatusFromLogs({
       hasApiKey: Boolean(getGGDealsApiKey()),
       logs: integrationLogs,
@@ -1298,12 +1476,25 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
       gogEnabled: isGogEnabled(),
       gogCatalogEntries: gogStatus.gogCatalogEntries,
       gogMappings: gogStatus.gogMappings,
+      gogMappedGames: gogStatus.gogMappings,
       gogOfferCount,
+      gogPriceSnapshotCount: gogPriceSnapshots,
       lastGogSync: gogStatus.lastGogSync,
+      lastGogCatalogSearch: gogStatus.lastGogCatalogSearch,
       lastGogError: gogLogs.find((log) => log.level === "error") ?? null,
       lastGogPriceRefresh: lastGogPriceRefresh?.capturedAt ?? null,
       gogCountryCode: getGogCountryCode(),
       gogCurrency: getGogCurrency(),
+      gogStatusMessage: isGogEnabled() ? null : "GOG connector disabled by environment.",
+      steamStorePriceEnabled: isSteamStorePriceEnabled(),
+      steamStoreCountryCode: getSteamStoreCountryCode(),
+      steamStoreCurrency: getSteamStoreCurrency(),
+      steamStoreMaxPerRun: getSteamStorePriceMaxPerRun(),
+      steamStoreCacheTtlMinutes: getSteamStorePriceCacheTtlMinutes(),
+      steamStoreOfferCount,
+      steamStorePriceSnapshotCount: steamStorePriceSnapshots,
+      lastSteamStorePriceRefresh: lastSteamStorePriceRefresh?.capturedAt ?? null,
+      lastSteamStorePriceError: steamStoreLogs.find((log) => log.level === "error") ?? null,
       realPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("steam-api"),
       mockPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("mock"),
       integrationLogs

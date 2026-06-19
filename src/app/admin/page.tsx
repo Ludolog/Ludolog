@@ -3,6 +3,7 @@ import { AlertTriangle, Database, RefreshCw, Server, ShoppingCart } from "lucide
 
 import { RefreshButton } from "@/components/forms/refresh-button";
 import { AdminActionButton } from "@/components/forms/admin-action-button";
+import { AdminSecretPanel } from "@/components/forms/admin-secret-panel";
 import { formatDate, formatNumber, formatPrice } from "@/lib/format";
 import { repositories } from "@/lib/repositories";
 import { gameSearchService } from "@/lib/services/game-search-service";
@@ -36,10 +37,12 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           </span>
           <div>
             <h1 className="text-2xl font-semibold text-white">Admin/dev dashboard</h1>
-            <p className="text-sm text-slate-400">PodglÄ…d danych, snapshotĂłw i statusu adapterĂłw.</p>
+            <p className="text-sm text-slate-400">Podgląd danych, snapshotów i statusu adapterów.</p>
           </div>
         </div>
       </section>
+
+      <AdminSecretPanel />
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatusCard icon={<Database size={18} />} label="Mode" value={status.mode.toUpperCase()} />
@@ -61,6 +64,18 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <StatusCard icon={<ShoppingCart size={18} />} label="GOG enabled" value={status.gogEnabled ? "YES" : "NO"} />
         <StatusCard icon={<ShoppingCart size={18} />} label="GOG mappings" value={String(status.gogMappings)} />
         <StatusCard icon={<ShoppingCart size={18} />} label="GOG offers" value={String(status.gogOfferCount)} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="GOG snaps" value={String(status.gogPriceSnapshotCount)} />
+        <StatusCard
+          icon={<ShoppingCart size={18} />}
+          label="Steam Store"
+          value={status.steamStorePriceEnabled ? "ON" : "OFF"}
+        />
+        <StatusCard icon={<ShoppingCart size={18} />} label="Steam offers" value={String(status.steamStoreOfferCount)} />
+        <StatusCard
+          icon={<ShoppingCart size={18} />}
+          label="Steam snaps"
+          value={String(status.steamStorePriceSnapshotCount)}
+        />
         <StatusCard icon={<RefreshCw size={18} />} label="Player snapshots" value={String(status.playerSnapshotCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Real player snaps" value={String(status.realPlayerSnapshots)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Mock player snaps" value={String(status.mockPlayerSnapshots)} />
@@ -87,6 +102,28 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           <InlineStatus icon={<Database size={18} />} label="Mock price snaps" value={String(status.mockPriceSnapshots)} />
           <InlineStatus icon={<Database size={18} />} label="Real offers" value={String(status.realOffers)} />
           <InlineStatus icon={<Database size={18} />} label="Mock offers" value={String(status.mockOffers)} />
+        </div>
+        <div className="mt-4 rounded-md border border-radar-amber/30 bg-radar-amber/10 p-4 text-sm leading-6 text-radar-amber">
+          <p className="font-semibold text-white">Mock price cleanup is guarded.</p>
+          <p className="mt-2">
+            Preview reports exactly what would be removed. Run requires the confirmation phrase and deletes only mock
+            price offers, mock price snapshots and mock price sources.
+          </p>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <AdminActionButton
+            endpoint="/api/admin/prices/mock-cleanup/preview"
+            method="GET"
+            label="Preview mock cleanup"
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/prices/mock-cleanup/run"
+            label="Run mock cleanup"
+            body={{ confirm: "DELETE_MOCK_PRICE_DATA_ONLY" }}
+            editableBody
+            requireSecret
+          />
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <AdminActionButton
@@ -239,6 +276,73 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           Set `GOG_ENABLED=true` only after `GOG_API_BASE_URL`, `GOG_CATALOG_BASE_URL`, `GOG_COUNTRY_CODE`,
           `GOG_CURRENCY` and `GOG_REQUEST_LIMIT_PER_HOUR` are configured. Keep refresh limits small; do not run mass
           syncs.
+        </div>
+      </section>
+
+      <section className="surface rounded-lg p-5">
+        <h2 className="text-lg font-semibold text-white">Steam Store Price Connector</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Experimental backend-only connector for Steam Store JSON appdetails. It stores only parsed JSON from official
+          Steam Store responses and is disabled until `STEAM_STORE_PRICE_ENABLED=true`.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <InlineStatus
+            icon={<ShoppingCart size={18} />}
+            label="Enabled"
+            value={status.steamStorePriceEnabled ? "true" : "false"}
+          />
+          <InlineStatus icon={<Database size={18} />} label="Country" value={status.steamStoreCountryCode} />
+          <InlineStatus icon={<Database size={18} />} label="Currency" value={status.steamStoreCurrency} />
+          <InlineStatus icon={<Database size={18} />} label="Max per run" value={String(status.steamStoreMaxPerRun)} />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Cache TTL"
+            value={`${status.steamStoreCacheTtlMinutes} min`}
+          />
+          <InlineStatus icon={<ShoppingCart size={18} />} label="Offers" value={String(status.steamStoreOfferCount)} />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Snapshots"
+            value={String(status.steamStorePriceSnapshotCount)}
+          />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Last refresh"
+            value={status.lastSteamStorePriceRefresh ? formatDate(status.lastSteamStorePriceRefresh) : "n/a"}
+          />
+        </div>
+        {status.lastSteamStorePriceError ? (
+          <p className="mt-4 rounded-md border border-radar-red/30 bg-radar-red/10 p-3 text-sm leading-6 text-radar-red">
+            {status.lastSteamStorePriceError.message}
+          </p>
+        ) : null}
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <AdminActionButton
+            endpoint="/api/admin/steam-store-prices/test"
+            label="Test Dota 2 Steam price"
+            body={{ steamAppId: 570, countryCode: "PL", currency: "PLN" }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/steam-store-prices/refresh"
+            label="Dry run Dota 2 Steam price"
+            body={{ steamAppIds: [570], limit: 1, dryRun: true }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/steam-store-prices/refresh"
+            label="Dry run imported Steam prices"
+            body={{ limit: 5, dryRun: true }}
+            editableBody
+            requireSecret
+          />
+        </div>
+        <div className="mt-4 rounded-md border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-400">
+          Suggested envs: `STEAM_STORE_PRICE_ENABLED=false`, `STEAM_STORE_COUNTRY=PL`,
+          `STEAM_STORE_CURRENCY=PLN`, `STEAM_STORE_API_BASE_URL=https://store.steampowered.com/api`,
+          `STEAM_STORE_PRICE_CACHE_TTL_MINUTES=360`, `STEAM_STORE_PRICE_MAX_PER_RUN=20`.
         </div>
       </section>
 
@@ -434,8 +538,14 @@ function formatSourceConfidence(status: string, source: string | null, sourceNam
   if (source === "gog" || sourceName === "gog") {
     return "GameValue / GOG";
   }
+  if (source === "steam-store" || sourceName === "steam-store") {
+    return "GameValue / Steam Store";
+  }
   if (status === "internal-real") {
     return "GameValue internal";
+  }
+  if (status === "experimental-store-api") {
+    return "Experimental store API";
   }
   if (status === "internal-mock") {
     return "Demo/mock seed";

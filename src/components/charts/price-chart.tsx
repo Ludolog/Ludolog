@@ -32,7 +32,7 @@ export function PriceChart({ data }: { data: GamePriceSnapshot[] }): React.React
           </defs>
           <CartesianGrid stroke="#253044" strokeDasharray="3 3" />
           <XAxis dataKey="date" stroke="#94A3B8" tick={{ fontSize: 12 }} />
-          <YAxis stroke="#94A3B8" tick={{ fontSize: 12 }} tickFormatter={(value) => `${value} zĹ‚`} />
+          <YAxis stroke="#94A3B8" tick={{ fontSize: 12 }} tickFormatter={(value) => `${value} zł`} />
           <Tooltip
             contentStyle={{ background: "#0D1220", border: "1px solid #253044", borderRadius: 8 }}
             formatter={(value: number) => [formatPrice(value), "Cena"]}

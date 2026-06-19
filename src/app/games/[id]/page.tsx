@@ -99,7 +99,7 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
           <PriceChart data={profile.priceHistory} />
         </div>
         <div className="surface rounded-lg p-5">
-          <h2 className="text-lg font-semibold text-white">Historia popularnoĹ›ci</h2>
+          <h2 className="text-lg font-semibold text-white">Historia popularności</h2>
           <PlayerChart data={profile.playerHistory} />
         </div>
       </section>
@@ -142,6 +142,8 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
                       {offer.isOfficial ? "Official" : "Adapter-ready"}
                       {offer.source === "gog" || offer.sourceName === "gog" ? (
                         <p className="mt-1 text-xs text-radar-violet">GameValue / GOG store API</p>
+                      ) : offer.source === "steam-store" || offer.sourceName === "steam-store" ? (
+                        <p className="mt-1 text-xs text-radar-cyan">GameValue / Steam Store</p>
                       ) : null}
                     </td>
                   </tr>
@@ -204,8 +206,14 @@ function sourceConfidenceLabel(confidence: string, source: string | null, source
   if (source === "gog" || sourceName === "gog") {
     return "GameValue / GOG store API price data";
   }
+  if (source === "steam-store" || sourceName === "steam-store") {
+    return "GameValue / Steam Store price data";
+  }
   if (confidence === "internal-real") {
     return "GameValue internal price data";
+  }
+  if (confidence === "experimental-store-api") {
+    return "Experimental store API price data";
   }
   if (confidence === "internal-mock") {
     return "Demo/mock price data";

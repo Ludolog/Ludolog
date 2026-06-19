@@ -96,6 +96,38 @@ export function getGogRequestLimitPerHour(): number {
   return Math.min(Math.floor(raw), 200);
 }
 
+export function isSteamStorePriceEnabled(): boolean {
+  return getOptionalEnv("STEAM_STORE_PRICE_ENABLED") === "true";
+}
+
+export function getSteamStoreApiBaseUrl(): string {
+  return trimTrailingSlash(getOptionalEnv("STEAM_STORE_API_BASE_URL") ?? "https://store.steampowered.com/api");
+}
+
+export function getSteamStoreCountryCode(): string {
+  return (getOptionalEnv("STEAM_STORE_COUNTRY") ?? "PL").toUpperCase();
+}
+
+export function getSteamStoreCurrency(): string {
+  return (getOptionalEnv("STEAM_STORE_CURRENCY") ?? "PLN").toUpperCase();
+}
+
+export function getSteamStorePriceCacheTtlMinutes(): number {
+  const raw = Number(getOptionalEnv("STEAM_STORE_PRICE_CACHE_TTL_MINUTES") ?? "360");
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return 360;
+  }
+  return Math.min(Math.floor(raw), 24 * 60);
+}
+
+export function getSteamStorePriceMaxPerRun(): number {
+  const raw = Number(getOptionalEnv("STEAM_STORE_PRICE_MAX_PER_RUN") ?? "20");
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return 20;
+  }
+  return Math.min(Math.floor(raw), 50);
+}
+
 export function getAdminApiSecret(): string | undefined {
   return getOptionalEnv("ADMIN_API_SECRET");
 }

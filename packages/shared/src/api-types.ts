@@ -4,9 +4,9 @@ export type DataMode = "mock" | "api";
 
 export type StatsDataMode = "real" | "mixed" | "mock";
 
-export type DataSource = "mock" | "steam-api" | "price-api" | "prisma" | "ggdeals" | "manual" | "gog";
+export type DataSource = "mock" | "steam-api" | "steam-store" | "price-api" | "prisma" | "ggdeals" | "manual" | "gog";
 
-export type PriceProviderName = "gamevalue" | "mock" | "ggdeals" | "itad" | "cheapshark" | "gog";
+export type PriceProviderName = "gamevalue" | "mock" | "ggdeals" | "itad" | "cheapshark" | "gog" | "steam-store";
 
 export type PriceMode = "internal" | "mock" | "api";
 
@@ -14,9 +14,14 @@ export type StoreType = "official" | "keyshop" | "marketplace" | "unknown";
 
 export type Recommendation = "buy_now" | "wait" | "weak_deal";
 
-export type PriceSourceType = "manual" | "csv" | "json" | "partner" | "mock" | "store-api";
+export type PriceSourceType = "manual" | "csv" | "json" | "partner" | "mock" | "store-api" | "store-api-experimental";
 
-export type PriceSourceConfidence = "internal-real" | "internal-mock" | "external-legacy" | "no-price-data";
+export type PriceSourceConfidence =
+  | "internal-real"
+  | "experimental-store-api"
+  | "internal-mock"
+  | "external-legacy"
+  | "no-price-data";
 
 export type ApiPriceSource = {
   id: string;
@@ -278,7 +283,7 @@ export type ApiWatchlistItem = {
 
 export type ApiIntegrationLog = {
   id: string;
-  service: "steam" | "ggdeals" | "gog" | "price" | "search" | "snapshot" | "alerts";
+  service: "steam" | "steam-store" | "ggdeals" | "gog" | "price" | "price-cleanup" | "search" | "snapshot" | "alerts";
   level: "info" | "warning" | "error";
   message: string;
   createdAt: DateString;
@@ -324,12 +329,25 @@ export type ApiAdminStatus = {
   gogEnabled: boolean;
   gogCatalogEntries: number;
   gogMappings: number;
+  gogMappedGames: number;
   gogOfferCount: number;
+  gogPriceSnapshotCount: number;
   lastGogSync: DateString | null;
+  lastGogCatalogSearch: DateString | null;
   lastGogError: ApiIntegrationLog | null;
   lastGogPriceRefresh: DateString | null;
   gogCountryCode: string;
   gogCurrency: string;
+  gogStatusMessage: string | null;
+  steamStorePriceEnabled: boolean;
+  steamStoreCountryCode: string;
+  steamStoreCurrency: string;
+  steamStoreMaxPerRun: number;
+  steamStoreCacheTtlMinutes: number;
+  steamStoreOfferCount: number;
+  steamStorePriceSnapshotCount: number;
+  lastSteamStorePriceRefresh: DateString | null;
+  lastSteamStorePriceError: ApiIntegrationLog | null;
   realPlayerSnapshots: number;
   mockPlayerSnapshots: number;
   integrationLogs: ApiIntegrationLog[];
@@ -348,6 +366,8 @@ export type ApiPricesStatus = {
   mockPriceSnapshots: number;
   realOffers: number;
   mockOffers: number;
+  steamStoreOfferCount: number;
+  steamStorePriceSnapshotCount: number;
 };
 
 export type ApiGogMappingConfidence = "exact" | "title-match" | "manual" | "unknown";
@@ -381,13 +401,17 @@ export type ApiGogStatus = {
   gogEnabled: boolean;
   gogCatalogEntries: number;
   gogMappings: number;
+  gogMappedGames: number;
   lastGogSync: DateString | null;
+  lastGogCatalogSearch: DateString | null;
   lastGogError: ApiIntegrationLog | null;
   requestLimitPerHour: number;
   countryCode: string;
   currency: string;
   gogOfferCount: number;
+  gogPriceSnapshotCount: number;
   lastGogPriceRefresh: DateString | null;
+  statusMessage: string | null;
   integrationLogs: ApiIntegrationLog[];
 };
 
@@ -446,6 +470,119 @@ export type ApiGogPricePreview = {
   drm: "DRM-free";
   externalUrl: string;
   available: boolean;
+};
+
+export type ApiMockPriceCleanupPreview = {
+  mode: "preview";
+  mockStoreOfferCount: number;
+  mockPriceSnapshotCount: number;
+  mockPriceSourceCount: number;
+  affectedGameCount: number;
+  affectedGames: Array<{
+    gameId: string;
+    steamAppId: number;
+    title: string;
+    mockOfferCount: number;
+    mockPriceSnapshotCount: number;
+  }>;
+  examples: Array<{
+    kind: "offer" | "price-snapshot" | "price-source";
+    id: string;
+    gameId?: string | null;
+    steamAppId?: number | null;
+    title?: string | null;
+    storeName?: string | null;
+    sourceName?: string | null;
+  }>;
+  whatWillBeDeleted: string[];
+  whatWillBeKept: string[];
+  requiresConfirmation: "DELETE_MOCK_PRICE_DATA_ONLY";
+  destructive: boolean;
+};
+
+export type ApiMockPriceCleanupRunRequest = {
+  confirm: "DELETE_MOCK_PRICE_DATA_ONLY";
+};
+
+export type ApiMockPriceCleanupRunResponse = Omit<ApiMockPriceCleanupPreview, "mode"> & {
+  mode: "run";
+  deletedStoreOffers: number;
+  deletedPriceSnapshots: number;
+  deletedPriceSources: number;
+  completedAt: DateString;
+};
+
+export type ApiSteamStorePriceStatus = {
+  steamStorePriceEnabled: boolean;
+  countryCode: string;
+  currency: string;
+  maxPerRun: number;
+  cacheTtlMinutes: number;
+  steamStoreOfferCount: number;
+  steamStorePriceSnapshotCount: number;
+  lastSteamStorePriceRefresh: DateString | null;
+  lastSteamStorePriceError: ApiIntegrationLog | null;
+  statusMessage: string | null;
+  integrationLogs: ApiIntegrationLog[];
+};
+
+export type ApiSteamStorePriceTestRequest = {
+  steamAppId: number;
+  countryCode?: string;
+  currency?: string;
+};
+
+export type ApiSteamStorePricePreview = {
+  steamAppId: number;
+  title: string | null;
+  storeName: "Steam";
+  storeType: "official";
+  sourceName: "steam-store";
+  sourceType: "store-api-experimental";
+  price: number;
+  regularPrice: number | null;
+  currency: string;
+  countryCode: string;
+  discountPercent: number;
+  drm: "Steam";
+  externalUrl: string;
+  available: boolean;
+  isFreeToPlay: boolean;
+};
+
+export type ApiSteamStorePriceTestResponse = {
+  configured: boolean;
+  result: ApiSteamStorePricePreview | null;
+  error: string | null;
+};
+
+export type ApiSteamStorePriceRefreshRequest = {
+  steamAppIds?: number[];
+  gameIds?: string[];
+  limit?: number;
+  dryRun?: boolean;
+};
+
+export type ApiSteamStorePriceRefreshResult = {
+  gameId: string;
+  steamAppId: number;
+  refreshed: boolean;
+  skipped: boolean;
+  offerId: string | null;
+  snapshotId: string | null;
+  message: string | null;
+};
+
+export type ApiSteamStorePriceRefreshResponse = {
+  provider: "gamevalue";
+  sourceName: "steam-store";
+  dryRun: boolean;
+  requested: number;
+  refreshed: number;
+  skipped: number;
+  failed: number;
+  errors: Array<{ steamAppId: number; gameId?: string; message: string }>;
+  results: ApiSteamStorePriceRefreshResult[];
 };
 
 export type ApiGogPriceTestResponse = {

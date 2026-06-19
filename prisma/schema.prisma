@@ -16,6 +16,7 @@ enum DataSource {
   ggdeals
   manual
   gog
+  steam_store
 }
 
 enum Recommendation {
@@ -32,9 +33,11 @@ enum IntegrationLevel {
 
 enum IntegrationService {
   steam
+  steam_store
   ggdeals
   gog
   price
+  price_cleanup
   search
   snapshot
   alerts

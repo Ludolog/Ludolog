@@ -4,8 +4,13 @@ import {
   getGGDealsApiKey,
   getGogCountryCode,
   getGogCurrency,
+  getSteamStoreCountryCode,
+  getSteamStoreCurrency,
+  getSteamStorePriceCacheTtlMinutes,
+  getSteamStorePriceMaxPerRun,
   getPriceMode,
   getPriceProvider,
+  isSteamStorePriceEnabled,
   isGogEnabled
 } from "@/lib/config";
 import {
@@ -19,6 +24,7 @@ import {
 } from "@/lib/mock-data";
 import { calculateGameValueScore } from "@/lib/services/deal-score-service";
 import { resolveGGDealsStatusFromLogs } from "@/lib/services/ggdeals-diagnostics";
+import { compareTrustedOffers, isTrustedPriceSource, trustedOffersOnly } from "@/lib/services/price-source-utils";
 import type {
   AdminStatus,
   Game,
@@ -80,10 +86,12 @@ function latestByDate<T extends { capturedAt: Date }>(items: T[]): T | null {
   return [...items].sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())[0] ?? null;
 }
 
-function latestOffer(gameId: string): StoreOffer | null {
-  return [...storeOffers]
-    .filter((offer) => offer.gameId === gameId)
-    .sort((a, b) => a.price - b.price)[0] ?? null;
+function removeMatching<T>(items: T[], predicate: (item: T) => boolean): void {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (predicate(items[index])) {
+      items.splice(index, 1);
+    }
+  }
 }
 
 function priceHistory(gameId: string): GamePriceSnapshot[] {
@@ -249,9 +257,11 @@ export function getGameSummary(gameOrId: Game | string): GameSummary | null {
   const prices = priceHistory(game.id);
   const players = playerHistory(game.id);
   const offers = getOffersForGame(game.id);
-  const latestPrice = latestByDate(prices);
+  const trustedPrices = prices.filter((snapshot) => isTrustedPriceSource(snapshot.source));
+  const trustedOffers = trustedOffersOnly(offers);
+  const latestPrice = latestByDate(trustedPrices);
   const latestPlayers = latestByDate(players);
-  const bestOffer = latestOffer(game.id);
+  const bestOffer = trustedOffers[0] ?? null;
 
   return {
     game,
@@ -260,10 +270,10 @@ export function getGameSummary(gameOrId: Game | string): GameSummary | null {
     bestOffer,
     score: calculateGameValueScore({
       latestPrice,
-      priceHistory: prices,
+      priceHistory: trustedPrices,
       latestPlayers,
       playerHistory: players,
-      offers,
+      offers: trustedOffers,
       reviewScore: game.reviewScore
     })
   };
@@ -322,28 +332,7 @@ export function getOffersForGame(gameId: string): StoreOffer[] {
 }
 
 function compareOffers(a: StoreOffer, b: StoreOffer): number {
-  const priceDiff = a.price - b.price;
-  if (priceDiff !== 0) {
-    return priceDiff;
-  }
-  const confidenceDiff = sourceConfidenceRank(a.sourceConfidence) - sourceConfidenceRank(b.sourceConfidence);
-  if (confidenceDiff !== 0) {
-    return confidenceDiff;
-  }
-  return b.updatedAt.getTime() - a.updatedAt.getTime();
-}
-
-function sourceConfidenceRank(source: StoreOffer["sourceConfidence"]): number {
-  if (source === "internal-real") {
-    return 0;
-  }
-  if (source === "external-legacy") {
-    return 1;
-  }
-  if (source === "internal-mock") {
-    return 2;
-  }
-  return 3;
+  return compareTrustedOffers(a, b);
 }
 
 export function upsertStoreOffers(gameId: string, offers: StoreOffer[]): void {
@@ -444,12 +433,110 @@ export function getLatestPriceRefresh(): Date | null {
   return latestByDate(priceSnapshots)?.capturedAt ?? null;
 }
 
-export function countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): number {
+export function countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog" | "steam-store"): number {
   return priceSnapshots.filter((snapshot) => snapshot.source === source).length;
 }
 
-export function countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): number {
+export function countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog" | "steam-store"): number {
   return storeOffers.filter((offer) => offer.source === source).length;
+}
+
+export function previewMockPriceCleanup(): {
+  mockStoreOfferCount: number;
+  mockPriceSnapshotCount: number;
+  mockPriceSourceCount: number;
+  affectedGameCount: number;
+  affectedGames: Array<{
+    gameId: string;
+    steamAppId: number;
+    title: string;
+    mockOfferCount: number;
+    mockPriceSnapshotCount: number;
+  }>;
+  examples: Array<{
+    kind: "offer" | "price-snapshot" | "price-source";
+    id: string;
+    gameId?: string | null;
+    steamAppId?: number | null;
+    title?: string | null;
+    storeName?: string | null;
+    sourceName?: string | null;
+  }>;
+} {
+  const mockOffers = storeOffers.filter((offer) => offer.source === "mock" || offer.provider === "mock");
+  const mockSnapshots = priceSnapshots.filter((snapshot) => snapshot.source === "mock" || snapshot.provider === "mock");
+  const mockSources = priceSources.filter((source) => source.type === "mock" || source.name.toLowerCase().includes("mock"));
+  const gameIds = new Set([...mockOffers.map((offer) => offer.gameId), ...mockSnapshots.map((snapshot) => snapshot.gameId)]);
+  const affectedGames = [...gameIds]
+    .map((gameId) => {
+      const game = getGameById(gameId);
+      if (!game) {
+        return null;
+      }
+      return {
+        gameId,
+        steamAppId: game.steamAppId,
+        title: game.title,
+        mockOfferCount: mockOffers.filter((offer) => offer.gameId === gameId).length,
+        mockPriceSnapshotCount: mockSnapshots.filter((snapshot) => snapshot.gameId === gameId).length
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    .sort((a, b) => b.mockOfferCount + b.mockPriceSnapshotCount - (a.mockOfferCount + a.mockPriceSnapshotCount));
+
+  return {
+    mockStoreOfferCount: mockOffers.length,
+    mockPriceSnapshotCount: mockSnapshots.length,
+    mockPriceSourceCount: mockSources.length,
+    affectedGameCount: affectedGames.length,
+    affectedGames,
+    examples: [
+      ...mockOffers.slice(0, 3).map((offer) => ({
+        kind: "offer" as const,
+        id: offer.id,
+        gameId: offer.gameId,
+        steamAppId: offer.steamAppId,
+        title: offer.title,
+        storeName: offer.storeName,
+        sourceName: offer.sourceName ?? offer.source
+      })),
+      ...mockSnapshots.slice(0, 3).map((snapshot) => ({
+        kind: "price-snapshot" as const,
+        id: snapshot.id,
+        gameId: snapshot.gameId,
+        steamAppId: snapshot.steamAppId,
+        title: null,
+        storeName: snapshot.storeName,
+        sourceName: snapshot.sourceName ?? snapshot.source
+      })),
+      ...mockSources.slice(0, 3).map((source) => ({
+        kind: "price-source" as const,
+        id: source.id,
+        gameId: null,
+        steamAppId: null,
+        title: null,
+        storeName: null,
+        sourceName: source.name
+      }))
+    ].slice(0, 8)
+  };
+}
+
+export function runMockPriceCleanup(): ReturnType<typeof previewMockPriceCleanup> & {
+  deletedStoreOffers: number;
+  deletedPriceSnapshots: number;
+  deletedPriceSources: number;
+} {
+  const preview = previewMockPriceCleanup();
+  removeMatching(storeOffers, (offer) => offer.source === "mock" || offer.provider === "mock");
+  removeMatching(priceSnapshots, (snapshot) => snapshot.source === "mock" || snapshot.provider === "mock");
+  removeMatching(priceSources, (source) => source.type === "mock" || source.name.toLowerCase().includes("mock"));
+  return {
+    ...preview,
+    deletedStoreOffers: preview.mockStoreOfferCount,
+    deletedPriceSnapshots: preview.mockPriceSnapshotCount,
+    deletedPriceSources: preview.mockPriceSourceCount
+  };
 }
 
 export function appendPriceSnapshot(snapshot: GamePriceSnapshot): void {
@@ -598,10 +685,12 @@ export function upsertGogMapping(input: {
 
 export function getGogRepositoryStatus(): GogRepositoryStatus {
   const latest = latestByDate(gogCatalogEntries.map((entry) => ({ capturedAt: entry.syncedAt })));
+  const lastSearch = integrationLogs.find((log) => log.service === "gog" && log.message.startsWith("GOG catalog search"));
   return {
     gogCatalogEntries: gogCatalogEntries.length,
     gogMappings: gameExternalMappings.filter((mapping) => mapping.provider === "gog").length,
-    lastGogSync: latest?.capturedAt ?? null
+    lastGogSync: latest?.capturedAt ?? null,
+    lastGogCatalogSearch: lastSearch?.createdAt ?? null
   };
 }
 
@@ -701,12 +790,16 @@ export function listUsers(): User[] {
 }
 
 export function getAdminStatus(): AdminStatus {
-  const realInternalPriceSnapshots = countPriceSnapshotsBySource("manual") + countPriceSnapshotsBySource("gog");
+  const steamStorePriceSnapshotCount = countPriceSnapshotsBySource("steam-store");
+  const steamStoreOfferCount = countOffersBySource("steam-store");
+  const realInternalPriceSnapshots =
+    countPriceSnapshotsBySource("manual") + countPriceSnapshotsBySource("gog") + steamStorePriceSnapshotCount;
   const realPriceSnapshots =
     realInternalPriceSnapshots + countPriceSnapshotsBySource("ggdeals") + countPriceSnapshotsBySource("price-api");
   const realOffers =
     countOffersBySource("manual") +
     countOffersBySource("gog") +
+    steamStoreOfferCount +
     countOffersBySource("ggdeals") +
     countOffersBySource("price-api");
   const integrationLogs = listIntegrationLogs();
@@ -746,12 +839,26 @@ export function getAdminStatus(): AdminStatus {
     gogEnabled: isGogEnabled(),
     gogCatalogEntries: gogCatalogEntries.length,
     gogMappings: gameExternalMappings.filter((mapping) => mapping.provider === "gog").length,
+    gogMappedGames: new Set(gameExternalMappings.filter((mapping) => mapping.provider === "gog").map((mapping) => mapping.gameId)).size,
     gogOfferCount: countOffersBySource("gog"),
+    gogPriceSnapshotCount: countPriceSnapshotsBySource("gog"),
     lastGogSync: getGogRepositoryStatus().lastGogSync,
+    lastGogCatalogSearch: getGogRepositoryStatus().lastGogCatalogSearch,
     lastGogError: gogLogs.find((log) => log.level === "error") ?? null,
     lastGogPriceRefresh: latestByDate(priceSnapshots.filter((snapshot) => snapshot.source === "gog"))?.capturedAt ?? null,
     gogCountryCode: getGogCountryCode(),
     gogCurrency: getGogCurrency(),
+    gogStatusMessage: isGogEnabled() ? null : "GOG connector disabled by environment.",
+    steamStorePriceEnabled: isSteamStorePriceEnabled(),
+    steamStoreCountryCode: getSteamStoreCountryCode(),
+    steamStoreCurrency: getSteamStoreCurrency(),
+    steamStoreMaxPerRun: getSteamStorePriceMaxPerRun(),
+    steamStoreCacheTtlMinutes: getSteamStorePriceCacheTtlMinutes(),
+    steamStoreOfferCount,
+    steamStorePriceSnapshotCount,
+    lastSteamStorePriceRefresh:
+      latestByDate(priceSnapshots.filter((snapshot) => snapshot.source === "steam-store"))?.capturedAt ?? null,
+    lastSteamStorePriceError: integrationLogs.find((log) => log.service === "steam-store" && log.level === "error") ?? null,
     realPlayerSnapshots: countPlayerSnapshotsBySource("steam-api"),
     mockPlayerSnapshots: countPlayerSnapshotsBySource("mock"),
     integrationLogs

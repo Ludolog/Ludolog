@@ -133,12 +133,17 @@ CRON_SECRET=""
 - `POST /api/admin/prices/manual-offer`
 - `POST /api/admin/prices/import-json`
 - `POST /api/admin/prices/import-csv`
+- `GET /api/admin/prices/mock-cleanup/preview`
+- `POST /api/admin/prices/mock-cleanup/run`
 - `POST /api/admin/prices/snapshot`
 - `POST /api/admin/prices/recalculate`
 - `POST /api/admin/prices/refresh` (legacy disabled)
 - `POST /api/admin/prices/refresh-best` (legacy disabled)
 - `POST /api/admin/prices/provider-diagnostics` (legacy disabled)
 - `POST /api/admin/player-counts/refresh`
+- `GET /api/admin/steam-store-prices/status`
+- `POST /api/admin/steam-store-prices/test`
+- `POST /api/admin/steam-store-prices/refresh`
 - `POST /api/games/:id/refresh-players`
 - `POST /api/cron/refresh-player-counts`
 - `GET /api/watchlist`
@@ -169,7 +174,9 @@ The active price module is internal:
 
 GG.deals, ITAD and CheapShark are legacy/disabled providers in the active application flow. GG.deals was disabled because Vercel received Cloudflare challenge HTML instead of API JSON. The project does not bypass Cloudflare, scrape protected pages, use Playwright/Puppeteer, cookies, proxies or browser sessions.
 
-Price data now enters through GameValue-controlled sources: `manual-admin`, `csv-import`, `json-import`, `partner-feed-placeholder`, `mock-seed` and future legal store APIs. `StoreOffer` stores current tracked offers, `Store` stores normalized store metadata, `PriceSource` stores the ingest source, and `GamePriceSnapshot` stores durable price history for charts, deals and GameValue Score.
+Price data now enters through GameValue-controlled sources: `manual-admin`, `csv-import`, `json-import`, `gog`, `steam-store`, `mock-seed` and future legal store APIs. `StoreOffer` stores current tracked offers, `Store` stores normalized store metadata, `PriceSource` stores the ingest source, and `GamePriceSnapshot` stores durable price history for charts, deals and GameValue Score.
+
+Public summaries and scoring prefer real/internal sources in this order: GOG, Steam Store, manual/internal. Mock price rows can remain in historical storage until cleanup, but they are not treated as normal live prices in public deal summaries.
 
 The first store connector is GOG. It is backend-only, disabled by default and feeds the same internal price tables with
 `sourceName=gog`, `sourceType=store-api`, `storeName=GOG`, `storeType=official` and `drm=DRM-free`. It uses public GOG JSON
@@ -185,6 +192,21 @@ GOG_CATALOG_BASE_URL=https://catalog.gog.com
 GOG_COUNTRY_CODE=PL
 GOG_CURRENCY=PLN
 GOG_REQUEST_LIMIT_PER_HOUR=200
+```
+
+The experimental Steam Store connector is also backend-only and disabled by default. It uses the official Steam Store
+`appdetails` JSON endpoint, rejects non-JSON responses and writes `sourceName=steam-store`,
+`sourceType=store-api-experimental`, `storeName=Steam`, `storeType=official` and `drm=Steam` only after an admin call.
+
+Steam Store configuration:
+
+```env
+STEAM_STORE_PRICE_ENABLED=false
+STEAM_STORE_API_BASE_URL=https://store.steampowered.com/api
+STEAM_STORE_COUNTRY=PL
+STEAM_STORE_CURRENCY=PLN
+STEAM_STORE_PRICE_CACHE_TTL_MINUTES=360
+STEAM_STORE_PRICE_MAX_PER_RUN=20
 ```
 
 Public price endpoints:
@@ -220,6 +242,21 @@ curl -X POST https://apka-seven.vercel.app/api/admin/prices/recalculate \
 
 Legacy `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` return disabled responses and do not call external aggregators.
 
+Mock price cleanup is guarded and should always start with preview:
+
+```bash
+curl https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/preview \
+  -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE"
+
+curl -X POST https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/run \
+  -H "Content-Type: application/json" \
+  -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
+  -d "{\"confirm\":\"DELETE_MOCK_PRICE_DATA_ONLY\"}"
+```
+
+The cleanup deletes only mock/demo `StoreOffer`, `GamePriceSnapshot` and mock `PriceSource` rows. It keeps `Game`,
+`SteamCatalogEntry`, `GogCatalogEntry`, `GameExternalMapping` and all player snapshots.
+
 GOG admin operations:
 
 - `GET /api/admin/gog/status`
@@ -232,6 +269,14 @@ GOG admin operations:
 
 Keep GOG refreshes small (`limit <= 10`) and map games manually before writing prices. Unknown-confidence mappings are
 skipped by refresh.
+
+Steam Store admin operations:
+
+- `GET /api/admin/steam-store-prices/status`
+- `POST /api/admin/steam-store-prices/test` with `x-admin-secret`
+- `POST /api/admin/steam-store-prices/refresh` with `x-admin-secret`
+
+Keep `dryRun=true` while testing. Do not run `dryRun=false` until the status and dry run output show valid JSON prices.
 
 Admin/dev Steam operations:
 
