@@ -94,6 +94,12 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
           <SmallMetric icon={<Activity size={17} />} label="Games" value={formatNumber(status?.gameCount)} />
           <SmallMetric icon={<TrendingUp size={17} />} label="Players" value={formatNumber(overview?.topPlayers[0]?.currentPlayers)} />
         </div>
+        {overview ? (
+          <p className="mt-3 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-slate-300">
+            {statsModeLabel(overview.mode)} - catalog {formatNumber(overview.sourceCounts.steamCatalogEntries)} - real snaps{" "}
+            {formatNumber(overview.sourceCounts.realPlayerSnapshots)}
+          </p>
+        ) : null}
       </section>
 
       <section className="surface rounded-lg p-4">
@@ -145,6 +151,16 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
       </section>
     </div>
   );
+}
+
+function statsModeLabel(mode: ApiStatsOverview["mode"]): string {
+  if (mode === "real") {
+    return "Real data";
+  }
+  if (mode === "mixed") {
+    return "Mixed data";
+  }
+  return "Mock fallback";
 }
 
 function StatsStrip({

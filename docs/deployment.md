@@ -202,7 +202,7 @@ https://apka-seven.vercel.app/api/admin/steam-catalog/status
 ```
 
 It should expose only booleans and counts, for example `hasSteamApiKey`, `dataMode`, `canUseRealSteamApi`,
-`steamCatalogEntryCount`, `lastSteamCatalogSync` and recent integration logs. It must never return the actual
+`steamCatalogEntryCount`, `lastSteamCatalogSync`, `nextSteamCatalogStartAfterAppId` and recent integration logs. It must never return the actual
 `STEAM_WEB_API_KEY`, `ADMIN_API_SECRET` or `CRON_SECRET`.
 
 Manual Steam catalog sync in PowerShell. Paste the real admin secret only into your local terminal, never into code:
@@ -227,6 +227,24 @@ Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-catalog/sy
 ```
 
 Start with `maxResults=100`. If Vercel and Neon stay stable, increase cautiously to 500 and then 1000 in later manual runs.
+`maxResults` is the total cap for a sync request. If `maxResults=100`, the request stops after 100 entries even when
+`maxPages` is higher. For follow-up batches, read `nextSteamCatalogStartAfterAppId` from status and pass it as
+`startAfterAppId`:
+
+```powershell
+$status = Invoke-RestMethod -Uri "https://apka-seven.vercel.app/api/admin/steam-catalog/status"
+$payload = @{
+  dryRun = $true
+  maxPages = 1
+  maxResults = 100
+}
+
+if ($status.nextSteamCatalogStartAfterAppId) {
+  $payload.startAfterAppId = $status.nextSteamCatalogStartAfterAppId
+}
+
+$body = $payload | ConvertTo-Json
+```
 
 Manual player-count refresh:
 

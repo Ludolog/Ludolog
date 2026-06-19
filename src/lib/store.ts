@@ -325,10 +325,15 @@ export function upsertSteamCatalogEntries(
 
 export function getSteamCatalogStatus(): SteamCatalogStatus {
   const latest = latestByDate(steamCatalogEntries.map((entry) => ({ capturedAt: entry.syncedAt })));
+  const highestAppId = steamCatalogEntries.reduce<number | null>(
+    (highest, entry) => (highest === null ? entry.steamAppId : Math.max(highest, entry.steamAppId)),
+    null
+  );
   return {
     entryCount: steamCatalogEntries.length,
     activeGameCount: steamCatalogEntries.filter((entry) => entry.isGame && entry.isActive).length,
-    lastSyncedAt: latest?.capturedAt ?? null
+    lastSyncedAt: latest?.capturedAt ?? null,
+    nextStartAfterAppId: highestAppId
   };
 }
 

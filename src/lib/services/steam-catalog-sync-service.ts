@@ -7,6 +7,7 @@ export type SteamCatalogSyncOptions = {
   dryRun?: boolean;
   maxPages?: number;
   maxResults?: number;
+  startAfterAppId?: number;
 };
 
 export type SteamCatalogSyncResult = {
@@ -42,12 +43,14 @@ export class SteamCatalogSyncService {
     const dryRun = options.dryRun ?? true;
     const maxPages = clampPositive(options.maxPages ?? 1, 1, 10);
     const maxResults = clampPositive(options.maxResults ?? defaultPageSize, 1, hardResultLimit);
+    const startAfterAppId =
+      options.startAfterAppId === undefined ? null : clampPositive(options.startAfterAppId, 1, Number.MAX_SAFE_INTEGER);
     const apiKey = getSteamWebApiKey();
 
     await repositories.diagnostics.recordIntegrationLog({
       service: "steam",
       level: "info",
-      message: `Steam catalog sync started. dryRun=${dryRun}, maxPages=${maxPages}, maxResults=${maxResults}.`
+      message: `Steam catalog sync started. dryRun=${dryRun}, maxPages=${maxPages}, maxResults=${maxResults}, startAfterAppId=${startAfterAppId ?? "none"}.`
     });
 
     if (!apiKey) {
@@ -69,7 +72,7 @@ export class SteamCatalogSyncService {
     }
 
     const entries: SteamCatalogUpsertInput[] = [];
-    let lastAppId: number | null = null;
+    let lastAppId: number | null = startAfterAppId;
     let page = 0;
     let hasMore = true;
 

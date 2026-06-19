@@ -57,7 +57,8 @@ Target production architecture:
 Android App -> Vercel Next.js API -> Neon PostgreSQL
 ```
 
-Deployment instructions are in [docs/deployment.md](docs/deployment.md).
+Deployment instructions are in [docs/deployment.md](docs/deployment.md). The current data-flow map is in
+[docs/architecture-map.md](docs/architecture-map.md).
 
 ## PostgreSQL and Prisma
 
@@ -161,6 +162,10 @@ Manual admin POST endpoints require `ADMIN_API_SECRET` through the `x-admin-secr
 
 When those variables are changed in Vercel, redeploy the latest `main` deployment before running sync checks. Android/mobile receives only the public `VITE_API_BASE_URL`.
 
+Steam catalog sync is intentionally manual and batched. `maxResults` is the total cap for one request; if it is `100`,
+the sync stops after 100 entries even when `maxPages` is higher. Public catalog status returns
+`nextSteamCatalogStartAfterAppId`, which can be passed as `startAfterAppId` for the next small batch.
+
 Weights:
 
 - 35% price against historical low,
@@ -201,6 +206,7 @@ prisma/schema.prisma    PostgreSQL data model
 prisma/migrations       Database migrations, including Steam catalog storage
 prisma/seed.ts          Demonstration seed
 docs/project-analysis.md
+docs/architecture-map.md
 tests
 ```
 

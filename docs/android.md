@@ -6,6 +6,8 @@ This document describes the Android MVP added through Capacitor.
 
 The Android app is a mobile API client. It does not package the Next.js backend, Prisma or PostgreSQL into the APK. The existing Next.js project remains the web app and backend API. The mobile client lives in `mobile/` and calls the existing endpoints through `VITE_API_BASE_URL`.
 
+The current end-to-end data-flow map is maintained in [architecture-map.md](architecture-map.md).
+
 ## Local backend
 
 Start the Next.js backend/web app from the repository root:
@@ -189,9 +191,11 @@ Game details shows the current player-count source and last refresh time. It doe
 Diagnostics should show:
 
 - `API base URL`,
+- HTTP transport and Capacitor platform,
 - backend status,
 - Steam catalog entry count,
 - imported game count,
+- real/mock player snapshot counts,
 - last Steam catalog sync,
 - last player-count refresh,
 - current data mode.

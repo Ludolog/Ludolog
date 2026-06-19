@@ -154,12 +154,14 @@ export type SteamCatalogStatus = {
   entryCount: number;
   activeGameCount: number;
   lastSyncedAt: Date | null;
+  nextStartAfterAppId: number | null;
 };
 
 export type SteamCatalogRuntimeStatus = {
   steamCatalogEntryCount: number;
   activeGameCount: number;
   lastSteamCatalogSync: Date | null;
+  nextSteamCatalogStartAfterAppId: number | null;
   lastSteamCatalogError: IntegrationLog | null;
   hasSteamApiKey: boolean;
   dataMode: DataMode;

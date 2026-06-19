@@ -14,6 +14,8 @@ The mobile app uses `VITE_API_BASE_URL`. For the Android emulator the local back
 
 The mobile app does not duplicate the scoring algorithm. It displays the score, recommendation and factors returned by the backend. Shared API DTO types are stored in `packages/shared`.
 
+The detailed live data-flow map is maintained in `docs/architecture-map.md`.
+
 Current limitations:
 
 - no offline cache,
@@ -40,6 +42,11 @@ Android App -> Vercel Next.js API -> Neon PostgreSQL
 `DATABASE_URL` is used for Prisma runtime access. `DIRECT_URL` is reserved for direct migration access, which is important when Neon connection pooling is enabled. Runtime repository selection is controlled by `REPOSITORY_PROVIDER`; local MVP defaults to `mock`, while production can use `prisma`.
 
 The repository layer introduces contracts for games, watchlist, alerts, snapshots and diagnostics. Current implementations are `mock` and `prisma`. A future Firestore migration should add Firebase implementations behind the same contracts instead of changing API responses or Android client DTOs.
+
+Steam catalog sync is an admin-controlled backend operation. It is intentionally batched with `maxResults`,
+`maxPages` and optional `startAfterAppId`, and it writes `SteamCatalogEntry` rows by unique `steamAppId`. Search can
+then combine imported library games, synced catalog entries and mock fallback catalog results without exposing Steam,
+Neon or admin secrets to Android.
 
 ## Cel systemu
 

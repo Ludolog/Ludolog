@@ -119,7 +119,9 @@ function SearchResultCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2 className="line-clamp-2 font-semibold text-white">{result.game.title}</h2>
-            <p className="mt-1 text-xs text-slate-400">{sourceLabel(result)}</p>
+            <span className={`mt-2 inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${sourceClass(result)}`}>
+              {sourceLabel(result)}
+            </span>
           </div>
           <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2 py-1 text-xs font-semibold text-radar-cyan">
             {result.importable ? <Download size={13} /> : <Search size={13} />}
@@ -153,4 +155,14 @@ function sourceLabel(result: ApiGameSearchResult): string {
     return "Steam catalog";
   }
   return "Mock fallback";
+}
+
+function sourceClass(result: ApiGameSearchResult): string {
+  if (!result.importable) {
+    return "border-radar-green/30 bg-radar-green/10 text-radar-green";
+  }
+  if (result.source === "steam-catalog") {
+    return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
+  }
+  return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";
 }

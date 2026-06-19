@@ -123,9 +123,13 @@ function StatsSection({
         <h2 className="text-lg font-semibold text-white">{title}</h2>
       </div>
       <div className="space-y-3">
-        {games.slice(0, 5).map((game) => (
-          <StatsGameCard key={game.id} game={game} onOpenGame={onOpenGame} />
-        ))}
+        {games.length > 0 ? (
+          games.slice(0, 5).map((game) => (
+            <StatsGameCard key={game.id} game={game} onOpenGame={onOpenGame} />
+          ))
+        ) : (
+          <EmptyState message={`No games available for ${title.toLowerCase()}.`} />
+        )}
       </div>
     </section>
   );

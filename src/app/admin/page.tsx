@@ -20,6 +20,7 @@ export default async function AdminPage(): Promise<React.ReactElement> {
       summary: await gameSearchService.getSummary(game.id)
     }))
   );
+  const nextSteamCatalogStartAfterAppId = steamStatus.nextSteamCatalogStartAfterAppId ?? undefined;
 
   return (
     <div className="space-y-6">
@@ -62,6 +63,13 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             value={steamStatus.lastSteamCatalogSync ? formatDate(steamStatus.lastSteamCatalogSync) : "n/a"}
           />
           <InlineStatus
+            icon={<Database size={18} />}
+            label="Next cursor"
+            value={steamStatus.nextSteamCatalogStartAfterAppId ? String(steamStatus.nextSteamCatalogStartAfterAppId) : "start"}
+          />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <InlineStatus
             icon={<AlertTriangle size={18} />}
             label="Last error"
             value={steamStatus.lastSteamCatalogError ? formatDate(steamStatus.lastSteamCatalogError.createdAt) : "none"}
@@ -70,14 +78,14 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <AdminActionButton
             endpoint="/api/admin/steam-catalog/sync"
-            label="Sync catalog dry run"
-            body={{ dryRun: true, maxPages: 1, maxResults: 100 }}
+            label="Dry run next 100"
+            body={{ dryRun: true, maxPages: 1, maxResults: 100, startAfterAppId: nextSteamCatalogStartAfterAppId }}
             requireSecret
           />
           <AdminActionButton
             endpoint="/api/admin/steam-catalog/sync"
-            label="Sync catalog 100"
-            body={{ dryRun: false, maxPages: 1, maxResults: 100 }}
+            label="Sync next 100"
+            body={{ dryRun: false, maxPages: 1, maxResults: 100, startAfterAppId: nextSteamCatalogStartAfterAppId }}
             requireSecret
           />
           <AdminActionButton

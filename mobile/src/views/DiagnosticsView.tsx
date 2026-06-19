@@ -65,6 +65,8 @@ export function DiagnosticsView(): React.ReactElement {
         <Metric label="Imported games" value={formatNumber(status.importedGameCount)} />
         <Metric label="Last catalog sync" value={status.lastSteamCatalogSync ? formatShortDate(status.lastSteamCatalogSync) : "n/a"} />
         <Metric label="Last player refresh" value={status.lastPlayerCountRefresh ? formatShortDate(status.lastPlayerCountRefresh) : "n/a"} />
+        <Metric label="Real snaps" value={formatNumber(stats?.sourceCounts.realPlayerSnapshots)} />
+        <Metric label="Mock snaps" value={formatNumber(stats?.sourceCounts.mockPlayerSnapshots)} />
       </section>
 
       <section className="surface rounded-lg p-4">

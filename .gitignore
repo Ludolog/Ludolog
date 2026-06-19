@@ -37,3 +37,10 @@ pnpm-debug.log*
 tmp
 temp
 *.tmp
+
+.vercel
+.env*
+!.env.example
+!.env.local.example
+!mobile/.env.example
+!mobile/.env.production.example

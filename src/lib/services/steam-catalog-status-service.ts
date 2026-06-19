@@ -16,6 +16,7 @@ export class SteamCatalogStatusService {
       steamCatalogEntryCount: catalog.entryCount,
       activeGameCount: catalog.activeGameCount,
       lastSteamCatalogSync: catalog.lastSyncedAt,
+      nextSteamCatalogStartAfterAppId: catalog.nextStartAfterAppId,
       lastSteamCatalogError: steamLogs.find((log) => log.level === "error") ?? null,
       hasSteamApiKey,
       dataMode,

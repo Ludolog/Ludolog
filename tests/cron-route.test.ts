@@ -17,4 +17,32 @@ describe("POST /api/cron/refresh-player-counts", () => {
     expect(response.status).toBe(503);
     expect(body.error).toContain("CRON_SECRET");
   });
+
+  it("rejects requests with an invalid CRON_SECRET", async () => {
+    vi.stubEnv("CRON_SECRET", "cron-secret");
+
+    const response = await POST(
+      new Request("http://localhost/api/cron/refresh-player-counts", {
+        method: "POST",
+        headers: { "x-cron-secret": "wrong-secret" }
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Unauthorized.");
+  });
+
+  it("accepts the CRON_SECRET through a bearer token", async () => {
+    vi.stubEnv("CRON_SECRET", "cron-secret");
+
+    const response = await POST(
+      new Request("http://localhost/api/cron/refresh-player-counts", {
+        method: "POST",
+        headers: { authorization: "Bearer cron-secret" }
+      })
+    );
+
+    expect(response.status).toBe(200);
+  });
 });

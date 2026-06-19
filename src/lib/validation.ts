@@ -29,7 +29,8 @@ export const gameImportSchema = z
 export const steamCatalogSyncSchema = z.object({
   dryRun: z.boolean().optional(),
   maxPages: z.number().int().positive().max(10).optional(),
-  maxResults: z.number().int().positive().max(5000).optional()
+  maxResults: z.number().int().positive().max(5000).optional(),
+  startAfterAppId: z.number().int().positive().optional()
 });
 
 export const playerCountsRefreshSchema = z.object({

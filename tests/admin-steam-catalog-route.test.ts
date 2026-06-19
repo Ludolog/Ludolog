@@ -54,6 +54,37 @@ describe("Steam catalog admin routes", () => {
     expect(body.error).toContain("ADMIN_API_SECRET");
   });
 
+  it("runs sync with a valid x-admin-secret", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    vi.stubEnv("STEAM_WEB_API_KEY", "");
+
+    const response = await POST(
+      new Request("http://localhost/api/admin/steam-catalog/sync", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ dryRun: true, maxPages: 1, maxResults: 100 })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.dryRun).toBe(true);
+    expect(body.source).toBe("mock-fallback");
+  });
+
+  it("includes a safe sync cursor in public status", async () => {
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toHaveProperty("nextSteamCatalogStartAfterAppId");
+    expect(body).not.toHaveProperty("steamWebApiKey");
+    expect(body).not.toHaveProperty("adminApiSecret");
+  });
+
   it("does not expose configured secrets in public status", async () => {
     vi.stubEnv("STEAM_WEB_API_KEY", "steam-key-that-must-not-leak");
     vi.stubEnv("ADMIN_API_SECRET", "admin-secret-that-must-not-leak");

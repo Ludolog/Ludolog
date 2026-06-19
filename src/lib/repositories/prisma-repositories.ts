@@ -480,16 +480,18 @@ class PrismaSteamCatalogRepository implements SteamCatalogRepository {
   }
 
   async status() {
-    const [entryCount, activeGameCount, latest] = await Promise.all([
+    const [entryCount, activeGameCount, latest, highestAppId] = await Promise.all([
       prisma.steamCatalogEntry.count(),
       prisma.steamCatalogEntry.count({ where: { isGame: true, isActive: true } }),
-      prisma.steamCatalogEntry.findFirst({ orderBy: { syncedAt: "desc" } })
+      prisma.steamCatalogEntry.findFirst({ orderBy: { syncedAt: "desc" } }),
+      prisma.steamCatalogEntry.findFirst({ orderBy: { steamAppId: "desc" } })
     ]);
 
     return {
       entryCount,
       activeGameCount,
-      lastSyncedAt: latest?.syncedAt ?? null
+      lastSyncedAt: latest?.syncedAt ?? null,
+      nextStartAfterAppId: highestAppId?.steamAppId ?? null
     };
   }
 }

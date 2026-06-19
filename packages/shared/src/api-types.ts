@@ -182,6 +182,7 @@ export type ApiSteamCatalogStatus = {
   steamCatalogEntryCount: number;
   activeGameCount: number;
   lastSteamCatalogSync: DateString | null;
+  nextSteamCatalogStartAfterAppId: number | null;
   lastSteamCatalogError: ApiIntegrationLog | null;
   hasSteamApiKey: boolean;
   dataMode: DataMode;
