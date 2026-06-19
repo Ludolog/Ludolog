@@ -326,6 +326,10 @@ function compareOffers(a: StoreOffer, b: StoreOffer): number {
   return compareTrustedOffers(a, b);
 }
 
+function hasTrackedPrice(summary: GameSummary): boolean {
+  return summary.latestPrice !== null || summary.bestOffer !== null;
+}
+
 function slugify(value: string): string {
   return (
     value
@@ -742,6 +746,7 @@ class PrismaGameRepository implements GameRepository {
     const summaries = await Promise.all(games.map((game) => this.summaryForGame(game)));
     return summaries
       .filter((summary): summary is GameSummary => summary !== null)
+      .filter(hasTrackedPrice)
       .sort((a, b) => b.score.score - a.score.score)
       .slice(0, limit);
   }

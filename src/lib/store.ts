@@ -312,11 +312,16 @@ export function getBestDeals(limit = 5): GameSummary[] {
   return games
     .map(getGameSummary)
     .filter((summary): summary is GameSummary => summary !== null)
+    .filter(hasTrackedPrice)
     .sort((a, b) => {
       const priceBias = (b.latestPrice?.discountPercent ?? 0) - (a.latestPrice?.discountPercent ?? 0);
       return b.score.score - a.score.score || priceBias;
     })
     .slice(0, limit);
+}
+
+function hasTrackedPrice(summary: GameSummary): boolean {
+  return summary.latestPrice !== null || summary.bestOffer !== null;
 }
 
 export function getMostActiveGames(limit = 5): GameSummary[] {

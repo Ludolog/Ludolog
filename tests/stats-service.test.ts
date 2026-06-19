@@ -20,9 +20,46 @@ describe("StatsService", () => {
   });
 
   it("builds best-value and category rankings", async () => {
+    const now = new Date(Date.now() + 2000);
+    await repositories.games.upsertOffers("dota-2", [
+      {
+        id: "offer-dota-2-stats-best-value",
+        gameId: "dota-2",
+        steamAppId: 570,
+        storeId: "store-steam",
+        sourceId: "price-source-manual-admin",
+        provider: "gamevalue",
+        storeName: "Steam",
+        storeType: "official",
+        title: "Dota 2",
+        price: 0,
+        regularPrice: 0,
+        historicalLow: 0,
+        currency: "PLN",
+        discountPercent: 0,
+        url: "https://store.steampowered.com/app/570",
+        externalUrl: "https://store.steampowered.com/app/570",
+        region: "PL",
+        isOfficial: true,
+        isOfficialStore: true,
+        isHistoricalLow: true,
+        available: true,
+        drm: "Steam",
+        platform: "PC",
+        sourceRawId: "manual-dota-stats-best-value",
+        rawProviderData: null,
+        fetchedAt: now,
+        createdAt: now,
+        updatedAt: now,
+        source: "manual",
+        sourceConfidence: "internal-real"
+      }
+    ]);
     const overview = await statsService.overview(8);
 
     expect(overview.bestValue.length).toBeGreaterThan(0);
+    expect(overview.bestValue.every((game) => game.bestPrice !== null)).toBe(true);
+    expect(overview.trackedDeals.every((game) => game.bestPrice !== null)).toBe(true);
     expect(overview.categories.find((category) => category.id === "strategy")?.games.length).toBeGreaterThan(0);
     expect(overview.categories.find((category) => category.id === "multiplayer")?.games.length).toBeGreaterThan(0);
     expect(overview.categories.find((category) => category.id === "popularne-teraz")?.topGames.length).toBeGreaterThan(0);

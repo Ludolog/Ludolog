@@ -70,13 +70,13 @@ export class StatsService {
     const byPlayers = [...sources].sort((a, b) => toStatsGame(b).currentPlayers - toStatsGame(a).currentPlayers);
     const byTrend = [...sources].sort((a, b) => b.trendPercent - a.trendPercent);
     const byDrop = [...sources].sort((a, b) => a.trendPercent - b.trendPercent);
-    const byBestValue = [...sources].sort((a, b) => bestValueScore(b) - bestValueScore(a));
+    const sourcesWithTrackedPrices = sources.filter(hasTrackedPrice);
+    const byBestValue = [...sourcesWithTrackedPrices].sort((a, b) => bestValueScore(b) - bestValueScore(a));
     const byWatchlists = [...sources].sort((a, b) => b.watchlistCount - a.watchlistCount);
-    const freeToPlay = [...sources]
+    const freeToPlay = [...sourcesWithTrackedPrices]
       .filter((source) => toStatsGame(source).bestPrice === 0)
       .sort((a, b) => toStatsGame(b).currentPlayers - toStatsGame(a).currentPlayers);
-    const trackedDeals = [...sources]
-      .filter((source) => toStatsGame(source).bestPrice !== null)
+    const trackedDeals = [...sourcesWithTrackedPrices]
       .sort((a, b) => bestValueScore(b) - bestValueScore(a));
     const hiddenGems = [...sources]
       .filter((source) => toStatsGame(source).currentPlayers <= 40000 && source.profile.score.score >= 70)
@@ -199,6 +199,10 @@ function buildMissingDataHints({
 
 export function topStatsGame(games: ApiStatsGame[]): ApiStatsGame | null {
   return games[0] ?? null;
+}
+
+function hasTrackedPrice(source: CategoryStatsSource): boolean {
+  return toStatsGame(source).bestPrice !== null;
 }
 
 export const statsService = new StatsService();
