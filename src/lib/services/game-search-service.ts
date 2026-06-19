@@ -5,9 +5,26 @@ import type { Game, GameImportInput, GameProfile, GameSummary, SteamCatalogEntry
 import type {
   ApiGame,
   ApiGameSearchResult,
+  ApiImportGameSource,
   ApiImportGameRequest,
   ApiImportGameResponse
 } from "@shared/api-types";
+
+type ResolvedCatalogGame = {
+  input: GameImportInput;
+  source: Exclude<ApiImportGameSource, "library">;
+};
+
+type ImportGameOptions = {
+  refreshPlayers?: boolean;
+};
+
+export class GameImportNotFoundError extends Error {
+  constructor(message = "Game is not available in the Steam catalog or mock fallback catalog.") {
+    super(message);
+    this.name = "GameImportNotFoundError";
+  }
+}
 
 export class GameSearchService {
   list(): Promise<Game[]> {
@@ -71,34 +88,35 @@ export class GameSearchService {
     return results;
   }
 
-  async importGame(request: ApiImportGameRequest): Promise<ApiImportGameResponse> {
-    const catalogGame = await this.resolveCatalogGame(request);
-
-    if (!catalogGame) {
-      throw new Error("Game is not available in the Steam catalog or mock fallback catalog.");
-    }
-
-    const existing = await repositories.games.findBySteamAppId(catalogGame.steamAppId);
+  async importGame(request: ApiImportGameRequest, options: ImportGameOptions = {}): Promise<ApiImportGameResponse> {
+    const existing = await this.findExistingImportTarget(request);
     if (existing) {
       const summary = await repositories.games.getSummary(existing.id);
       if (!summary) {
         throw new Error("Existing game could not be summarized.");
       }
-      return { imported: false, summary: summary as unknown as ApiImportGameResponse["summary"] };
+      return importResponse(false, "library", summary);
     }
 
+    const resolved = await this.resolveCatalogGame(request);
+
+    if (!resolved) {
+      throw new GameImportNotFoundError();
+    }
+
+    const { input: catalogGame, source } = resolved;
     let summary = await repositories.games.importFromCatalog(catalogGame);
-    if (catalogGame.source === "steam-api") {
+    if ((options.refreshPlayers ?? true) && catalogGame.source === "steam-api") {
       await steamApiService.refreshPlayerCount(catalogGame.steamAppId);
       summary = (await repositories.games.getSummary(summary.game.id)) ?? summary;
     }
     await repositories.diagnostics.recordIntegrationLog({
       service: "search",
       level: "info",
-      message: `Imported ${catalogGame.title} from ${catalogGame.source === "steam-api" ? "Steam catalog" : "mock catalog"}.`
+      message: `Imported ${catalogGame.title} from ${source === "steam-catalog" ? "Steam catalog" : "mock catalog"}.`
     });
 
-    return { imported: true, summary: summary as unknown as ApiImportGameResponse["summary"] };
+    return importResponse(true, source, summary);
   }
 
   findGame(id: string): Promise<Game | null> {
@@ -134,17 +152,47 @@ export class GameSearchService {
     }
   }
 
-  private async resolveCatalogGame(request: ApiImportGameRequest): Promise<GameImportInput | null> {
+  private async findExistingImportTarget(request: ApiImportGameRequest): Promise<Game | null> {
     if (typeof request.steamAppId === "number") {
-      const realEntry = await this.findDatabaseCatalogEntry(request.steamAppId);
-      if (realEntry) {
-        return gameImportInputFromSteamCatalogEntry(realEntry);
-      }
-      return steamAppCatalogService.findBySteamAppId(request.steamAppId);
+      return repositories.games.findBySteamAppId(request.steamAppId);
     }
 
     if (request.slug) {
-      return steamAppCatalogService.findBySlug(request.slug);
+      return repositories.games.findById(request.slug);
+    }
+
+    if (request.query) {
+      const matches = await repositories.games.search(request.query);
+      return matches[0]?.game ?? null;
+    }
+
+    return null;
+  }
+
+  private async resolveCatalogGame(request: ApiImportGameRequest): Promise<ResolvedCatalogGame | null> {
+    if (typeof request.steamAppId === "number") {
+      const realEntry = await this.findDatabaseCatalogEntry(request.steamAppId);
+      if (realEntry) {
+        return { input: gameImportInputFromSteamCatalogEntry(realEntry), source: "steam-catalog" };
+      }
+      const fallback = steamAppCatalogService.findBySteamAppId(request.steamAppId);
+      return fallback ? { input: fallback, source: "mock-catalog" } : null;
+    }
+
+    if (request.slug) {
+      const fallback = steamAppCatalogService.findBySlug(request.slug);
+      return fallback ? { input: fallback, source: "mock-catalog" } : null;
+    }
+
+    if (request.query) {
+      const databaseCatalogResults = await this.searchDatabaseCatalog(request.query);
+      const bestCatalogMatch = pickBestCatalogMatch(databaseCatalogResults, request.query);
+      if (bestCatalogMatch) {
+        return { input: gameImportInputFromSteamCatalogEntry(bestCatalogMatch), source: "steam-catalog" };
+      }
+
+      const fallback = steamAppCatalogService.search(request.query, 1)[0];
+      return fallback ? { input: fallback, source: "mock-catalog" } : null;
     }
 
     return null;
@@ -164,6 +212,21 @@ export class GameSearchService {
       return null;
     }
   }
+}
+
+function importResponse(
+  created: boolean,
+  source: ApiImportGameSource,
+  summary: GameSummary
+): ApiImportGameResponse {
+  return {
+    imported: created,
+    created,
+    source,
+    steamAppId: summary.game.steamAppId,
+    gameId: summary.game.id,
+    summary: summary as unknown as ApiImportGameResponse["summary"]
+  };
 }
 
 function libraryResult(summary: GameSummary): ApiGameSearchResult {
@@ -228,6 +291,16 @@ function toApiGame(game: Game): ApiGame {
     createdAt: game.createdAt.toISOString(),
     updatedAt: game.updatedAt.toISOString()
   };
+}
+
+function pickBestCatalogMatch(entries: SteamCatalogEntry[], query: string): SteamCatalogEntry | null {
+  const normalizedQuery = query.trim().toLowerCase();
+  return (
+    entries.find((entry) => entry.title.toLowerCase() === normalizedQuery) ??
+    entries.find((entry) => entry.title.toLowerCase().startsWith(normalizedQuery)) ??
+    entries[0] ??
+    null
+  );
 }
 
 function slugify(value: string): string {

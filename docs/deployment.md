@@ -254,6 +254,37 @@ $body = '{"mode":"top","limit":25}'
 Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
 ```
 
+Starter import from the already synced Steam catalog. Keep this as a small, intentional batch; it does not run a full catalog import:
+
+```powershell
+$starterAppIds = @(730,570,578080,1172470,1091500,292030,1086940,1245620,105600,413150,227300,252490,230410,1085660,440,892970,108600,275850,381210,238960)
+$body = @{
+  steamAppIds = $starterAppIds
+  refreshPlayers = $true
+  limit = 20
+} | ConvertTo-Json
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/games/bulk-import" -Method POST -Headers $headers -Body $body
+```
+
+Refresh only imported games:
+
+```powershell
+$body = '{"mode":"all-imported","limit":20}'
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
+```
+
+Refresh explicit Steam App IDs:
+
+```powershell
+$body = '{"steamAppIds":[570,730],"limit":2}'
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
+```
+
+`POST /api/admin/games/bulk-import` reports each imported, skipped and failed game independently. A failed Steam App ID does not roll back the rest of the batch.
+
 Cron readiness:
 
 - `POST /api/cron/refresh-player-counts` is ready for a future Vercel Cron job.

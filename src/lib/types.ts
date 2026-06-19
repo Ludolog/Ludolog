@@ -189,5 +189,7 @@ export type AdminStatus = {
   playerSnapshotCount: number;
   watchlistCount: number;
   alertCount: number;
+  realPlayerSnapshots: number;
+  mockPlayerSnapshots: number;
   integrationLogs: IntegrationLog[];
 };

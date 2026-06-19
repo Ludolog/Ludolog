@@ -176,7 +176,7 @@ Search results can come from the local database, the backend-synced Steam catalo
 - `Steam catalog` for synced `SteamCatalogEntry` rows from Neon,
 - `Mock fallback` when the real catalog is empty or unavailable.
 
-Importing a catalog result is also a backend operation. The APK never calls Steam directly and must never contain `STEAM_WEB_API_KEY`, `STEAM_API_KEY`, database URLs, Neon credentials or signing secrets.
+Importing a catalog result is also a backend operation. The mobile response uses backend fields such as `created`, `source`, `steamAppId`, `gameId`, `summary` and `imported`, then shows whether the game was newly imported or already in the library. The APK never calls Steam directly and must never contain `STEAM_WEB_API_KEY`, `STEAM_API_KEY`, `ADMIN_API_SECRET`, database URLs, Neon credentials or signing secrets.
 
 Steam Stats in the mobile UI are based on backend `PlayerCountSnapshot` records. Trends use the latest two player snapshots. If live Steam access is unavailable, the backend returns mock/fallback values and records an integration log; the Android app simply displays the API response.
 
@@ -186,7 +186,7 @@ The Stats screen shows a data mode badge:
 - `Mixed data` when real and fallback data are combined,
 - `Mock fallback` when the app is running on demonstration data.
 
-Game details shows the current player-count source and last refresh time. It does not run admin refresh actions from Android. `POST /api/games/{id}/refresh-players` is a backend/admin endpoint protected by `ADMIN_API_SECRET`, so the APK must not call it or contain that secret.
+Game details shows the current player-count source, last refresh time and a warning when no real player snapshot has been refreshed yet. It does not run admin refresh actions from Android. `POST /api/games/{id}/refresh-players`, `POST /api/admin/games/bulk-import` and `POST /api/admin/player-counts/refresh` are backend/admin endpoints protected by `ADMIN_API_SECRET`, so the APK must not call them or contain that secret.
 
 Diagnostics should show:
 

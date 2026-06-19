@@ -21,14 +21,23 @@ describe("GameSearchService", () => {
     expect(["database", "steam-catalog", "mock-catalog"]).toContain(palworld?.source);
   });
 
-  it("imports a fallback catalog game as a normal library game", async () => {
+  it("returns an existing fallback fixture from the local library without duplicating it", async () => {
     const response = await gameSearchService.importGame({ steamAppId: 1623730 });
 
     expect(response.summary.game.title).toBe("Palworld");
     expect(response.summary.game.source).toBe("mock");
+    expect(response).toMatchObject({
+      created: false,
+      gameId: "palworld",
+      imported: false,
+      source: "library",
+      steamAppId: 1623730
+    });
 
     const duplicate = await gameSearchService.importGame({ steamAppId: 1623730 });
     expect(duplicate.imported).toBe(false);
+    expect(duplicate.created).toBe(false);
+    expect(duplicate.source).toBe("library");
     expect(duplicate.summary.game.id).toBe(response.summary.game.id);
 
     const results = await gameSearchService.searchCatalog("palworld");
@@ -100,11 +109,38 @@ describe("GameSearchService", () => {
     const response = await gameSearchService.importGame({ steamAppId: 7654321 });
 
     expect(response.imported).toBe(true);
+    expect(response.created).toBe(true);
+    expect(response.source).toBe("steam-catalog");
+    expect(response.steamAppId).toBe(7654321);
     expect(response.summary.game.title).toBe("Import Fixture Arena");
     expect(response.summary.game.source).toBe("steam-api");
 
     const results = await gameSearchService.searchCatalog("import fixture arena");
     expect(results[0]?.kind).toBe("library");
     expect(results[0]?.source).toBe("database");
+  });
+
+  it("imports by query from the synced Steam catalog", async () => {
+    await repositories.steamCatalog.upsertMany([
+      {
+        id: "steam-catalog-7654323",
+        steamAppId: 7654323,
+        title: "Query Import Fixture",
+        appType: "game",
+        lastModified: null,
+        priceChangeNumber: null,
+        isGame: true,
+        isActive: true,
+        source: "steam-api",
+        syncedAt: new Date("2026-06-19T00:00:00.000Z")
+      }
+    ]);
+
+    const response = await gameSearchService.importGame({ query: "Query Import Fixture" });
+
+    expect(response.created).toBe(true);
+    expect(response.source).toBe("steam-catalog");
+    expect(response.steamAppId).toBe(7654323);
+    expect(response.summary.game.title).toBe("Query Import Fixture");
   });
 });

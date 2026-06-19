@@ -162,6 +162,9 @@ function StatsGameCard({
           <span className="rounded-md border border-radar-cyan/25 bg-radar-cyan/10 px-2 py-1 font-semibold text-radar-cyan">
             {formatNumber(game.currentPlayers)} online
           </span>
+          <span className={`rounded-md border px-2 py-1 font-semibold ${playerSourceClass(game.playerSource)}`}>
+            {playerSourceLabel(game.playerSource)}
+          </span>
           <span className={`rounded-md border px-2 py-1 font-semibold ${isUp ? "border-radar-green/30 bg-radar-green/10 text-radar-green" : "border-radar-red/30 bg-radar-red/10 text-radar-red"}`}>
             {isUp ? "+" : ""}
             {game.playerTrendPercent}%
@@ -176,6 +179,26 @@ function StatsGameCard({
       </div>
     </button>
   );
+}
+
+function playerSourceLabel(source: ApiStatsGame["playerSource"]): string {
+  if (source === "steam-api") {
+    return "Real Steam";
+  }
+  if (source === "mock") {
+    return "Mock";
+  }
+  return "Cached";
+}
+
+function playerSourceClass(source: ApiStatsGame["playerSource"]): string {
+  if (source === "steam-api") {
+    return "border-radar-green/30 bg-radar-green/10 text-radar-green";
+  }
+  if (source === "mock") {
+    return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";
+  }
+  return "border-white/10 bg-black/20 text-slate-300";
 }
 
 function CompactStatsRow({

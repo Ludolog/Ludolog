@@ -683,6 +683,8 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
       playerSnapshotCount,
       watchlistCount,
       alertCount,
+      realPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("steam-api"),
+      mockPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("mock"),
       integrationLogs
     };
   }

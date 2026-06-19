@@ -92,11 +92,23 @@ describe("mobile api client", () => {
     expect(fetcher.mock.calls[0]?.[0]).toBe("https://apka-seven.vercel.app/api/stats/overview");
   });
 
-  it("posts catalog imports as JSON", async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ imported: true, summary: { game: { id: "palworld" } } }), { status: 201 }));
+  it("posts catalog imports as JSON and reads the richer response", async () => {
+    const fetcher = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          created: true,
+          gameId: "palworld",
+          imported: true,
+          source: "mock-catalog",
+          steamAppId: 1623730,
+          summary: { game: { id: "palworld" } }
+        }),
+        { status: 201 }
+      )
+    );
     const client = createApiClient("https://apka-seven.vercel.app", createFetchTransport(fetcher as unknown as Fetcher));
 
-    await client.importGame({ steamAppId: 1623730 });
+    const response = await client.importGame({ steamAppId: 1623730 });
 
     const [url, options] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
     const headers = options.headers as Headers;
@@ -104,5 +116,11 @@ describe("mobile api client", () => {
     expect(options.method).toBe("POST");
     expect(headers.get("Content-Type")).toBe("application/json");
     expect(options.body).toBe(JSON.stringify({ steamAppId: 1623730 }));
+    expect(response).toMatchObject({
+      created: true,
+      gameId: "palworld",
+      source: "mock-catalog",
+      steamAppId: 1623730
+    });
   });
 });

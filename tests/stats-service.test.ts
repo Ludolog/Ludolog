@@ -56,6 +56,7 @@ describe("StatsService", () => {
     expect(overview.sourceCounts.importedGames).toBeGreaterThan(0);
     expect(overview.sourceCounts.realPlayerSnapshots).toBeGreaterThan(0);
     expect(overview.topPlayers.some((game) => game.steamAppId === 7654322)).toBe(true);
+    expect(overview.topPlayers.find((game) => game.steamAppId === 7654322)?.playerSource).toBe("steam-api");
     expect(["real", "mixed"]).toContain(overview.mode);
   });
 });

@@ -10,6 +10,11 @@ import { steamCatalogStatusService } from "@/lib/services/steam-catalog-status-s
 
 export const dynamic = "force-dynamic";
 
+const starterSteamAppIds = [
+  730, 570, 578080, 1172470, 1091500, 292030, 1086940, 1245620, 105600, 413150,
+  227300, 252490, 230410, 1085660, 440, 892970, 108600, 275850, 381210, 238960
+];
+
 export default async function AdminPage(): Promise<React.ReactElement> {
   const status = await repositories.diagnostics.getAdminStatus();
   const steamStatus = await steamCatalogStatusService.getStatus();
@@ -47,6 +52,8 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <StatusCard icon={<Database size={18} />} label="Offers" value={String(status.offerCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Price snapshots" value={String(status.priceSnapshotCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Player snapshots" value={String(status.playerSnapshotCount)} />
+        <StatusCard icon={<RefreshCw size={18} />} label="Real player snaps" value={String(status.realPlayerSnapshots)} />
+        <StatusCard icon={<RefreshCw size={18} />} label="Mock player snaps" value={String(status.mockPlayerSnapshots)} />
       </section>
 
       <section className="surface rounded-lg p-5">
@@ -100,6 +107,36 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             {steamStatus.lastSteamCatalogError.message}
           </p>
         ) : null}
+      </section>
+
+      <section className="surface rounded-lg p-5">
+        <h2 className="text-lg font-semibold text-white">Import starter games</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Imports a capped starter list from the synced Steam catalog and optionally refreshes current players.
+          Missing catalog entries are reported per game; the batch does not stop on one failure.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <InlineStatus icon={<Database size={18} />} label="Imported games" value={String(status.importedGameCount)} />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Last player refresh"
+            value={status.lastPlayerCountRefresh ? formatDate(status.lastPlayerCountRefresh) : "n/a"}
+          />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <AdminActionButton
+            endpoint="/api/admin/games/bulk-import"
+            label="Import starter 20"
+            body={{ steamAppIds: starterSteamAppIds, refreshPlayers: true, limit: 20 }}
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/player-counts/refresh"
+            label="Refresh imported players"
+            body={{ mode: "all-imported", limit: 20 }}
+            requireSecret
+          />
+        </div>
       </section>
 
       <section className="surface rounded-lg p-5">

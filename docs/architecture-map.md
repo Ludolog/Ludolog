@@ -39,12 +39,20 @@ The Android app is a client only. It never talks to Steam, Neon or Prisma direct
 
 ## Import game flow
 
-1. UI posts `POST /api/games/import` with a simple body such as `{ "steamAppId": 570 }`.
+1. UI posts `POST /api/games/import` with a simple body such as `{ "steamAppId": 570 }` or `{ "query": "Dota 2" }`.
 2. `GameSearchService.importGame()` resolves the app from `SteamCatalogEntry` first, then mock fallback.
-3. If the game already exists, the endpoint returns the existing summary with `imported: false`.
+3. If the game already exists, the endpoint returns the existing summary with `created: false`, `source: "library"` and `imported: false`.
 4. If missing, the repository creates `Game`, a Steam offer, initial price snapshot and initial player snapshots.
 5. For `source: "steam-api"` imports, the backend attempts a current-player refresh after import.
-6. Search then returns the imported game as `kind: "library"`.
+6. The response includes `created`, `source`, `steamAppId`, `gameId`, `summary` and the backwards-compatible `imported` flag. Search then returns the imported game as `kind: "library"`.
+
+## Bulk import flow
+
+1. Admin calls `POST /api/admin/games/bulk-import` with `x-admin-secret`.
+2. The body accepts `steamAppIds`, `queries`, `refreshPlayers` and `limit`; the route caps one request at 50 targets.
+3. The service imports each game independently through the same catalog resolution path as public import.
+4. Optional player refresh runs only for imported or existing games with a Steam App ID.
+5. The response reports `imported`, `skipped`, `refreshed`, `failed`, per-game results and per-game errors. One failing target does not roll back successful imports.
 
 ## Steam catalog sync flow
 
@@ -61,10 +69,10 @@ The Android app is a client only. It never talks to Steam, Neon or Prisma direct
 ## Player count refresh flow
 
 1. Admin calls `POST /api/admin/player-counts/refresh` with `x-admin-secret`, or cron calls `POST /api/cron/refresh-player-counts` with `CRON_SECRET`.
-2. `PlayerCountRefreshService` resolves Steam App IDs from `watchlist`, `top` or `all-imported`.
+2. `PlayerCountRefreshService` resolves Steam App IDs from `watchlist`, `top`, `all-imported` or explicit `steamAppIds`.
 3. `SteamApiService.refreshPlayerCount()` fetches current players from Steam when `DATA_MODE=api` and a Steam key is configured.
 4. Successful refreshes append `PlayerCountSnapshot` rows with `source: "steam-api"`.
-5. Failures are logged and cached/mock data can still keep the UI usable.
+5. Failures are returned per Steam App ID and logged; cached/mock data can still keep the UI usable.
 
 Public `GET /api/games/:id/players` can read current/cached player data, but it does not store a durable snapshot. Durable refreshes stay admin/cron controlled.
 
@@ -74,7 +82,7 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 2. `StatsService` loads game profiles, watchlists, catalog status and snapshot counts.
 3. It calculates top players, trending, drops, best value, watchlist popularity, hidden gems and categories.
 4. It returns `mode: "real" | "mixed" | "mock"` based on real/mock player snapshot counts.
-5. Home and Stats screens display `updatedAt`, source counts and category sections.
+5. Home and Stats screens display `updatedAt`, source counts, player source badges and category sections.
 
 ## Android diagnostics flow
 

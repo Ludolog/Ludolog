@@ -100,10 +100,17 @@ export type ApiGameSearchResult = {
 export type ApiImportGameRequest = {
   steamAppId?: number;
   slug?: string;
+  query?: string;
 };
+
+export type ApiImportGameSource = "library" | "steam-catalog" | "mock-catalog";
 
 export type ApiImportGameResponse = {
   imported: boolean;
+  created: boolean;
+  source: ApiImportGameSource;
+  steamAppId: number;
+  gameId: string;
   summary: ApiGameSummary;
 };
 
@@ -119,6 +126,7 @@ export type ApiStatsGame = {
   discountPercent: number;
   gameValueScore: number;
   recommendation: Recommendation;
+  playerSource: DataSource;
   tags: string[];
 };
 
@@ -202,7 +210,47 @@ export type ApiAdminStatus = {
   playerSnapshotCount: number;
   watchlistCount: number;
   alertCount: number;
+  realPlayerSnapshots: number;
+  mockPlayerSnapshots: number;
   integrationLogs: ApiIntegrationLog[];
+};
+
+export type ApiPlayerCountRefreshError = {
+  steamAppId: number;
+  message: string;
+};
+
+export type ApiPlayerCountRefreshResponse = {
+  mode: "watchlist" | "top" | "all-imported" | "explicit";
+  requested: number;
+  refreshed: number;
+  failed: number;
+  errors: ApiPlayerCountRefreshError[];
+  snapshots: ApiPlayerCountSnapshot[];
+};
+
+export type ApiBulkImportResult = {
+  input: string;
+  created: boolean;
+  source: ApiImportGameSource;
+  steamAppId: number;
+  gameId: string;
+  title: string;
+  refreshed: boolean;
+};
+
+export type ApiBulkImportError = {
+  input: string;
+  message: string;
+};
+
+export type ApiBulkImportResponse = {
+  imported: number;
+  skipped: number;
+  refreshed: number;
+  failed: number;
+  errors: ApiBulkImportError[];
+  results: ApiBulkImportResult[];
 };
 
 export type SearchResponse = {

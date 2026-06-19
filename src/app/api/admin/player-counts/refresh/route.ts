@@ -12,7 +12,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   try {
     const body = parseJsonBody(playerCountsRefreshSchema, await request.json());
-    return NextResponse.json(await playerCountRefreshService.refresh(body.mode ?? "top", body.limit ?? 25));
+    return NextResponse.json(await playerCountRefreshService.refresh(body.mode ?? "top", body.limit ?? 25, body.steamAppIds));
   } catch (error) {
     if (isZodError(error)) {
       return zodError(error);

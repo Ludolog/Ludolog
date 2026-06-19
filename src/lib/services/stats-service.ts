@@ -167,6 +167,7 @@ function statsGame(source: StatsSource): ApiStatsGame {
     discountPercent: profile.latestPrice?.discountPercent ?? profile.bestOffer?.discountPercent ?? 0,
     gameValueScore: profile.score.score,
     recommendation: profile.score.recommendation,
+    playerSource: profile.latestPlayers?.source ?? "mock",
     tags: profile.game.genres
   };
 }

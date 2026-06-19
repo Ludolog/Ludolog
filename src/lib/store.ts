@@ -445,6 +445,8 @@ export function getAdminStatus(): AdminStatus {
     playerSnapshotCount: playerSnapshots.length,
     watchlistCount: watchlistItems.length,
     alertCount: priceAlerts.length,
+    realPlayerSnapshots: countPlayerSnapshotsBySource("steam-api"),
+    mockPlayerSnapshots: countPlayerSnapshotsBySource("mock"),
     integrationLogs: listIntegrationLogs()
   };
 }

@@ -123,6 +123,7 @@ CRON_SECRET=""
 - `GET /api/stats/best-value`
 - `GET /api/admin/steam-catalog/status`
 - `POST /api/admin/steam-catalog/sync`
+- `POST /api/admin/games/bulk-import`
 - `POST /api/admin/player-counts/refresh`
 - `POST /api/games/:id/refresh-players`
 - `POST /api/cron/refresh-player-counts`
@@ -138,7 +139,7 @@ The scoring algorithm is implemented in `src/lib/services/deal-score-service.ts`
 
 ## Expanded search and Steam Stats
 
-Search now combines local database results, synced Steam catalog entries stored in PostgreSQL and the larger mock fallback catalog. If a result is already stored, clients can open its profile immediately. If it only exists in the catalog, the client can call `POST /api/games/import` with a `steamAppId` or `slug`; the backend creates the game, attempts a current-player refresh and keeps the import working even when Steam is unavailable. UI components never hardcode the catalog.
+Search now combines local database results, synced Steam catalog entries stored in PostgreSQL and the larger mock fallback catalog. If a result is already stored, clients can open its profile immediately. If it only exists in the catalog, the client can call `POST /api/games/import` with a `steamAppId`, `query` or legacy `slug`; the backend creates the game, attempts a current-player refresh and keeps the import working even when Steam is unavailable. The response includes `created`, `source`, `steamAppId`, `gameId`, `summary` and the backwards-compatible `imported` flag. UI components never hardcode the catalog.
 
 Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending games, biggest growth/drop, best value, watchlist popularity, hidden gems, genre categories, data freshness and source counts. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app uses mock snapshots and logs the fallback.
 
@@ -152,10 +153,15 @@ curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"dryRun\":true,\"maxPages\":1,\"maxResults\":100}"
 
+curl -X POST https://apka-seven.vercel.app/api/admin/games/bulk-import \
+  -H "Content-Type: application/json" \
+  -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
+  -d "{\"steamAppIds\":[570,730],\"refreshPlayers\":true,\"limit\":2}"
+
 curl -X POST https://apka-seven.vercel.app/api/admin/player-counts/refresh \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
-  -d "{\"mode\":\"top\",\"limit\":25}"
+  -d "{\"steamAppIds\":[570,730],\"limit\":2}"
 ```
 
 Manual admin POST endpoints require `ADMIN_API_SECRET` through the `x-admin-secret` header. `POST /api/cron/refresh-player-counts` is prepared for a future Vercel Cron job and is protected by `CRON_SECRET` in production. Do not commit `STEAM_WEB_API_KEY`, `ADMIN_API_SECRET`, `CRON_SECRET`, database URLs or mobile signing secrets.

@@ -97,6 +97,11 @@ export function GameDetailsView({
             <p className="mt-1 text-xs text-slate-400">
               Last refreshed: {profile.latestPlayers ? new Date(profile.latestPlayers.capturedAt).toLocaleString("pl-PL") : "n/a"}
             </p>
+            {(profile.latestPlayers?.playersOnline ?? 0) === 0 ? (
+              <p className="mt-2 rounded-md border border-radar-amber/30 bg-radar-amber/10 px-3 py-2 text-xs leading-5 text-radar-amber">
+                Player count has not been refreshed yet for this game.
+              </p>
+            ) : null}
           </div>
         </div>
       </section>
@@ -139,12 +144,12 @@ export function GameDetailsView({
 
 function playerSourceLabel(source: string | undefined): string {
   if (source === "steam-api") {
-    return "Real Steam";
+    return "Real Steam players";
   }
   if (source === "mock") {
-    return "Mock";
+    return "Mock fallback";
   }
-  return "Cached";
+  return "Cached Steam";
 }
 
 function Metric({ label, value }: { label: string; value: string }): React.ReactElement {

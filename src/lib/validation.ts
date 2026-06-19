@@ -20,10 +20,22 @@ export const watchlistCreateSchema = z.object({
 export const gameImportSchema = z
   .object({
     steamAppId: z.number().int().positive().optional(),
-    slug: z.string().trim().min(1).max(120).optional()
+    slug: z.string().trim().min(1).max(120).optional(),
+    query: z.string().trim().min(1).max(120).optional()
   })
-  .refine((value) => value.steamAppId !== undefined || value.slug !== undefined, {
-    message: "steamAppId or slug is required."
+  .refine((value) => value.steamAppId !== undefined || value.slug !== undefined || value.query !== undefined, {
+    message: "steamAppId, slug or query is required."
+  });
+
+export const adminBulkImportSchema = z
+  .object({
+    steamAppIds: z.array(z.number().int().positive()).max(50).optional(),
+    queries: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
+    refreshPlayers: z.boolean().default(true),
+    limit: z.number().int().positive().max(50).default(20)
+  })
+  .refine((value) => (value.steamAppIds?.length ?? 0) > 0 || (value.queries?.length ?? 0) > 0, {
+    message: "steamAppIds or queries are required."
   });
 
 export const steamCatalogSyncSchema = z.object({
@@ -35,7 +47,8 @@ export const steamCatalogSyncSchema = z.object({
 
 export const playerCountsRefreshSchema = z.object({
   mode: z.enum(["watchlist", "top", "all-imported"]).default("top"),
-  limit: z.number().int().positive().max(50).default(25)
+  limit: z.number().int().positive().max(50).default(25),
+  steamAppIds: z.array(z.number().int().positive()).max(50).optional()
 });
 
 export const priceAlertCreateSchema = z.object({

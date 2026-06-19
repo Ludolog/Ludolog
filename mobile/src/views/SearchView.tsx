@@ -11,6 +11,7 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
   const [results, setResults] = useState<ApiGameSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [importingSteamAppId, setImportingSteamAppId] = useState<number | null>(null);
+  const [importSuccess, setImportSuccess] = useState<{ created: boolean; gameId: string; title: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
@@ -22,6 +23,7 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
 
     setLoading(true);
     setError(null);
+    setImportSuccess(null);
     setSearched(true);
     try {
       const response = await apiClient.searchGames(trimmed);
@@ -41,9 +43,32 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
 
     setImportingSteamAppId(result.game.steamAppId);
     setError(null);
+    setImportSuccess(null);
     try {
       const response = await apiClient.importGame({ steamAppId: result.game.steamAppId });
-      onOpenGame(response.summary.game.id);
+      setResults((current) =>
+        current.map((item) =>
+          item.game.steamAppId === response.steamAppId
+            ? {
+                ...item,
+                kind: "library",
+                importable: false,
+                source: "database",
+                game: response.summary.game,
+                summary: response.summary,
+                currentPlayers: response.summary.latestPlayers?.playersOnline ?? item.currentPlayers,
+                currentPrice: response.summary.latestPrice?.price ?? response.summary.bestOffer?.price ?? item.currentPrice,
+                historicalLow: response.summary.latestPrice?.historicalLow ?? item.historicalLow,
+                tags: response.summary.game.genres
+              }
+            : item
+        )
+      );
+      setImportSuccess({
+        created: response.created,
+        gameId: response.gameId,
+        title: response.summary.game.title
+      });
     } catch (importError) {
       setError(describeApiClientError(importError));
     } finally {
@@ -81,6 +106,20 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
       </section>
 
       {loading ? <LoadingState label="Searching catalog" /> : null}
+      {importSuccess ? (
+        <section className="surface rounded-lg border border-radar-green/25 p-4">
+          <p className="text-sm font-semibold text-radar-green">
+            {importSuccess.created ? "Imported" : "Already in library"}: {importSuccess.title}
+          </p>
+          <button
+            type="button"
+            onClick={() => onOpenGame(importSuccess.gameId)}
+            className="mt-3 min-h-11 rounded-md bg-radar-cyan px-4 text-sm font-semibold text-slate-950"
+          >
+            Open details
+          </button>
+        </section>
+      ) : null}
       {error ? <ErrorState message={error} onRetry={search} /> : null}
       {!loading && !error && searched && results.length === 0 ? <EmptyState message="No games matched this query." /> : null}
       {!loading && !error
