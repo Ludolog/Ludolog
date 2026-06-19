@@ -30,9 +30,13 @@ The code caps `GOG_REQUEST_LIMIT_PER_HOUR` at 200 and admin refreshes are limite
 
 1. Admin searches the GOG catalog through `POST /api/admin/gog/catalog/search`.
 2. The backend stores small `GogCatalogEntry` records for review.
-3. Admin creates a `GameExternalMapping` with provider `gog`.
-4. `POST /api/admin/gog/prices/test` checks one mapped product without writing prices.
-5. `POST /api/admin/gog/prices/refresh` writes official GOG offers and price snapshots for approved mappings only.
+3. Admin can run `POST /api/admin/gog/catalog/discover` to search imported/top tracked games or explicit queries.
+4. Discovery returns suggested and uncertain mappings, but it does not create `GameExternalMapping` rows automatically.
+5. Admin creates a `GameExternalMapping` with provider `gog`.
+6. `POST /api/admin/gog/prices/test` checks one mapped product without writing prices.
+7. `POST /api/admin/gog/prices/refresh` defaults to `dryRun=true`. Dry runs return parsed price previews and do not
+   write `StoreOffer` or `GamePriceSnapshot` rows.
+8. `dryRun=false` writes official GOG offers and price snapshots for approved mappings only.
 
 Written offers use:
 
@@ -52,6 +56,7 @@ The persisted `DataSource` value is `gog`, and UI badges render it as `GameValue
 - `POST /api/admin/gog/mappings` with `x-admin-secret`
 - `POST /api/admin/gog/resolve-game` with `x-admin-secret`
 - `POST /api/admin/gog/catalog/search` with `x-admin-secret`
+- `POST /api/admin/gog/catalog/discover` with `x-admin-secret`
 - `POST /api/admin/gog/prices/test` with `x-admin-secret`
 - `POST /api/admin/gog/prices/refresh` with `x-admin-secret`
 
@@ -72,6 +77,16 @@ Example safe refresh:
 {
   "mode": "mapped-games",
   "gameIds": ["cyberpunk-2077"],
-  "limit": 1
+  "limit": 1,
+  "dryRun": true
+}
+```
+
+Example discovery:
+
+```json
+{
+  "mode": "imported-games",
+  "limit": 10
 }
 ```

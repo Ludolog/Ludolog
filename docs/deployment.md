@@ -95,6 +95,12 @@ GOG_CATALOG_BASE_URL=https://catalog.gog.com
 GOG_COUNTRY_CODE=PL
 GOG_CURRENCY=PLN
 GOG_REQUEST_LIMIT_PER_HOUR=200
+STEAM_STORE_PRICE_ENABLED=false
+STEAM_STORE_API_BASE_URL=https://store.steampowered.com/api
+STEAM_STORE_COUNTRY=PL
+STEAM_STORE_CURRENCY=PLN
+STEAM_STORE_PRICE_CACHE_TTL_MINUTES=360
+STEAM_STORE_PRICE_MAX_PER_RUN=20
 ENABLE_LEGACY_PRICE_PROVIDERS=false
 # Legacy fallbacks:
 PRICE_API_PROVIDER=gamevalue
@@ -252,9 +258,13 @@ It should expose only booleans and counts, for example `hasSteamApiKey`, `dataMo
 Manual Steam catalog sync in PowerShell. Paste the real admin secret only into your local terminal, never into code:
 
 ```powershell
+if ([string]::IsNullOrWhiteSpace($env:ADMIN_API_SECRET)) {
+  throw "Set ADMIN_API_SECRET in this PowerShell session first."
+}
+
 $headers = @{
   "Content-Type" = "application/json"
-  "x-admin-secret" = "TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE"
+  "x-admin-secret" = $env:ADMIN_API_SECRET.Trim()
 }
 
 $body = '{"dryRun":true,"maxPages":1,"maxResults":100}'
@@ -288,6 +298,20 @@ if ($status.nextSteamCatalogStartAfterAppId) {
 }
 
 $body = $payload | ConvertTo-Json
+```
+
+To safely grow the stored Steam catalog to a target count, use the guarded multi-batch wrapper. Always start with
+`dryRun=$true`; it reports `estimatedFinalCount` while leaving Neon unchanged:
+
+```powershell
+$body = @{
+  dryRun = $true
+  targetCount = 2000
+  batchSize = 500
+  maxBatches = 4
+} | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-catalog/sync-until" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Manual player-count refresh:
@@ -387,6 +411,22 @@ Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-store-pric
 ```
 
 Do not set `dryRun=false` until `STEAM_STORE_PRICE_ENABLED=true` is deployed and the dry run shows valid JSON-derived price data.
+
+GOG catalog discovery stores only small review entries and suggested matches. It does not create mappings automatically:
+
+```powershell
+$body = @{ mode = "imported-games"; limit = 10 } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/catalog/discover" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
+GOG mapped price refresh defaults to dry run. Keep it that way until approved mappings exist and the preview looks right:
+
+```powershell
+$body = @{ mode = "mapped-games"; limit = 5; dryRun = $true } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
 
 Starter import from the already synced Steam catalog. Keep this as a small, intentional batch; it does not run a full catalog import:
 

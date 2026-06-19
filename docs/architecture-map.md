@@ -65,7 +65,9 @@ The Android app is a client only. It never talks to Steam, Neon or Prisma direct
 4. `dryRun: true` fetches and reports counts without writing to Neon.
 5. `dryRun: false` upserts by unique `steamAppId`, so repeated syncs update existing rows instead of duplicating them.
 6. The result reports `lastAppId`; public status exposes `nextSteamCatalogStartAfterAppId` so small follow-up syncs can continue from the highest stored app id.
-7. Errors are recorded as `IntegrationLog` entries and returned as safe messages. Secrets are never returned by status endpoints.
+7. `POST /api/admin/steam-catalog/sync-until` wraps multiple one-page batches behind the same admin guard. In dry-run
+   mode it reports `estimatedFinalCount` while leaving stored rows unchanged.
+8. Errors are recorded as `IntegrationLog` entries and returned as safe messages. Secrets are never returned by status endpoints.
 
 `maxResults` is a total cap for one sync request. If `maxResults` is `100`, the sync stops after 100 fetched entries even when `maxPages` is higher.
 
@@ -89,8 +91,12 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 6. Legacy `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` return disabled responses and do not call external aggregators.
 7. GG.deals, ITAD and CheapShark are not active providers. GG.deals was disabled after Vercel received Cloudflare challenge HTML instead of API JSON. The app does not bypass Cloudflare, scrape protected pages, use Playwright/Puppeteer, cookies, proxies or browser sessions.
 8. The GOG connector is admin/backend-only, disabled by default and writes official DRM-free offers only after a manual `GameExternalMapping` exists.
-9. The Steam Store price connector is admin/backend-only, disabled by default and writes official Steam offers only from JSON `appdetails` responses.
-10. `GET /api/admin/prices/mock-cleanup/preview` reports old mock/demo price rows. `POST /api/admin/prices/mock-cleanup/run` requires `confirm=DELETE_MOCK_PRICE_DATA_ONLY` and deletes only mock price offers, mock price snapshots and mock price sources.
+9. `POST /api/admin/gog/catalog/discover` stores small `GogCatalogEntry` review rows and returns suggested mappings, but it
+   does not create mappings automatically.
+10. GOG price refresh defaults to `dryRun=true`; dry runs return parsed price previews and do not write `StoreOffer` or
+    `GamePriceSnapshot` rows.
+11. The Steam Store price connector is admin/backend-only, disabled by default and writes official Steam offers only from JSON `appdetails` responses.
+12. `GET /api/admin/prices/mock-cleanup/preview` reports old mock/demo price rows. `POST /api/admin/prices/mock-cleanup/run` requires `confirm=DELETE_MOCK_PRICE_DATA_ONLY` and deletes only mock price offers, mock price snapshots and mock price sources.
 
 ## Stats overview flow
 
@@ -132,7 +138,8 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 - Do not bypass GG.deals Cloudflare challenges with browser automation, cookies, fake sessions, proxies or HTML scraping.
 - Do not run a full Steam catalog sync automatically or from user traffic.
 - Start with `dryRun: true`, `maxPages: 1`, `maxResults: 100`.
-- Use `startAfterAppId` or the status cursor for controlled follow-up batches.
+- Use `startAfterAppId`, the status cursor or `sync-until` with small `batchSize`/`maxBatches` for controlled follow-up batches.
 - Always run mock price cleanup preview before cleanup run.
+- Keep GOG discovery and price refresh limits small; discovery suggestions are not approved mappings.
 - Keep Steam Store price refreshes as `dryRun=true` until status/test output confirms valid JSON-derived prices.
 - Keep admin secrets in local form state or terminal environment only; do not commit them.

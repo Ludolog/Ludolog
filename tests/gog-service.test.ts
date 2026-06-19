@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { POST as searchGogCatalog } from "@/app/api/admin/gog/catalog/search/route";
+import { POST as discoverGogCatalog } from "@/app/api/admin/gog/catalog/discover/route";
 import { POST as createGogMapping } from "@/app/api/admin/gog/mappings/route";
 import { POST as refreshGogPrices } from "@/app/api/admin/gog/prices/refresh/route";
 import { repositories } from "@/lib/repositories";
@@ -164,6 +165,38 @@ describe("GOG connector", () => {
     expect(body.upserted.created + body.upserted.updated).toBeGreaterThan(0);
   });
 
+  it("discovers GOG catalog products without creating mappings", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    vi.stubEnv("GOG_ENABLED", "true");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(JSON.stringify({ products: [sampleCyberpunkProduct] }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      })
+    );
+
+    const response = await discoverGogCatalog(
+      new Request("http://localhost/api/admin/gog/catalog/discover", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ mode: "top-steam-catalog", limit: 1 })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.mode).toBe("top-steam-catalog");
+    expect(body.foundProducts).toBe(1);
+    expect(body.createdCatalogEntries + body.updatedCatalogEntries).toBeGreaterThan(0);
+    expect(body.suggestedMappings.length + body.uncertainMatches.length).toBeGreaterThan(0);
+  });
+
   it("refreshes a mapped GOG game into StoreOffer and GamePriceSnapshot", async () => {
     vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
     vi.stubEnv("GOG_ENABLED", "true");
@@ -191,7 +224,7 @@ describe("GOG connector", () => {
           "content-type": "application/json",
           "x-admin-secret": "test-admin-secret"
         },
-        body: JSON.stringify({ mode: "mapped-games", gameIds: ["cyberpunk-2077"], limit: 1 })
+        body: JSON.stringify({ mode: "mapped-games", gameIds: ["cyberpunk-2077"], limit: 1, dryRun: false })
       })
     );
     const body = await response.json();
@@ -203,6 +236,48 @@ describe("GOG connector", () => {
     expect(offers.some((offer) => offer.source === "gog" && offer.storeName === "GOG" && offer.drm === "DRM-free")).toBe(true);
     expect(afterHistory.length).toBeGreaterThan(beforeHistory.length);
     expect(afterHistory.at(-1)).toMatchObject({ source: "gog", storeName: "GOG", sourceConfidence: "internal-real" });
+  });
+
+  it("dry-runs a mapped GOG price refresh without writing StoreOffer or GamePriceSnapshot", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    vi.stubEnv("GOG_ENABLED", "true");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(JSON.stringify({ products: [sampleCyberpunkProduct] }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      })
+    );
+    await repositories.gog.upsertMapping({
+      gameId: "cyberpunk-2077",
+      externalId: "2093619782",
+      externalSlug: "cyberpunk_2077",
+      confidence: "manual"
+    });
+    const beforeOffers = await priceApiService.listOffers("cyberpunk-2077");
+    const beforeHistory = await repositories.snapshots.listPrices("cyberpunk-2077");
+
+    const response = await refreshGogPrices(
+      new Request("http://localhost/api/admin/gog/prices/refresh", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ mode: "mapped-games", gameIds: ["cyberpunk-2077"], limit: 1, dryRun: true })
+      })
+    );
+    const body = await response.json();
+    const afterOffers = await priceApiService.listOffers("cyberpunk-2077");
+    const afterHistory = await repositories.snapshots.listPrices("cyberpunk-2077");
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ dryRun: true, requested: 1, refreshed: 0, skipped: 1, failed: 0 });
+    expect(body.results[0].preview).toMatchObject({ gogProductId: "2093619782", storeName: "GOG" });
+    expect(afterOffers).toHaveLength(beforeOffers.length);
+    expect(afterHistory).toHaveLength(beforeHistory.length);
   });
 
   it("skips unknown-confidence mappings without calling GOG", async () => {

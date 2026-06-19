@@ -267,6 +267,20 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             requireSecret
           />
           <AdminActionButton
+            endpoint="/api/admin/gog/catalog/discover"
+            label="Discover imported GOG"
+            body={{ mode: "imported-games", limit: 10 }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/gog/catalog/discover"
+            label="Discover GOG queries"
+            body={{ queries: ["witcher", "cyberpunk", "stardew valley"], limit: 3 }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
             endpoint="/api/admin/gog/resolve-game"
             label="Resolve game to GOG"
             body={{ gameId: "cyberpunk-2077", limit: 10 }}
@@ -294,8 +308,15 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           />
           <AdminActionButton
             endpoint="/api/admin/gog/prices/refresh"
+            label="Dry run mapped GOG prices"
+            body={{ mode: "mapped-games", gameIds: ["cyberpunk-2077"], limit: 1, dryRun: true }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/gog/prices/refresh"
             label="Refresh mapped GOG prices"
-            body={{ mode: "mapped-games", gameIds: ["cyberpunk-2077"], limit: 1 }}
+            body={{ mode: "mapped-games", gameIds: ["cyberpunk-2077"], limit: 1, dryRun: false }}
             editableBody
             requireSecret
           />
@@ -366,6 +387,13 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             editableBody
             requireSecret
           />
+          <AdminActionButton
+            endpoint="/api/admin/steam-store-prices/refresh"
+            label="Refresh imported Steam prices"
+            body={{ limit: 5, dryRun: false }}
+            editableBody
+            requireSecret
+          />
         </div>
         <div className="mt-4 rounded-md border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-400">
           Suggested envs: `STEAM_STORE_PRICE_ENABLED=false`, `STEAM_STORE_COUNTRY=PL`,
@@ -419,6 +447,27 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             endpoint="/api/admin/steam-catalog/sync"
             label="Sync next 2000"
             body={{ dryRun: false, maxPages: 2, maxResults: 2000, startAfterAppId: nextSteamCatalogStartAfterAppId }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/steam-catalog/sync-until"
+            label="Dry run until 2000"
+            body={{ dryRun: true, targetCount: 2000, batchSize: 500, maxBatches: 4 }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/steam-catalog/sync-until"
+            label="Sync until 2000"
+            body={{ dryRun: false, targetCount: 2000, batchSize: 500, maxBatches: 4 }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/steam-catalog/sync-until"
+            label="Sync until 5000"
+            body={{ dryRun: false, targetCount: 5000, batchSize: 500, maxBatches: 10 }}
             editableBody
             requireSecret
           />

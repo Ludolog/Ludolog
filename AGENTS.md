@@ -27,6 +27,8 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 - `PlayerCountSnapshot` stores real and fallback player-count snapshots.
 - GameValue Price API is the first-party price module.
 - GOG connector exists.
+- GOG catalog discovery stores review entries and suggestions, not automatic mappings.
+- GOG price refresh defaults to dry run.
 - Steam Store price connector exists and is experimental.
 - GG.deals, ITAD, and CheapShark are legacy/disabled and are not active price providers.
 
@@ -109,6 +111,7 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `GET /api/admin/status`
 - `GET /api/admin/steam-catalog/status`
 - `POST /api/admin/steam-catalog/sync`
+- `POST /api/admin/steam-catalog/sync-until`
 - `GET /api/categories/overview`
 - `GET /api/categories/:slug`
 - `GET /api/games/search`
@@ -119,6 +122,7 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `GET /api/deals/best`
 - `GET /api/admin/gog/status`
 - `POST /api/admin/gog/catalog/search`
+- `POST /api/admin/gog/catalog/discover`
 - `POST /api/admin/gog/mappings`
 - `POST /api/admin/gog/prices/test`
 - `POST /api/admin/gog/prices/refresh`

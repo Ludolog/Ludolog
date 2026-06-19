@@ -48,6 +48,10 @@ Steam catalog sync is an admin-controlled backend operation. It is intentionally
 then combine imported library games, synced catalog entries and mock fallback catalog results without exposing Steam,
 Neon or admin secrets to Android.
 
+`POST /api/admin/steam-catalog/sync-until` is a safer operational wrapper for growing the catalog toward a target count
+through capped one-page batches. Dry runs report `estimatedFinalCount` and do not change Neon, which makes larger search
+coverage testable before a real write.
+
 ## Cel systemu
 
 GameValue Radar to aplikacja webowa wspomagająca decyzje zakupowe graczy PC. System łączy dane o cenach, ofertach sklepów, historii cen, liczbie aktywnych graczy oraz autorskim wskaźniku opłacalności zakupu. Projekt nie jest kopią SteamDB ani GG.deals i nie wykonuje scrapingu stron HTML. Integracje są zamknięte w adapterach, a tryb demonstracyjny działa na danych mockowych.
@@ -171,6 +175,10 @@ The internal price layer adds:
 `GameValuePriceService` validates admin inputs, creates stores and sources when needed, upserts offers and appends snapshots. `sourceConfidence` distinguishes `internal-real`, `experimental-store-api`, `internal-mock`, `external-legacy` and `no-price-data`, which lets web and Android show clear badges without exposing technical provider failures.
 
 `GogService` is the first real store connector in that layer. It is disabled by default, uses public GOG JSON endpoints only, respects small admin batches and writes official DRM-free `source=gog` offers after manual mapping approval. It rejects HTML/non-JSON responses and never stores Cloudflare or page HTML as a price record.
+
+GOG catalog discovery can search imported/top tracked games or explicit queries and store `GogCatalogEntry` rows for
+review. It returns suggested and uncertain mappings separately, but it never creates `GameExternalMapping` records on
+its own. GOG price refresh defaults to `dryRun=true`, returning parsed price previews without writing offers or snapshots.
 
 `SteamStorePriceService` is the second real/experimental connector. It is disabled by default, uses Steam Store `appdetails` JSON only, keeps admin batches small and writes `source=steam-store` offers/snapshots only when explicitly invoked. It rejects non-JSON responses and never stores HTML.
 

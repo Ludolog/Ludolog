@@ -32,7 +32,11 @@ Invoke-RestMethod "https://apka-seven.vercel.app/api/admin/steam-store-prices/st
 Safe Dota 2 dry run:
 
 ```powershell
-$headers = @{ "x-admin-secret" = $env:ADMIN_API_SECRET }
+if ([string]::IsNullOrWhiteSpace($env:ADMIN_API_SECRET)) {
+  throw "Set ADMIN_API_SECRET in this PowerShell session first."
+}
+
+$headers = @{ "x-admin-secret" = $env:ADMIN_API_SECRET.Trim() }
 $body = @{ steamAppIds = @(570); limit = 1; dryRun = $true } | ConvertTo-Json -Compress
 
 Invoke-RestMethod `

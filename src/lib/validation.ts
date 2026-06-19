@@ -47,6 +47,13 @@ export const steamCatalogSyncSchema = z.object({
   startAfterAppId: z.number().int().positive().optional()
 });
 
+export const steamCatalogSyncUntilSchema = z.object({
+  targetCount: z.number().int().positive().min(1).max(100_000),
+  batchSize: z.number().int().positive().min(1).max(1000).default(500),
+  maxBatches: z.number().int().positive().min(1).max(20).default(4),
+  dryRun: z.boolean().default(true)
+});
+
 export const playerCountsRefreshSchema = z.object({
   mode: z.enum(["watchlist", "top", "all-imported"]).default("top"),
   limit: z.number().int().positive().max(50).default(25),
@@ -108,6 +115,16 @@ export const gogCatalogSearchSchema = z.object({
   limit: z.number().int().positive().max(25).default(10)
 });
 
+export const gogCatalogDiscoverSchema = z
+  .object({
+    mode: z.enum(["imported-games", "top-steam-catalog"]).optional(),
+    queries: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
+    limit: z.number().int().positive().max(50).default(20)
+  })
+  .refine((value) => value.mode !== undefined || (value.queries?.length ?? 0) > 0, {
+    message: "mode or queries are required."
+  });
+
 export const gogMappingSchema = z.object({
   gameId: z.string().trim().min(1).max(120),
   gogProductId: z.string().trim().min(1).max(80),
@@ -130,7 +147,8 @@ export const gogPriceTestSchema = z.object({
 export const gogPriceRefreshSchema = z.object({
   mode: z.literal("mapped-games").default("mapped-games"),
   gameIds: z.array(z.string().trim().min(1).max(120)).max(10).optional(),
-  limit: z.number().int().positive().max(10).default(10)
+  limit: z.number().int().positive().max(10).default(10),
+  dryRun: z.boolean().default(true)
 });
 
 export const mockPriceCleanupRunSchema = z.object({

@@ -130,6 +130,7 @@ CRON_SECRET=""
 - `GET /api/stats/best-value`
 - `GET /api/admin/steam-catalog/status`
 - `POST /api/admin/steam-catalog/sync`
+- `POST /api/admin/steam-catalog/sync-until`
 - `POST /api/admin/games/bulk-import`
 - `GET /api/admin/prices/status`
 - `POST /api/admin/prices/manual-offer`
@@ -268,11 +269,14 @@ GOG admin operations:
 - `POST /api/admin/gog/mappings` with `x-admin-secret`
 - `POST /api/admin/gog/resolve-game` with `x-admin-secret`
 - `POST /api/admin/gog/catalog/search` with `x-admin-secret`
+- `POST /api/admin/gog/catalog/discover` with `x-admin-secret`
 - `POST /api/admin/gog/prices/test` with `x-admin-secret`
 - `POST /api/admin/gog/prices/refresh` with `x-admin-secret`
 
-Keep GOG refreshes small (`limit <= 10`) and map games manually before writing prices. Unknown-confidence mappings are
-skipped by refresh.
+Keep GOG discovery and refreshes small. Discovery stores `GogCatalogEntry` review data and returns suggested mappings,
+but it does not create mappings automatically. GOG price refresh defaults to `dryRun=true`; use `dryRun=false` only for
+approved mappings after a dry run shows valid JSON-derived price previews. Unknown-confidence mappings are skipped by
+refresh.
 
 Steam Store admin operations:
 
@@ -289,6 +293,11 @@ curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"dryRun\":true,\"maxPages\":1,\"maxResults\":100}"
+
+curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync-until \
+  -H "Content-Type: application/json" \
+  -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
+  -d "{\"dryRun\":true,\"targetCount\":2000,\"batchSize\":500,\"maxBatches\":4}"
 
 curl -X POST https://apka-seven.vercel.app/api/admin/games/bulk-import \
   -H "Content-Type: application/json" \
@@ -308,6 +317,8 @@ When those variables are changed in Vercel, redeploy the latest `main` deploymen
 Steam catalog sync is intentionally manual and batched. `maxResults` is the total cap for one request; if it is `100`,
 the sync stops after 100 entries even when `maxPages` is higher. Public catalog status returns
 `nextSteamCatalogStartAfterAppId`, which can be passed as `startAfterAppId` for the next small batch.
+`POST /api/admin/steam-catalog/sync-until` wraps multiple one-page batches behind one guarded admin call. Use
+`dryRun=true` first; it reports `estimatedFinalCount` without changing stored rows.
 
 Weights:
 

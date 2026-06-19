@@ -2,6 +2,11 @@ import { getSteamWebApiKey } from "@/lib/config";
 import { mockGameCatalog } from "@/lib/mock-data";
 import { repositories } from "@/lib/repositories";
 import type { SteamCatalogUpsertInput } from "@/lib/repositories/contracts";
+import type {
+  ApiSteamCatalogSyncUntilBatch,
+  ApiSteamCatalogSyncUntilRequest,
+  ApiSteamCatalogSyncUntilResponse
+} from "@shared/api-types";
 
 export type SteamCatalogSyncOptions = {
   dryRun?: boolean;
@@ -21,6 +26,10 @@ export type SteamCatalogSyncResult = {
   source: "steam-api" | "mock-fallback";
   warning?: string;
 };
+
+export type SteamCatalogSyncUntilOptions = ApiSteamCatalogSyncUntilRequest;
+
+export type SteamCatalogSyncUntilResult = ApiSteamCatalogSyncUntilResponse;
 
 type SteamAppListResponse = {
   response?: {
@@ -121,6 +130,123 @@ export class SteamCatalogSyncService {
       });
       throw error;
     }
+  }
+
+  async syncUntil(options: SteamCatalogSyncUntilOptions): Promise<SteamCatalogSyncUntilResult> {
+    const targetCount = clampPositive(options.targetCount, 1, 100_000);
+    const batchSize = clampPositive(options.batchSize ?? 500, 1, 1000);
+    const maxBatches = clampPositive(options.maxBatches ?? 4, 1, 20);
+    const dryRun = options.dryRun ?? true;
+    const initialStatus = await repositories.steamCatalog.status();
+    const initialCount = initialStatus.entryCount;
+    let finalCount = initialCount;
+    let estimatedFinalCount = initialCount;
+    let cursor = initialStatus.nextStartAfterAppId;
+    let lastAppId: number | null = cursor;
+    let hasMore = true;
+    let fetched = 0;
+    let created = 0;
+    let updated = 0;
+    let reason: SteamCatalogSyncUntilResult["reason"] | null = null;
+    const batches: ApiSteamCatalogSyncUntilBatch[] = [];
+
+    await repositories.diagnostics.recordIntegrationLog({
+      service: "steam",
+      level: "info",
+      message: `Steam catalog sync-until started. dryRun=${dryRun}, targetCount=${targetCount}, batchSize=${batchSize}, maxBatches=${maxBatches}.`
+    });
+
+    if (initialCount >= targetCount) {
+      reason = "target-reached";
+    }
+
+    while (reason === null && batches.length < maxBatches) {
+      const countBeforeBatch = dryRun ? estimatedFinalCount : finalCount;
+      const syncOptions: SteamCatalogSyncOptions = {
+        dryRun,
+        maxPages: 1,
+        maxResults: batchSize
+      };
+      if (cursor !== null) {
+        syncOptions.startAfterAppId = cursor;
+      }
+
+      const batchResult = await this.sync(syncOptions);
+      fetched += batchResult.fetched;
+      created += batchResult.created;
+      updated += batchResult.updated;
+      lastAppId = batchResult.lastAppId;
+      hasMore = batchResult.hasMore;
+
+      if (dryRun) {
+        estimatedFinalCount += batchResult.fetched;
+      } else {
+        finalCount = (await repositories.steamCatalog.status()).entryCount;
+        estimatedFinalCount = finalCount;
+      }
+
+      const countAfterBatch = dryRun ? estimatedFinalCount : finalCount;
+      batches.push({
+        batch: batches.length + 1,
+        dryRun,
+        fetched: batchResult.fetched,
+        created: batchResult.created,
+        updated: batchResult.updated,
+        pages: batchResult.pages,
+        lastAppId: batchResult.lastAppId,
+        hasMore: batchResult.hasMore,
+        source: batchResult.source,
+        countAfterBatch
+      });
+
+      cursor = batchResult.lastAppId;
+
+      if (batchResult.source === "mock-fallback") {
+        reason = "mock-fallback";
+      } else if (countAfterBatch >= targetCount) {
+        reason = "target-reached";
+      } else if (!batchResult.hasMore) {
+        reason = "steam-end-reached";
+      } else if (batchResult.fetched === 0 || countAfterBatch <= countBeforeBatch) {
+        reason = "no-progress";
+      }
+    }
+
+    if (reason === null) {
+      reason = "max-batches-reached";
+    }
+
+    if (!dryRun) {
+      finalCount = (await repositories.steamCatalog.status()).entryCount;
+      estimatedFinalCount = finalCount;
+    }
+
+    const response: SteamCatalogSyncUntilResult = {
+      dryRun,
+      targetCount,
+      initialCount,
+      finalCount,
+      estimatedFinalCount,
+      batchSize,
+      maxBatches,
+      batchesRun: batches.length,
+      fetched,
+      created,
+      updated,
+      completed: dryRun ? estimatedFinalCount >= targetCount : finalCount >= targetCount,
+      reason,
+      lastAppId,
+      hasMore,
+      batches
+    };
+
+    await repositories.diagnostics.recordIntegrationLog({
+      service: "steam",
+      level: response.completed ? "info" : "warning",
+      message: `Steam catalog sync-until finished. dryRun=${dryRun}, targetCount=${targetCount}, finalCount=${finalCount}, estimatedFinalCount=${estimatedFinalCount}, batchesRun=${batches.length}, reason=${reason}.`
+    });
+
+    return response;
   }
 
   mapSteamApps(apps: NonNullable<SteamAppListResponse["response"]>["apps"] = []): SteamCatalogUpsertInput[] {

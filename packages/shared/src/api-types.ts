@@ -336,6 +336,45 @@ export type ApiSteamCatalogStatus = {
   integrationLogs: ApiIntegrationLog[];
 };
 
+export type ApiSteamCatalogSyncUntilRequest = {
+  targetCount: number;
+  batchSize?: number;
+  maxBatches?: number;
+  dryRun?: boolean;
+};
+
+export type ApiSteamCatalogSyncUntilBatch = {
+  batch: number;
+  dryRun: boolean;
+  fetched: number;
+  created: number;
+  updated: number;
+  pages: number;
+  lastAppId: number | null;
+  hasMore: boolean;
+  source: "steam-api" | "mock-fallback";
+  countAfterBatch: number;
+};
+
+export type ApiSteamCatalogSyncUntilResponse = {
+  dryRun: boolean;
+  targetCount: number;
+  initialCount: number;
+  finalCount: number;
+  estimatedFinalCount: number;
+  batchSize: number;
+  maxBatches: number;
+  batchesRun: number;
+  fetched: number;
+  created: number;
+  updated: number;
+  completed: boolean;
+  reason: "target-reached" | "max-batches-reached" | "steam-end-reached" | "no-progress" | "mock-fallback";
+  lastAppId: number | null;
+  hasMore: boolean;
+  batches: ApiSteamCatalogSyncUntilBatch[];
+};
+
 export type ApiAdminStatus = {
   mode: DataMode;
   gameCount: number;
@@ -462,6 +501,33 @@ export type ApiGogCatalogSearchResponse = {
     created: number;
     updated: number;
   };
+};
+
+export type ApiGogCatalogDiscoverRequest = {
+  mode?: "imported-games" | "top-steam-catalog";
+  queries?: string[];
+  limit?: number;
+};
+
+export type ApiGogCatalogSuggestedMapping = {
+  gameId: string;
+  steamAppId: number;
+  gameTitle: string;
+  gogProductId: string;
+  gogTitle: string;
+  externalSlug: string | null;
+  confidence: ApiGogMappingConfidence;
+  reason: string;
+};
+
+export type ApiGogCatalogDiscoverResponse = {
+  mode: "imported-games" | "top-steam-catalog" | "queries";
+  searchedQueries: string[];
+  foundProducts: number;
+  createdCatalogEntries: number;
+  updatedCatalogEntries: number;
+  suggestedMappings: ApiGogCatalogSuggestedMapping[];
+  uncertainMatches: ApiGogCatalogSuggestedMapping[];
 };
 
 export type ApiGogMappingRequest = {
@@ -631,6 +697,7 @@ export type ApiGogPriceRefreshRequest = {
   mode?: "mapped-games";
   gameIds?: string[];
   limit?: number;
+  dryRun?: boolean;
 };
 
 export type ApiGogPriceRefreshResult = {
@@ -638,6 +705,7 @@ export type ApiGogPriceRefreshResult = {
   gogProductId: string;
   refreshed: boolean;
   skipped: boolean;
+  preview: ApiGogPricePreview | null;
   offerId: string | null;
   snapshotId: string | null;
   message: string | null;
@@ -646,6 +714,7 @@ export type ApiGogPriceRefreshResult = {
 export type ApiGogPriceRefreshResponse = {
   provider: "gamevalue";
   sourceName: "gog";
+  dryRun: boolean;
   requested: number;
   refreshed: number;
   skipped: number;

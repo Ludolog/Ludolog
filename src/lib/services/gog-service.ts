@@ -18,6 +18,14 @@ import type {
   Store,
   StoreOffer
 } from "@/lib/types";
+import type {
+  ApiGogCatalogDiscoverRequest,
+  ApiGogCatalogDiscoverResponse,
+  ApiGogCatalogSuggestedMapping,
+  ApiGogPricePreview,
+  ApiGogPriceRefreshRequest,
+  ApiGogPriceRefreshResponse
+} from "@shared/api-types";
 
 type Fetcher = typeof fetch;
 
@@ -78,6 +86,7 @@ type NormalizedGogPrice = {
 };
 
 type GogSuggestion = GogCatalogEntry & { confidence: GogMappingConfidence; reason: string };
+type GogDiscoveryTarget = { query: string; game: Game | null };
 
 const requestTimestamps: number[] = [];
 const hourMs = 60 * 60 * 1000;
@@ -358,6 +367,67 @@ export class GogService {
     return { query: input.query, results: entries, upserted };
   }
 
+  async discoverCatalog(input: ApiGogCatalogDiscoverRequest): Promise<ApiGogCatalogDiscoverResponse> {
+    ensureEnabled();
+    const limit = clampPositive(input.limit ?? 20, 1, 50);
+    const mode = discoveryMode(input);
+    const targets = await this.discoveryTargets(input, mode, limit);
+    const seenProducts = new Set<string>();
+    const seenSuggestions = new Set<string>();
+    let createdCatalogEntries = 0;
+    let updatedCatalogEntries = 0;
+    const searchedQueries: string[] = [];
+    const suggestedMappings: ApiGogCatalogSuggestedMapping[] = [];
+    const uncertainMatches: ApiGogCatalogSuggestedMapping[] = [];
+
+    for (const target of targets) {
+      const query = target.query.trim();
+      if (!query || searchedQueries.includes(query)) {
+        continue;
+      }
+      searchedQueries.push(query);
+      const search = await this.searchCatalog({ query, limit: Math.min(limit, 10) });
+      createdCatalogEntries += search.upserted.created;
+      updatedCatalogEntries += search.upserted.updated;
+      for (const entry of search.results) {
+        seenProducts.add(entry.gogProductId);
+      }
+
+      if (!target.game) {
+        continue;
+      }
+
+      for (const suggestion of this.mapper.suggest(target.game, search.results)) {
+        const apiSuggestion = suggestionToApi(target.game, suggestion);
+        const suggestionKey = `${apiSuggestion.gameId}:${apiSuggestion.gogProductId}`;
+        if (seenSuggestions.has(suggestionKey)) {
+          continue;
+        }
+        seenSuggestions.add(suggestionKey);
+        if (apiSuggestion.confidence === "unknown") {
+          uncertainMatches.push(apiSuggestion);
+        } else {
+          suggestedMappings.push(apiSuggestion);
+        }
+      }
+    }
+
+    await logGog(
+      "info",
+      `GOG catalog discovery finished. mode=${mode}, queries=${searchedQueries.length}, products=${seenProducts.size}, suggested=${suggestedMappings.length}, uncertain=${uncertainMatches.length}.`
+    );
+
+    return {
+      mode,
+      searchedQueries,
+      foundProducts: seenProducts.size,
+      createdCatalogEntries,
+      updatedCatalogEntries,
+      suggestedMappings,
+      uncertainMatches
+    };
+  }
+
   async resolveGame(input: { gameId: string; limit?: number }) {
     const game = await repositories.games.findById(input.gameId);
     if (!game) {
@@ -394,13 +464,14 @@ export class GogService {
     };
   }
 
-  async refreshPrices(input: { mode?: "mapped-games"; gameIds?: string[]; limit?: number }) {
+  async refreshPrices(input: ApiGogPriceRefreshRequest): Promise<ApiGogPriceRefreshResponse> {
     ensureEnabled();
     const limit = Math.min(Math.max(input.limit ?? 10, 1), 10);
     const mappings = await this.mappingsForRefresh(input.gameIds, limit);
-    const result = {
+    const result: ApiGogPriceRefreshResponse = {
       provider: "gamevalue" as const,
       sourceName: "gog" as const,
+      dryRun: input.dryRun ?? true,
       requested: mappings.length,
       refreshed: 0,
       skipped: 0,
@@ -411,6 +482,7 @@ export class GogService {
         gogProductId: string;
         refreshed: boolean;
         skipped: boolean;
+        preview: ApiGogPricePreview | null;
         offerId: string | null;
         snapshotId: string | null;
         message: string | null;
@@ -426,6 +498,7 @@ export class GogService {
             gogProductId: mapping.externalId,
             refreshed: false,
             skipped: true,
+            preview: null,
             offerId: null,
             snapshotId: null,
             message: "Skipped unknown-confidence GOG mapping."
@@ -444,6 +517,22 @@ export class GogService {
           title: game.title
         });
         const normalized = this.normalizer.normalize(product);
+        const preview = normalizedToPreview(normalized);
+        if (result.dryRun) {
+          result.skipped += 1;
+          result.results.push({
+            gameId: game.id,
+            gogProductId: mapping.externalId,
+            refreshed: false,
+            skipped: true,
+            preview,
+            offerId: null,
+            snapshotId: null,
+            message: "Dry run only; no GOG price data was written."
+          });
+          continue;
+        }
+
         const write = await this.writePrice(game, mapping, normalized);
         result.refreshed += 1;
         result.results.push({
@@ -451,6 +540,7 @@ export class GogService {
           gogProductId: mapping.externalId,
           refreshed: true,
           skipped: false,
+          preview,
           offerId: write.offer.id,
           snapshotId: write.snapshot.id,
           message: null
@@ -464,6 +554,7 @@ export class GogService {
           gogProductId: mapping.externalId,
           refreshed: false,
           skipped: false,
+          preview: null,
           offerId: null,
           snapshotId: null,
           message
@@ -474,10 +565,30 @@ export class GogService {
 
     await logGog(
       result.failed > 0 ? "warning" : "info",
-      `GOG price refresh finished. requested=${result.requested}, refreshed=${result.refreshed}, skipped=${result.skipped}, failed=${result.failed}.`
+      `GOG price refresh finished. dryRun=${result.dryRun}, requested=${result.requested}, refreshed=${result.refreshed}, skipped=${result.skipped}, failed=${result.failed}.`
     );
 
     return result;
+  }
+
+  private async discoveryTargets(
+    input: ApiGogCatalogDiscoverRequest,
+    mode: ApiGogCatalogDiscoverResponse["mode"],
+    limit: number
+  ): Promise<GogDiscoveryTarget[]> {
+    if (mode === "queries" && "queries" in input) {
+      return uniqueStrings(input.queries ?? [])
+        .slice(0, limit)
+        .map((query) => ({ query, game: null }));
+    }
+
+    if (mode === "top-steam-catalog") {
+      const summaries = await repositories.games.mostActive(limit);
+      return summaries.map((summary) => ({ query: summary.game.title, game: summary.game }));
+    }
+
+    const games = await repositories.games.listImported(limit);
+    return games.map((game) => ({ query: game.title, game }));
   }
 
   private async mappingsForRefresh(gameIds: string[] | undefined, limit: number): Promise<GameExternalMapping[]> {
@@ -622,7 +733,7 @@ function catalogProductToEntry(product: GogCatalogProduct, syncedAt: Date): GogC
   };
 }
 
-function normalizedToPreview(normalized: NormalizedGogPrice) {
+function normalizedToPreview(normalized: NormalizedGogPrice): ApiGogPricePreview {
   return {
     gogProductId: normalized.gogProductId,
     title: normalized.title,
@@ -640,6 +751,50 @@ function normalizedToPreview(normalized: NormalizedGogPrice) {
     externalUrl: normalized.externalUrl,
     available: normalized.available
   };
+}
+
+function discoveryMode(input: ApiGogCatalogDiscoverRequest): ApiGogCatalogDiscoverResponse["mode"] {
+  if ("queries" in input && input.queries?.length) {
+    return "queries";
+  }
+  if ("mode" in input && input.mode) {
+    return input.mode;
+  }
+  return "imported-games";
+}
+
+function suggestionToApi(game: Game, suggestion: GogSuggestion): ApiGogCatalogSuggestedMapping {
+  return {
+    gameId: game.id,
+    steamAppId: game.steamAppId,
+    gameTitle: game.title,
+    gogProductId: suggestion.gogProductId,
+    gogTitle: suggestion.title,
+    externalSlug: suggestion.slug,
+    confidence: suggestion.confidence,
+    reason: suggestion.reason
+  };
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const value of values) {
+    const normalized = value.trim();
+    const key = normalized.toLowerCase();
+    if (normalized && !seen.has(key)) {
+      seen.add(key);
+      unique.push(normalized);
+    }
+  }
+  return unique;
+}
+
+function clampPositive(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+  return Math.max(min, Math.min(max, Math.floor(value)));
 }
 
 async function fetchJson(url: URL, fetcher: Fetcher, options: { timeoutMs: number; maxRetries: number }): Promise<unknown> {

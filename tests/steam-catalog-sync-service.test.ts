@@ -113,4 +113,53 @@ describe("SteamCatalogSyncService", () => {
     expect(result.hasMore).toBe(true);
     expect(result.lastAppId).toBe(7655000);
   });
+
+  it("syncs until a target count in dry-run mode without writing catalog entries", async () => {
+    vi.stubEnv("STEAM_WEB_API_KEY", "test-steam-key");
+    const initialStatus = await repositories.steamCatalog.status();
+    const fetchMock = vi.fn(async (request: URL | RequestInfo) => {
+      const requestUrl = new URL(String(request));
+      const previousCursor = Number(requestUrl.searchParams.get("last_appid") ?? initialStatus.nextStartAfterAppId ?? 0);
+      const appId = previousCursor + 1;
+      return new Response(
+        JSON.stringify({
+          response: {
+            apps: [
+              {
+                appid: appId,
+                name: `Dry Run Fixture ${appId}`,
+                app_type: "game"
+              }
+            ],
+            have_more_results: true,
+            last_appid: appId
+          }
+        }),
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const service = new SteamCatalogSyncService();
+    const result = await service.syncUntil({
+      dryRun: true,
+      targetCount: initialStatus.entryCount + 2,
+      batchSize: 1,
+      maxBatches: 3
+    });
+    const finalStatus = await repositories.steamCatalog.status();
+
+    expect(result).toMatchObject({
+      dryRun: true,
+      initialCount: initialStatus.entryCount,
+      finalCount: initialStatus.entryCount,
+      estimatedFinalCount: initialStatus.entryCount + 2,
+      fetched: 2,
+      completed: true,
+      reason: "target-reached"
+    });
+    expect(result.batches).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(finalStatus.entryCount).toBe(initialStatus.entryCount);
+  });
 });
