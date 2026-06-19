@@ -20,16 +20,20 @@ The Android app stays a client. The backend, Prisma and PostgreSQL are not packa
 DATABASE_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r-pooler.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
 DIRECT_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
 REPOSITORY_PROVIDER=prisma
-DATA_MODE=mock
+DATA_MODE=api
 NEXT_PUBLIC_APP_URL=https://apka-seven.vercel.app
 MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
 STEAM_WEB_API_KEY=
+ADMIN_API_SECRET=
 CRON_SECRET=
 ```
 
 Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT_URL`. Replace `TWOJE_HASLO` only inside Vercel settings or local ignored env files.
 
 6. Start the deployment.
+   After changing `STEAM_WEB_API_KEY`, `ADMIN_API_SECRET`, `CRON_SECRET` or `DATA_MODE`, trigger a new deployment from
+   `Project -> Deployments -> Redeploy`. Vercel does not apply changed environment variables to an already-running
+   deployment.
 7. After deployment, check:
 
 ```text
@@ -69,7 +73,7 @@ Use `DATABASE_URL` for the app runtime and `DIRECT_URL` for Prisma migrations. D
 Set these in Vercel Project Settings -> Environment Variables:
 
 ```env
-DATA_MODE=mock
+DATA_MODE=api
 REPOSITORY_PROVIDER=prisma
 DATABASE_URL=...
 DIRECT_URL=...
@@ -78,6 +82,7 @@ MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
 STEAM_WEB_API_KEY=
 # Legacy fallback name is still accepted, but new environments should use STEAM_WEB_API_KEY.
 STEAM_API_KEY=
+ADMIN_API_SECRET=
 CRON_SECRET=
 PRICE_API_PROVIDER=mock
 PRICE_API_KEY=
@@ -88,9 +93,10 @@ GG_DEALS_API_KEY=
 Notes:
 
 - `REPOSITORY_PROVIDER=prisma` makes API routes use PostgreSQL through Prisma repositories.
-- `DATA_MODE` controls external integrations/mock fallbacks, not the database provider.
+- `DATA_MODE=api` enables API-oriented adapters. If Steam is missing or fails, backend services still fall back to cached/mock data.
 - `MOBILE_ALLOWED_ORIGINS` should be explicit in production. Do not use `*`.
 - `STEAM_WEB_API_KEY` is backend-only. It enables real Steam catalog sync and real current-player refreshes.
+- `ADMIN_API_SECRET` protects manual admin POST endpoints through the `x-admin-secret` header.
 - `CRON_SECRET` protects `/api/cron/refresh-player-counts` in production. Do not expose it to mobile.
 - Mobile public config uses `VITE_API_BASE_URL`; secrets must never use the `VITE_` prefix.
 
@@ -189,28 +195,45 @@ https://apka-seven.vercel.app/api/admin/steam-catalog/status
 
 If `STEAM_WEB_API_KEY`, legacy `STEAM_API_KEY` or provider-specific API keys are not configured, the app continues in mock/fallback mode and records integration logs. Never add those secrets to `mobile/.env.production` or any committed file.
 
-Manual Steam catalog sync:
+Before real Steam sync, confirm this endpoint:
 
-```bash
-curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync \
-  -H "Content-Type: application/json" \
-  -d "{\"dryRun\":true,\"maxPages\":1,\"maxResults\":1000}"
+```text
+https://apka-seven.vercel.app/api/admin/steam-catalog/status
 ```
 
-After verifying the dry run, run a limited write sync:
+It should expose only booleans and counts, for example `hasSteamApiKey`, `dataMode`, `canUseRealSteamApi`,
+`steamCatalogEntryCount`, `lastSteamCatalogSync` and recent integration logs. It must never return the actual
+`STEAM_WEB_API_KEY`, `ADMIN_API_SECRET` or `CRON_SECRET`.
 
-```bash
-curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync \
-  -H "Content-Type: application/json" \
-  -d "{\"dryRun\":false,\"maxPages\":1,\"maxResults\":1000}"
+Manual Steam catalog sync in PowerShell. Paste the real admin secret only into your local terminal, never into code:
+
+```powershell
+$headers = @{
+  "Content-Type" = "application/json"
+  "x-admin-secret" = "TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE"
+}
+
+$body = '{"dryRun":true,"maxPages":1,"maxResults":100}'
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-catalog/sync" -Method POST -Headers $headers -Body $body
 ```
+
+After verifying the dry run, run a small real write sync:
+
+```powershell
+$body = '{"dryRun":false,"maxPages":1,"maxResults":100}'
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-catalog/sync" -Method POST -Headers $headers -Body $body
+```
+
+Start with `maxResults=100`. If Vercel and Neon stay stable, increase cautiously to 500 and then 1000 in later manual runs.
 
 Manual player-count refresh:
 
-```bash
-curl -X POST https://apka-seven.vercel.app/api/admin/player-counts/refresh \
-  -H "Content-Type: application/json" \
-  -d "{\"mode\":\"top\",\"limit\":25}"
+```powershell
+$body = '{"mode":"top","limit":25}'
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
 ```
 
 Cron readiness:

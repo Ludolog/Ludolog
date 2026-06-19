@@ -7,36 +7,58 @@ import { RefreshCw } from "lucide-react";
 export function AdminActionButton({
   body,
   endpoint,
-  label
+  label,
+  requireSecret = false
 }: {
   body?: unknown;
   endpoint: string;
   label: string;
+  requireSecret?: boolean;
 }): React.ReactElement {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [secret, setSecret] = useState("");
 
   async function run(): Promise<void> {
     setLoading(true);
     setResult(null);
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body)
-    });
-    const payload = (await response.json()) as unknown;
-    setResult(response.ok ? compactJson(payload) : `Error ${response.status}: ${compactJson(payload)}`);
-    setLoading(false);
-    router.refresh();
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (requireSecret && secret.trim().length > 0) {
+        headers["x-admin-secret"] = secret.trim();
+      }
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      const payload = (await response.json()) as unknown;
+      setResult(response.ok ? compactJson(payload) : `Error ${response.status}: ${compactJson(payload)}`);
+      router.refresh();
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : "Admin action failed.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <div className="space-y-2">
+      {requireSecret ? (
+        <input
+          type="password"
+          value={secret}
+          onChange={(event) => setSecret(event.target.value)}
+          placeholder="x-admin-secret"
+          className="min-h-10 w-full rounded-md border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-radar-cyan"
+        />
+      ) : null}
       <button
         type="button"
         onClick={run}
-        disabled={loading}
+        disabled={loading || (requireSecret && secret.trim().length === 0)}
         className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-radar-cyan/35 bg-radar-cyan/10 px-3 text-sm font-semibold text-radar-cyan transition hover:bg-radar-cyan/20 disabled:opacity-60"
       >
         <RefreshCw size={16} className={loading ? "animate-spin" : ""} aria-hidden />

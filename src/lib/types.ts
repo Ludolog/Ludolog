@@ -156,6 +156,17 @@ export type SteamCatalogStatus = {
   lastSyncedAt: Date | null;
 };
 
+export type SteamCatalogRuntimeStatus = {
+  steamCatalogEntryCount: number;
+  activeGameCount: number;
+  lastSteamCatalogSync: Date | null;
+  lastSteamCatalogError: IntegrationLog | null;
+  hasSteamApiKey: boolean;
+  dataMode: DataMode;
+  canUseRealSteamApi: boolean;
+  integrationLogs: IntegrationLog[];
+};
+
 export type GameProfile = GameSummary & {
   priceHistory: GamePriceSnapshot[];
   playerHistory: PlayerCountSnapshot[];

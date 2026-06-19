@@ -165,7 +165,6 @@ The Android app now uses backend endpoints for expanded search and Steam/player 
 
 - `GET /api/games/search?q=`
 - `POST /api/games/import`
-- `POST /api/games/{id}/refresh-players`
 - `GET /api/stats/overview`
 - `GET /api/admin/status`
 
@@ -185,7 +184,7 @@ The Stats screen shows a data mode badge:
 - `Mixed data` when real and fallback data are combined,
 - `Mock fallback` when the app is running on demonstration data.
 
-Game details can call `POST /api/games/{id}/refresh-players`. This still goes through the Next.js backend, which owns the Steam Web API key and stores the refreshed `PlayerCountSnapshot`.
+Game details shows the current player-count source and last refresh time. It does not run admin refresh actions from Android. `POST /api/games/{id}/refresh-players` is a backend/admin endpoint protected by `ADMIN_API_SECRET`, so the APK must not call it or contain that secret.
 
 Diagnostics should show:
 

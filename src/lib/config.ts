@@ -19,6 +19,10 @@ export function getSteamWebApiKey(): string | undefined {
   return getOptionalEnv("STEAM_WEB_API_KEY") ?? getOptionalEnv("STEAM_API_KEY");
 }
 
+export function getAdminApiSecret(): string | undefined {
+  return getOptionalEnv("ADMIN_API_SECRET");
+}
+
 export function getCronSecret(): string | undefined {
   return getOptionalEnv("CRON_SECRET");
 }

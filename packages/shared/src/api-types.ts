@@ -178,6 +178,17 @@ export type ApiIntegrationLog = {
   createdAt: DateString;
 };
 
+export type ApiSteamCatalogStatus = {
+  steamCatalogEntryCount: number;
+  activeGameCount: number;
+  lastSteamCatalogSync: DateString | null;
+  lastSteamCatalogError: ApiIntegrationLog | null;
+  hasSteamApiKey: boolean;
+  dataMode: DataMode;
+  canUseRealSteamApi: boolean;
+  integrationLogs: ApiIntegrationLog[];
+};
+
 export type ApiAdminStatus = {
   mode: DataMode;
   gameCount: number;

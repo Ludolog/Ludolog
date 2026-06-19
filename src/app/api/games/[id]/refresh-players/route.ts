@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { jsonError, resolveRouteParams } from "@/lib/api";
+import { jsonError, requireAdminSecret, resolveRouteParams } from "@/lib/api";
 import { gameSearchService } from "@/lib/services/game-search-service";
 import { steamApiService } from "@/lib/services/steam-api-service";
 
@@ -8,7 +8,12 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export async function POST(_: Request, context: RouteContext): Promise<NextResponse> {
+export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
+  const unauthorized = requireAdminSecret(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   const { id } = await resolveRouteParams(context.params);
   const game = await gameSearchService.findGame(id);
 

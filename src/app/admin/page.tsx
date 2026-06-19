@@ -6,11 +6,13 @@ import { AdminActionButton } from "@/components/forms/admin-action-button";
 import { formatDate, formatNumber, formatPrice } from "@/lib/format";
 import { repositories } from "@/lib/repositories";
 import { gameSearchService } from "@/lib/services/game-search-service";
+import { steamCatalogStatusService } from "@/lib/services/steam-catalog-status-service";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage(): Promise<React.ReactElement> {
   const status = await repositories.diagnostics.getAdminStatus();
+  const steamStatus = await steamCatalogStatusService.getStatus();
   const games = await gameSearchService.list();
   const gameRows = await Promise.all(
     games.map(async (game) => ({
@@ -35,6 +37,9 @@ export default async function AdminPage(): Promise<React.ReactElement> {
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatusCard icon={<Database size={18} />} label="Mode" value={status.mode.toUpperCase()} />
+        <StatusCard icon={<Database size={18} />} label="DATA_MODE=api" value={steamStatus.dataMode === "api" ? "YES" : "NO"} />
+        <StatusCard icon={<Database size={18} />} label="Steam key" value={steamStatus.hasSteamApiKey ? "SET" : "MISSING"} />
+        <StatusCard icon={<Database size={18} />} label="Real Steam API" value={steamStatus.canUseRealSteamApi ? "READY" : "OFF"} />
         <StatusCard icon={<Database size={18} />} label="Games" value={String(status.gameCount)} />
         <StatusCard icon={<Database size={18} />} label="Steam catalog" value={String(status.steamCatalogEntryCount)} />
         <StatusCard icon={<Database size={18} />} label="Imported" value={String(status.importedGameCount)} />
@@ -46,25 +51,47 @@ export default async function AdminPage(): Promise<React.ReactElement> {
       <section className="surface rounded-lg p-5">
         <h2 className="text-lg font-semibold text-white">Steam catalog status</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
-          Manual admin actions only. Do not run large syncs during normal user traffic.
+          Manual admin actions only. Set `ADMIN_API_SECRET` in Vercel, redeploy, then paste it into the local
+          `x-admin-secret` field before running a small sync. Do not run large syncs during normal user traffic.
         </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <InlineStatus icon={<Database size={18} />} label="Catalog entries" value={String(steamStatus.steamCatalogEntryCount)} />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Last sync"
+            value={steamStatus.lastSteamCatalogSync ? formatDate(steamStatus.lastSteamCatalogSync) : "n/a"}
+          />
+          <InlineStatus
+            icon={<AlertTriangle size={18} />}
+            label="Last error"
+            value={steamStatus.lastSteamCatalogError ? formatDate(steamStatus.lastSteamCatalogError.createdAt) : "none"}
+          />
+        </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <AdminActionButton
             endpoint="/api/admin/steam-catalog/sync"
             label="Sync catalog dry run"
-            body={{ dryRun: true, maxPages: 1, maxResults: 1000 }}
+            body={{ dryRun: true, maxPages: 1, maxResults: 100 }}
+            requireSecret
           />
           <AdminActionButton
             endpoint="/api/admin/steam-catalog/sync"
-            label="Sync catalog limited"
-            body={{ dryRun: false, maxPages: 1, maxResults: 1000 }}
+            label="Sync catalog 100"
+            body={{ dryRun: false, maxPages: 1, maxResults: 100 }}
+            requireSecret
           />
           <AdminActionButton
             endpoint="/api/admin/player-counts/refresh"
             label="Refresh top players"
             body={{ mode: "top", limit: 25 }}
+            requireSecret
           />
         </div>
+        {steamStatus.lastSteamCatalogError ? (
+          <p className="mt-4 rounded-md border border-radar-red/30 bg-radar-red/10 p-3 text-sm leading-6 text-radar-red">
+            {steamStatus.lastSteamCatalogError.message}
+          </p>
+        ) : null}
       </section>
 
       <section className="surface rounded-lg p-5">
@@ -142,6 +169,24 @@ function StatusCard({
       <div className="mb-3 text-radar-cyan">{icon}</div>
       <p className="text-xs uppercase text-slate-500">{label}</p>
       <p className="mt-1 break-words text-2xl font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function InlineStatus({
+  icon,
+  label,
+  value
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}): React.ReactElement {
+  return (
+    <div className="rounded-md border border-white/10 bg-black/20 p-3">
+      <div className="mb-2 text-radar-cyan">{icon}</div>
+      <p className="text-xs uppercase text-slate-500">{label}</p>
+      <p className="mt-1 break-words text-lg font-semibold text-white">{value}</p>
     </div>
   );
 }

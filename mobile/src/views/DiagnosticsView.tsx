@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { ApiClientError, apiClient, describeApiClientError } from "@/api/client";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { formatNumber, formatShortDate } from "@/format";
-import type { ApiAdminStatus } from "@shared/api-types";
+import type { ApiAdminStatus, ApiStatsOverview } from "@shared/api-types";
 
 export function DiagnosticsView(): React.ReactElement {
   const [status, setStatus] = useState<ApiAdminStatus | null>(null);
+  const [stats, setStats] = useState<ApiStatsOverview | null>(null);
   const [apiError, setApiError] = useState<ApiClientError | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,9 +18,12 @@ export function DiagnosticsView(): React.ReactElement {
     setError(null);
     setApiError(null);
     try {
-      setStatus(await apiClient.getAdminStatus());
+      const [adminStatus, overview] = await Promise.all([apiClient.getAdminStatus(), apiClient.getStatsOverview()]);
+      setStatus(adminStatus);
+      setStats(overview);
     } catch (loadError) {
       setStatus(null);
+      setStats(null);
       setApiError(loadError instanceof ApiClientError ? loadError : null);
       setError(describeApiClientError(loadError));
     } finally {
@@ -51,7 +55,8 @@ export function DiagnosticsView(): React.ReactElement {
 
       <section className="grid grid-cols-2 gap-3">
         <Metric label="Backend" value="OK" />
-        <Metric label="Mode" value={status.mode.toUpperCase()} />
+        <Metric label="Backend mode" value={status.mode.toUpperCase()} />
+        <Metric label="Data source" value={dataModeLabel(stats?.mode)} />
         <Metric label="Games" value={formatNumber(status.gameCount)} />
         <Metric label="Offers" value={formatNumber(status.offerCount)} />
         <Metric label="Alerts" value={formatNumber(status.alertCount)} />
@@ -79,6 +84,16 @@ export function DiagnosticsView(): React.ReactElement {
       </section>
     </div>
   );
+}
+
+function dataModeLabel(mode: ApiStatsOverview["mode"] | undefined): string {
+  if (mode === "real") {
+    return "Real data";
+  }
+  if (mode === "mixed") {
+    return "Mixed data";
+  }
+  return "Mock fallback";
 }
 
 function DiagnosticsHeader({ ok }: { ok: boolean }): React.ReactElement {

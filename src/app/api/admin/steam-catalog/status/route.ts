@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { repositories } from "@/lib/repositories";
+import { steamCatalogStatusService } from "@/lib/services/steam-catalog-status-service";
 
 export async function GET(): Promise<NextResponse> {
-  return NextResponse.json(await repositories.steamCatalog.status());
+  return NextResponse.json(await steamCatalogStatusService.getStatus());
 }

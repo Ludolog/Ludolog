@@ -81,6 +81,7 @@ DIRECT_URL="postgresql://gamevalue:gamevalue@localhost:5432/gamevalue_radar?sche
 STEAM_WEB_API_KEY=""
 # Legacy name accepted for backward compatibility; prefer STEAM_WEB_API_KEY.
 STEAM_API_KEY=""
+ADMIN_API_SECRET=""
 PRICE_API_PROVIDER="mock"
 PRICE_API_KEY=""
 ISTHEREANYDEAL_API_KEY=""
@@ -147,14 +148,18 @@ Admin/dev Steam operations:
 ```bash
 curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync \
   -H "Content-Type: application/json" \
-  -d "{\"dryRun\":true,\"maxPages\":1,\"maxResults\":1000}"
+  -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
+  -d "{\"dryRun\":true,\"maxPages\":1,\"maxResults\":100}"
 
 curl -X POST https://apka-seven.vercel.app/api/admin/player-counts/refresh \
   -H "Content-Type: application/json" \
+  -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"mode\":\"top\",\"limit\":25}"
 ```
 
-`POST /api/cron/refresh-player-counts` is prepared for a future Vercel Cron job and is protected by `CRON_SECRET` in production. Do not commit `STEAM_WEB_API_KEY`, `CRON_SECRET`, database URLs or mobile signing secrets.
+Manual admin POST endpoints require `ADMIN_API_SECRET` through the `x-admin-secret` header. `POST /api/cron/refresh-player-counts` is prepared for a future Vercel Cron job and is protected by `CRON_SECRET` in production. Do not commit `STEAM_WEB_API_KEY`, `ADMIN_API_SECRET`, `CRON_SECRET`, database URLs or mobile signing secrets.
+
+When those variables are changed in Vercel, redeploy the latest `main` deployment before running sync checks. Android/mobile receives only the public `VITE_API_BASE_URL`.
 
 Weights:
 
