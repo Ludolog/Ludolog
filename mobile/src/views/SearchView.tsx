@@ -81,6 +81,24 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
     void search();
   }
 
+  const groupedResults = [
+    {
+      id: "library",
+      title: "W bibliotece",
+      results: results.filter((result) => !result.importable)
+    },
+    {
+      id: "steam-catalog",
+      title: "Katalog Steam",
+      results: results.filter((result) => result.importable && result.source === "steam-catalog")
+    },
+    {
+      id: "mock-catalog",
+      title: "Fallback demo",
+      results: results.filter((result) => result.importable && result.source === "mock-catalog")
+    }
+  ].filter((group) => group.results.length > 0);
+
   return (
     <div className="space-y-5">
       <section className="surface rounded-lg p-4">
@@ -123,13 +141,18 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
       {error ? <ErrorState message={error} onRetry={search} /> : null}
       {!loading && !error && searched && results.length === 0 ? <EmptyState message="Brak wyników dla tej frazy." /> : null}
       {!loading && !error
-        ? results.map((result) => (
-            <SearchResultCard
-              key={`${result.kind}-${result.game.steamAppId}`}
-              importing={importingSteamAppId === result.game.steamAppId}
-              result={result}
-              onOpen={() => void openResult(result)}
-            />
+        ? groupedResults.map((group) => (
+            <section key={group.id} className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">{group.title}</h2>
+              {group.results.map((result) => (
+                <SearchResultCard
+                  key={`${result.kind}-${result.game.steamAppId}`}
+                  importing={importingSteamAppId === result.game.steamAppId}
+                  result={result}
+                  onOpen={() => void openResult(result)}
+                />
+              ))}
+            </section>
           ))
         : null}
       {!searched ? <EmptyState message="Wpisz nazwę gry, żeby przeszukać bibliotekę i katalog Steam." /> : null}

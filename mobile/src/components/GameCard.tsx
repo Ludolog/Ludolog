@@ -49,9 +49,9 @@ export function GameCard({
           </div>
 
           <div className="grid grid-cols-3 gap-2 text-xs text-slate-400">
-            <Metric icon={<ShoppingCart size={15} />} value={formatPrice(price)} label={summary.bestOffer?.storeName ?? "Offer"} />
+            <Metric icon={<ShoppingCart size={15} />} value={formatPrice(price)} label={summary.bestOffer?.storeName ?? "Brak oferty"} />
             <Metric icon={<Activity size={15} />} value={formatNumber(summary.latestPlayers?.playersOnline)} label="online" />
-            <Metric icon={<BadgePercent size={15} />} value={formatPrice(summary.latestPrice?.historicalLow)} label="low" />
+            <Metric icon={<BadgePercent size={15} />} value={formatPrice(summary.latestPrice?.historicalLow)} label="minimum" />
           </div>
         </div>
       </button>
@@ -64,21 +64,21 @@ function priceSourceLabel(confidence: PriceSourceConfidence, source: DataSource 
     return "GameValue / GOG";
   }
   if (source === "steam-store" || sourceName === "steam-store") {
-    return "GameValue / Steam";
+    return "Steam Store eksperymentalnie";
   }
   if (confidence === "internal-real") {
     return "GameValue internal";
   }
   if (confidence === "experimental-store-api") {
-    return "Experimental store API";
+    return "Eksperymentalne źródło";
   }
   if (confidence === "internal-mock") {
-    return "Mock price";
+    return "Cena demo";
   }
   if (confidence === "external-legacy") {
-    return "External legacy";
+    return "Legacy provider";
   }
-  return "No price data";
+  return "Brak śledzonych cen";
 }
 
 function priceSourceClass(source: PriceSourceConfidence): string {
@@ -99,7 +99,7 @@ function priceSourceClass(source: PriceSourceConfidence): string {
 
 function storeTypeLabel(type: string): string {
   if (type === "official") {
-    return "Official";
+    return "Oficjalny";
   }
   if (type === "keyshop") {
     return "Keyshop";
@@ -107,7 +107,7 @@ function storeTypeLabel(type: string): string {
   if (type === "marketplace") {
     return "Marketplace";
   }
-  return "Store";
+  return "Sklep";
 }
 
 function Metric({

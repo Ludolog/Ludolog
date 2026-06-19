@@ -196,9 +196,9 @@ function playerSourceLabel(source: ApiStatsGame["playerSource"]): string {
     return "Real Steam";
   }
   if (source === "mock") {
-    return "Mock";
+    return "Demo";
   }
-    return "Cache";
+  return "Cache";
 }
 
 function playerSourceClass(source: ApiStatsGame["playerSource"]): string {
@@ -228,7 +228,7 @@ function priceSourceLabel(confidence: ApiStatsGame["priceSourceConfidence"], sou
     return "Cena demo";
   }
   if (confidence === "external-legacy") {
-    return "External legacy";
+    return "Legacy provider";
   }
   return "Brak danych cenowych";
 }

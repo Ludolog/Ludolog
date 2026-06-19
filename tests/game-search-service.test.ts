@@ -114,10 +114,64 @@ describe("GameSearchService", () => {
     expect(response.steamAppId).toBe(7654321);
     expect(response.summary.game.title).toBe("Import Fixture Arena");
     expect(response.summary.game.source).toBe("steam-api");
+    expect(response.summary.latestPrice).toBeNull();
+    expect(response.summary.bestOffer).toBeNull();
 
     const { results } = await gameSearchService.searchCatalog("import fixture arena");
     expect(results[0]?.kind).toBe("library");
     expect(results[0]?.source).toBe("database");
+  });
+
+  it("supports catalog result -> import -> details and duplicate import without a second Game", async () => {
+    await repositories.steamCatalog.upsertMany([
+      {
+        id: "steam-catalog-7654324",
+        steamAppId: 7654324,
+        title: "Clickable Search Fixture",
+        appType: "game",
+        lastModified: null,
+        priceChangeNumber: null,
+        isGame: true,
+        isActive: true,
+        source: "steam-api",
+        syncedAt: new Date("2026-06-19T00:00:00.000Z")
+      }
+    ]);
+
+    const beforeGames = await repositories.games.list();
+    const searchBefore = await gameSearchService.searchCatalog("clickable search fixture");
+    expect(searchBefore.results[0]).toMatchObject({
+      kind: "catalog",
+      importable: true,
+      source: "steam-catalog"
+    });
+
+    const imported = await gameSearchService.importGame({ steamAppId: 7654324 });
+    const profile = await gameSearchService.getProfile(imported.gameId);
+    const duplicate = await gameSearchService.importGame({ steamAppId: 7654324 });
+    const afterGames = await repositories.games.list();
+    const searchAfter = await gameSearchService.searchCatalog("clickable search fixture");
+
+    expect(imported).toMatchObject({
+      created: true,
+      gameId: expect.any(String),
+      source: "steam-catalog",
+      steamAppId: 7654324
+    });
+    expect(profile?.game.id).toBe(imported.gameId);
+    expect(duplicate).toMatchObject({
+      created: false,
+      imported: false,
+      gameId: imported.gameId,
+      source: "library"
+    });
+    expect(afterGames.filter((game) => game.steamAppId === 7654324)).toHaveLength(1);
+    expect(afterGames.length).toBe(beforeGames.length + 1);
+    expect(searchAfter.results[0]).toMatchObject({
+      kind: "library",
+      importable: false,
+      source: "database"
+    });
   });
 
   it("paginates search results while keeping ordering metadata", async () => {

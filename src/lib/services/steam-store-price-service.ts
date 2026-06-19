@@ -239,6 +239,7 @@ export class SteamStorePriceService {
             steamAppId: game.steamAppId,
             refreshed: false,
             skipped: true,
+            preview: previewOnly(normalized),
             offerId: null,
             snapshotId: null,
             message: "Dry run only; no Steam Store price data was written."
@@ -253,6 +254,7 @@ export class SteamStorePriceService {
           steamAppId: game.steamAppId,
           refreshed: true,
           skipped: false,
+          preview: previewOnly(normalized),
           offerId: written.offerId,
           snapshotId: written.snapshotId,
           message: null
@@ -266,6 +268,7 @@ export class SteamStorePriceService {
           steamAppId: game.steamAppId,
           refreshed: false,
           skipped: false,
+          preview: null,
           offerId: null,
           snapshotId: null,
           message

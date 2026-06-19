@@ -15,6 +15,8 @@ export class SteamCatalogStatusService {
     return {
       steamCatalogEntryCount: catalog.entryCount,
       activeGameCount: catalog.activeGameCount,
+      catalogCompleteness: resolveCatalogCompleteness(catalog.entryCount, steamLogs),
+      fetchedTotal: catalog.entryCount,
       lastSteamCatalogSync: catalog.lastSyncedAt,
       nextSteamCatalogStartAfterAppId: catalog.nextStartAfterAppId,
       lastSteamCatalogError: steamLogs.find((log) => log.level === "error") ?? null,
@@ -24,6 +26,25 @@ export class SteamCatalogStatusService {
       integrationLogs: steamLogs
     };
   }
+}
+
+function resolveCatalogCompleteness(
+  entryCount: number,
+  logs: Awaited<ReturnType<typeof repositories.diagnostics.listIntegrationLogs>>
+): "partial" | "full" | "unknown" {
+  if (entryCount <= 0) {
+    return "unknown";
+  }
+
+  const latestFinish = logs.find(
+    (log) => log.service === "steam" && log.message.startsWith("Steam catalog sync finished.")
+  );
+
+  if (latestFinish?.message.includes("hasMore=false")) {
+    return "full";
+  }
+
+  return "partial";
 }
 
 export const steamCatalogStatusService = new SteamCatalogStatusService();

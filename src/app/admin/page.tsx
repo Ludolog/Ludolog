@@ -382,6 +382,8 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <InlineStatus icon={<Database size={18} />} label="Catalog entries" value={String(steamStatus.steamCatalogEntryCount)} />
+          <InlineStatus icon={<Database size={18} />} label="Catalog status" value={steamStatus.catalogCompleteness} />
+          <InlineStatus icon={<Database size={18} />} label="Fetched total" value={String(steamStatus.fetchedTotal)} />
           <InlineStatus
             icon={<RefreshCw size={18} />}
             label="Last sync"
@@ -403,14 +405,21 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <AdminActionButton
             endpoint="/api/admin/steam-catalog/sync"
-            label="Dry run next 100"
-            body={{ dryRun: true, maxPages: 1, maxResults: 100, startAfterAppId: nextSteamCatalogStartAfterAppId }}
+            label="Dry run next 500"
+            body={{ dryRun: true, maxPages: 1, maxResults: 500, startAfterAppId: nextSteamCatalogStartAfterAppId }}
             requireSecret
           />
           <AdminActionButton
             endpoint="/api/admin/steam-catalog/sync"
-            label="Sync next 100"
-            body={{ dryRun: false, maxPages: 1, maxResults: 100, startAfterAppId: nextSteamCatalogStartAfterAppId }}
+            label="Sync next 500"
+            body={{ dryRun: false, maxPages: 1, maxResults: 500, startAfterAppId: nextSteamCatalogStartAfterAppId }}
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/steam-catalog/sync"
+            label="Sync next 2000"
+            body={{ dryRun: false, maxPages: 2, maxResults: 2000, startAfterAppId: nextSteamCatalogStartAfterAppId }}
+            editableBody
             requireSecret
           />
           <AdminActionButton
@@ -567,19 +576,19 @@ function formatSourceConfidence(status: string, source: string | null, sourceNam
     return "GameValue / GOG";
   }
   if (source === "steam-store" || sourceName === "steam-store") {
-    return "GameValue / Steam Store";
+    return "Eksperymentalne źródło Steam Store";
   }
   if (status === "internal-real") {
     return "GameValue internal";
   }
   if (status === "experimental-store-api") {
-    return "Experimental store API";
+    return "Eksperymentalne źródło";
   }
   if (status === "internal-mock") {
-    return "Demo/mock seed";
+    return "Dane demonstracyjne";
   }
   if (status === "external-legacy") {
-    return "External legacy";
+    return "Legacy provider";
   }
-  return "No price data";
+  return "Brak śledzonych cen";
 }

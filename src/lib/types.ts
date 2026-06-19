@@ -278,6 +278,8 @@ export type SteamCatalogStatus = {
 export type SteamCatalogRuntimeStatus = {
   steamCatalogEntryCount: number;
   activeGameCount: number;
+  catalogCompleteness: "partial" | "full" | "unknown";
+  fetchedTotal: number;
   lastSteamCatalogSync: Date | null;
   nextSteamCatalogStartAfterAppId: number | null;
   lastSteamCatalogError: IntegrationLog | null;

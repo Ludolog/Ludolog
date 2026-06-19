@@ -589,88 +589,90 @@ class PrismaGameRepository implements GameRepository {
     });
 
     const gameId = game.id;
-    await new PrismaPriceRepository().upsertPriceSource({ name: "mock-seed", type: "mock" });
-    await new PrismaPriceRepository().upsertStore({
-      name: "Steam",
-      slug: "steam",
-      storeType: "official",
-      websiteUrl: "https://store.steampowered.com/"
-    });
-    const discountPercent =
-      input.basePrice === 0 ? 0 : Math.max(0, Math.round((1 - input.currentPrice / input.basePrice) * 100));
-    await prisma.storeOffer.upsert({
-      where: { id: `offer-${input.id}-import-steam` },
-      update: {
-        steamAppId: input.steamAppId,
-        storeId: "store-steam",
-        sourceId: "price-source-mock-seed",
-        title: input.title,
-        price: input.currentPrice,
-        discountPercent,
-        regularPrice: input.basePrice,
-        historicalLow: input.historicalLow,
-        isHistoricalLow: input.currentPrice <= input.historicalLow,
-        isOfficialStore: true,
-        available: true,
-        region: "PL",
-        platform: input.platform,
-        fetchedAt: now,
-        updatedAt: now
-      },
-      create: {
-        id: `offer-${input.id}-import-steam`,
-        gameId,
-        steamAppId: input.steamAppId,
-        storeId: "store-steam",
-        sourceId: "price-source-mock-seed",
-        provider: "mock",
-        storeName: "Steam",
+    if (input.source === "mock") {
+      await new PrismaPriceRepository().upsertPriceSource({ name: "mock-seed", type: "mock" });
+      await new PrismaPriceRepository().upsertStore({
+        name: "Steam",
+        slug: "steam",
         storeType: "official",
-        title: input.title,
-        price: input.currentPrice,
-        regularPrice: input.basePrice,
-        historicalLow: input.historicalLow,
-        currency: "PLN",
-        discountPercent,
-        url: `https://store.steampowered.com/app/${input.steamAppId}`,
-        externalUrl: `https://store.steampowered.com/app/${input.steamAppId}`,
-        region: "PL",
-        isOfficial: true,
-        isOfficialStore: true,
-        isHistoricalLow: input.currentPrice <= input.historicalLow,
-        available: true,
-        drm: "Steam",
-        platform: input.platform,
-        fetchedAt: now,
-        createdAt: now,
-        source: "mock",
-        updatedAt: now
-      }
-    });
+        websiteUrl: "https://store.steampowered.com/"
+      });
+      const discountPercent =
+        input.basePrice === 0 ? 0 : Math.max(0, Math.round((1 - input.currentPrice / input.basePrice) * 100));
+      await prisma.storeOffer.upsert({
+        where: { id: `offer-${input.id}-import-steam` },
+        update: {
+          steamAppId: input.steamAppId,
+          storeId: "store-steam",
+          sourceId: "price-source-mock-seed",
+          title: input.title,
+          price: input.currentPrice,
+          discountPercent,
+          regularPrice: input.basePrice,
+          historicalLow: input.historicalLow,
+          isHistoricalLow: input.currentPrice <= input.historicalLow,
+          isOfficialStore: true,
+          available: true,
+          region: "PL",
+          platform: input.platform,
+          fetchedAt: now,
+          updatedAt: now
+        },
+        create: {
+          id: `offer-${input.id}-import-steam`,
+          gameId,
+          steamAppId: input.steamAppId,
+          storeId: "store-steam",
+          sourceId: "price-source-mock-seed",
+          provider: "mock",
+          storeName: "Steam",
+          storeType: "official",
+          title: input.title,
+          price: input.currentPrice,
+          regularPrice: input.basePrice,
+          historicalLow: input.historicalLow,
+          currency: "PLN",
+          discountPercent,
+          url: `https://store.steampowered.com/app/${input.steamAppId}`,
+          externalUrl: `https://store.steampowered.com/app/${input.steamAppId}`,
+          region: "PL",
+          isOfficial: true,
+          isOfficialStore: true,
+          isHistoricalLow: input.currentPrice <= input.historicalLow,
+          available: true,
+          drm: "Steam",
+          platform: input.platform,
+          fetchedAt: now,
+          createdAt: now,
+          source: "mock",
+          updatedAt: now
+        }
+      });
 
-    await prisma.gamePriceSnapshot.create({
-      data: {
-        id: `price-${input.id}-import-${now.getTime()}`,
-        gameId,
-        steamAppId: input.steamAppId,
-        sourceId: "price-source-mock-seed",
-        price: input.currentPrice,
-        historicalLow: input.historicalLow,
-        basePrice: input.basePrice,
-        discountPercent,
-        provider: "mock",
-        storeType: "official",
-        storeName: "Steam",
-        currency: "PLN",
-        externalUrl: `https://store.steampowered.com/app/${input.steamAppId}`,
-        offerCount: 1,
-        isHistoricalLow: input.currentPrice <= input.historicalLow,
-        fetchedAt: now,
-        capturedAt: now,
-        createdAt: now,
-        source: "mock"
-      }
-    });
+      await prisma.gamePriceSnapshot.create({
+        data: {
+          id: `price-${input.id}-import-${now.getTime()}`,
+          gameId,
+          steamAppId: input.steamAppId,
+          sourceId: "price-source-mock-seed",
+          price: input.currentPrice,
+          historicalLow: input.historicalLow,
+          basePrice: input.basePrice,
+          discountPercent,
+          provider: "mock",
+          storeType: "official",
+          storeName: "Steam",
+          currency: "PLN",
+          externalUrl: `https://store.steampowered.com/app/${input.steamAppId}`,
+          offerCount: 1,
+          isHistoricalLow: input.currentPrice <= input.historicalLow,
+          fetchedAt: now,
+          capturedAt: now,
+          createdAt: now,
+          source: "mock"
+        }
+      });
+    }
 
     const previousPlayers = Math.max(0, Math.round(input.currentPlayers / Math.max(input.trendFactor, 0.1)));
     await prisma.playerCountSnapshot.createMany({

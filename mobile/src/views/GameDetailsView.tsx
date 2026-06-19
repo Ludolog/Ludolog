@@ -63,6 +63,10 @@ export function GameDetailsView({
   const storeType = bestPrice?.storeType ?? latestPrice?.storeType ?? "unknown";
   const isGogPrice = priceDataSource === "gog" || priceSourceName === "gog" || bestPrice?.storeName === "GOG";
   const isSteamStorePrice = priceDataSource === "steam-store" || priceSourceName === "steam-store";
+  const trackedPrice = bestPrice?.price ?? latestPrice?.price ?? null;
+  const trackedCurrency = bestPrice?.currency ?? latestPrice?.currency ?? "PLN";
+  const hasTrackedPrice = trackedPrice !== null;
+  const tags = profile.game.genres;
 
   return (
     <div className="space-y-5">
@@ -92,13 +96,26 @@ export function GameDetailsView({
       </section>
 
       <section className="grid grid-cols-2 gap-3">
-        <Metric label="Best price" value={formatPrice(profile.bestOffer?.price ?? profile.latestPrice?.price)} />
-        <Metric label="Historical low" value={formatPrice(profile.historicalLow)} />
-        <Metric label="Store" value={bestPrice?.storeName ?? latestPrice?.storeName ?? "n/a"} />
-        <Metric label="Price source" value={priceSourceLabel(priceSource, priceDataSource, priceSourceName)} />
-        <Metric label="Players" value={formatNumber(profile.latestPlayers?.playersOnline)} />
+        <Metric label="Najlepsza cena" value={hasTrackedPrice ? formatPrice(trackedPrice, trackedCurrency) : "Brak śledzonych cen"} />
+        <Metric label="Historyczne minimum" value={formatPrice(profile.historicalLow)} />
+        <Metric label="Sklep" value={bestPrice?.storeName ?? latestPrice?.storeName ?? "n/a"} />
+        <Metric label="Źródło ceny" value={priceSourceLabel(priceSource, priceDataSource, priceSourceName)} />
+        <Metric label="Gracze" value={formatNumber(profile.latestPlayers?.playersOnline)} />
         <Metric label="Steam App ID" value={String(profile.game.steamAppId)} />
       </section>
+
+      {tags.length > 0 ? (
+        <section className="surface rounded-lg p-4">
+          <h2 className="text-lg font-semibold text-white">Tagi i kategorie</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <span key={tag} className="rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-xs text-slate-300">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="surface rounded-lg p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -110,7 +127,7 @@ export function GameDetailsView({
           </span>
           {bestPrice?.isHistoricalLow || latestPrice?.isHistoricalLow ? (
             <span className="rounded-md border border-radar-green/30 bg-radar-green/10 px-2.5 py-1 text-xs font-semibold text-radar-green">
-              Historical low
+              Historyczne minimum
             </span>
           ) : null}
           {isGogPrice ? (
@@ -125,23 +142,23 @@ export function GameDetailsView({
           ) : null}
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-400">
-          Best offer: {formatPrice(bestPrice?.price ?? latestPrice?.price, bestPrice?.currency ?? latestPrice?.currency ?? "PLN")}
-          {" · "}
-          Regular: {formatPrice(bestPrice?.regularPrice ?? latestPrice?.basePrice, bestPrice?.currency ?? latestPrice?.currency ?? "PLN")}
-          {" · "}
-          Discount: {bestPrice?.discountPercent ?? latestPrice?.discountPercent ?? 0}%
+          Najlepsza oferta: {hasTrackedPrice ? formatPrice(trackedPrice, trackedCurrency) : "Brak śledzonych cen"}
+          {" / "}
+          Regularna: {formatPrice(bestPrice?.regularPrice ?? latestPrice?.basePrice, trackedCurrency)}
+          {" / "}
+          Rabat: {hasTrackedPrice ? (bestPrice?.discountPercent ?? latestPrice?.discountPercent ?? 0) : 0}%
         </p>
-        {isGogPrice ? <p className="mt-1 text-xs text-slate-500">Source: GameValue / GOG store API</p> : null}
-        {isSteamStorePrice ? <p className="mt-1 text-xs text-slate-500">Source: GameValue / Steam Store</p> : null}
+        {isGogPrice ? <p className="mt-1 text-xs text-slate-500">Źródło: GameValue / GOG store API</p> : null}
+        {isSteamStorePrice ? <p className="mt-1 text-xs text-slate-500">Źródło: eksperymentalne Steam Store</p> : null}
         <p className="mt-1 text-xs text-slate-500">
-          Last price refresh:{" "}
+          Ostatnia aktualizacja ceny:{" "}
           {latestPrice?.fetchedAt ?? latestPrice?.capturedAt ?? bestPrice?.fetchedAt ?? bestPrice?.updatedAt
             ? new Date(latestPrice?.fetchedAt ?? latestPrice?.capturedAt ?? bestPrice?.fetchedAt ?? bestPrice?.updatedAt ?? "").toLocaleString("pl-PL")
             : "n/a"}
         </p>
         {priceSource === "internal-mock" ? (
           <p className="mt-3 rounded-md border border-radar-amber/30 bg-radar-amber/10 px-3 py-2 text-xs leading-5 text-radar-amber">
-            Price data is demo/mock seed until GameValue Price API receives tracked offers.
+            To jest demonstracyjna cena. Nie traktujemy jej jako zaufanej oferty w rankingach produkcyjnych.
           </p>
         ) : null}
       </section>
@@ -149,14 +166,14 @@ export function GameDetailsView({
       <section className="surface rounded-lg p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase text-slate-500">Player count source</p>
+            <p className="text-xs uppercase text-slate-500">Źródło liczby graczy</p>
             <p className="mt-1 text-lg font-semibold text-white">{playerSourceLabel(profile.latestPlayers?.source)}</p>
             <p className="mt-1 text-xs text-slate-400">
-              Last refreshed: {profile.latestPlayers ? new Date(profile.latestPlayers.capturedAt).toLocaleString("pl-PL") : "n/a"}
+              Ostatnia aktualizacja: {profile.latestPlayers ? new Date(profile.latestPlayers.capturedAt).toLocaleString("pl-PL") : "n/a"}
             </p>
             {(profile.latestPlayers?.playersOnline ?? 0) === 0 ? (
               <p className="mt-2 rounded-md border border-radar-amber/30 bg-radar-amber/10 px-3 py-2 text-xs leading-5 text-radar-amber">
-                Player count has not been refreshed yet for this game.
+                Liczba graczy nie została jeszcze odświeżona dla tej gry.
               </p>
             ) : null}
           </div>
@@ -164,7 +181,7 @@ export function GameDetailsView({
       </section>
 
       <section className="surface rounded-lg p-4">
-        <p className="text-xs uppercase text-slate-500">Recommendation</p>
+        <p className="text-xs uppercase text-slate-500">Rekomendacja</p>
         <p className="mt-1 text-lg font-semibold text-white">{recommendationLabel(profile.score.recommendation)}</p>
         <p className="mt-2 text-sm leading-6 text-slate-400">{profile.score.reason}</p>
       </section>
@@ -180,32 +197,38 @@ export function GameDetailsView({
       </section>
 
       <section className="surface rounded-lg p-4">
-        <h2 className="text-lg font-semibold text-white">Oferty sklepów</h2>
+        <h2 className="text-lg font-semibold text-white">Ceny śledzone</h2>
         <div className="mt-3 space-y-3">
-          {profile.offers.map((offer) => (
-            <div key={offer.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
-              <div className="flex items-center justify-between gap-3">
-                {offer.externalUrl ?? offer.url ? (
-                  <a
-                    href={offer.externalUrl ?? offer.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold text-white underline underline-offset-2"
-                  >
-                    {offer.storeName}
-                  </a>
-                ) : (
-                  <span className="font-semibold text-white">{offer.storeName}</span>
-                )}
-                <span className="text-radar-green">{formatPrice(offer.price, offer.currency)}</span>
+          {profile.offers.length === 0 ? (
+            <p className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm leading-6 text-slate-300">
+              Brak śledzonych cen. Dodaj Steam Store, GOG albo manualne źródło ceny w panelu admina.
+            </p>
+          ) : (
+            profile.offers.map((offer) => (
+              <div key={offer.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  {offer.externalUrl ?? offer.url ? (
+                    <a
+                      href={offer.externalUrl ?? offer.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-semibold text-white underline underline-offset-2"
+                    >
+                      {offer.storeName}
+                    </a>
+                  ) : (
+                    <span className="font-semibold text-white">{offer.storeName}</span>
+                  )}
+                  <span className="text-radar-green">{formatPrice(offer.price, offer.currency)}</span>
+                </div>
+                <p className="mt-1 text-sm text-slate-400">
+                  {offer.discountPercent}% / {offer.drm} / {offer.isOfficial ? "Oficjalny sklep" : "Adapter"}
+                  {offer.source === "gog" || offer.sourceName === "gog" ? " / GameValue / GOG store API" : ""}
+                  {offer.source === "steam-store" || offer.sourceName === "steam-store" ? " / Eksperymentalne Steam Store" : ""}
+                </p>
               </div>
-              <p className="mt-1 text-sm text-slate-400">
-                {offer.discountPercent}% · {offer.drm} · {offer.isOfficial ? "official" : "adapter-ready"}
-                {offer.source === "gog" || offer.sourceName === "gog" ? " · GameValue / GOG store API" : ""}
-                {offer.source === "steam-store" || offer.sourceName === "steam-store" ? " · GameValue / Steam Store" : ""}
-              </p>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </section>
     </div>
@@ -214,12 +237,12 @@ export function GameDetailsView({
 
 function playerSourceLabel(source: string | undefined): string {
   if (source === "steam-api") {
-    return "Real Steam players";
+    return "Real Steam";
   }
   if (source === "mock") {
-    return "Mock fallback";
+    return "Dane demonstracyjne";
   }
-  return "Cached Steam";
+  return "Cache";
 }
 
 function priceSourceLabel(
@@ -231,21 +254,21 @@ function priceSourceLabel(
     return "GameValue / GOG store API";
   }
   if (source === "steam-store" || sourceName === "steam-store") {
-    return "GameValue / Steam Store";
+    return "Eksperymentalne źródło Steam Store";
   }
   if (confidence === "internal-real") {
     return "GameValue internal";
   }
   if (confidence === "experimental-store-api") {
-    return "Experimental store API";
+    return "Eksperymentalne źródło";
   }
   if (confidence === "internal-mock") {
-    return "Mock fallback";
+    return "Dane demonstracyjne";
   }
   if (confidence === "external-legacy") {
-    return "External legacy";
+    return "Legacy provider";
   }
-  return "No price data";
+  return "Brak śledzonych cen";
 }
 
 function priceSourceClass(source: PriceSourceConfidence | undefined): string {
@@ -266,7 +289,7 @@ function priceSourceClass(source: PriceSourceConfidence | undefined): string {
 
 function storeTypeLabel(type: string | undefined): string {
   if (type === "official") {
-    return "Official store";
+    return "Oficjalny sklep";
   }
   if (type === "keyshop") {
     return "Keyshop";
@@ -274,7 +297,7 @@ function storeTypeLabel(type: string | undefined): string {
   if (type === "marketplace") {
     return "Marketplace";
   }
-  return "Unknown store type";
+  return "Nieznany typ sklepu";
 }
 
 function Metric({ label, value }: { label: string; value: string }): React.ReactElement {

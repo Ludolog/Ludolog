@@ -6,7 +6,7 @@ export function formatPrice(value: number | null | undefined, currency = "PLN"):
   }
 
   if (value === 0) {
-    return "Free";
+    return "Darmowa";
   }
 
   return new Intl.NumberFormat("pl-PL", {

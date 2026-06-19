@@ -81,6 +81,8 @@ describe("Steam catalog admin routes", () => {
 
     expect(response.status).toBe(200);
     expect(body).toHaveProperty("nextSteamCatalogStartAfterAppId");
+    expect(body).toHaveProperty("catalogCompleteness");
+    expect(body).toHaveProperty("fetchedTotal");
     expect(body).not.toHaveProperty("steamWebApiKey");
     expect(body).not.toHaveProperty("adminApiSecret");
   });

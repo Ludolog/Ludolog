@@ -17,6 +17,7 @@ export type SteamCatalogSyncResult = {
   updated: number;
   pages: number;
   lastAppId: number | null;
+  hasMore: boolean;
   source: "steam-api" | "mock-fallback";
   warning?: string;
 };
@@ -43,8 +44,12 @@ export class SteamCatalogSyncService {
     const dryRun = options.dryRun ?? true;
     const maxPages = clampPositive(options.maxPages ?? 1, 1, 10);
     const maxResults = clampPositive(options.maxResults ?? defaultPageSize, 1, hardResultLimit);
+    const catalogStatus =
+      options.startAfterAppId === undefined ? await repositories.steamCatalog.status() : null;
     const startAfterAppId =
-      options.startAfterAppId === undefined ? null : clampPositive(options.startAfterAppId, 1, Number.MAX_SAFE_INTEGER);
+      options.startAfterAppId === undefined
+        ? catalogStatus?.nextStartAfterAppId ?? null
+        : clampPositive(options.startAfterAppId, 1, Number.MAX_SAFE_INTEGER);
     const apiKey = getSteamWebApiKey();
 
     await repositories.diagnostics.recordIntegrationLog({
@@ -66,6 +71,7 @@ export class SteamCatalogSyncService {
         updated: 0,
         pages: 0,
         lastAppId: null,
+        hasMore: false,
         source: "mock-fallback",
         warning: "STEAM_WEB_API_KEY is not configured."
       };
@@ -92,7 +98,7 @@ export class SteamCatalogSyncService {
       await repositories.diagnostics.recordIntegrationLog({
         service: "steam",
         level: "info",
-        message: `Steam catalog sync finished. fetched=${entries.length}, created=${result.created}, updated=${result.updated}, dryRun=${dryRun}.`
+        message: `Steam catalog sync finished. fetched=${entries.length}, created=${result.created}, updated=${result.updated}, dryRun=${dryRun}, hasMore=${hasMore}.`
       });
 
       return {
@@ -102,6 +108,7 @@ export class SteamCatalogSyncService {
         updated: result.updated,
         pages: page,
         lastAppId,
+        hasMore,
         source: "steam-api"
       };
     } catch (error) {

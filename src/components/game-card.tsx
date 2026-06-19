@@ -44,7 +44,7 @@ export function GameCard({ summary }: { summary: GameSummary }): React.ReactElem
           <div>
             <ShoppingCart size={15} className="mb-1 text-radar-cyan" aria-hidden />
             <span className="block font-semibold text-white">{formatPrice(bestOffer?.price ?? latestPrice?.price)}</span>
-            <span>{bestOffer?.storeName ?? "No offer"}</span>
+            <span>{bestOffer?.storeName ?? "Brak oferty"}</span>
           </div>
           <div>
             <Activity size={15} className="mb-1 text-radar-green" aria-hidden />
@@ -54,7 +54,7 @@ export function GameCard({ summary }: { summary: GameSummary }): React.ReactElem
           <div>
             <BadgePercent size={15} className="mb-1 text-radar-violet" aria-hidden />
             <span className="block font-semibold text-white">{formatPrice(latestPrice?.historicalLow)}</span>
-            <span>low</span>
+            <span>minimum</span>
           </div>
         </div>
         <p className="text-xs text-slate-500">{sourceConfidenceLabel(priceSource, priceDataSource, priceSourceName)}</p>
@@ -68,19 +68,19 @@ function sourceConfidenceLabel(confidence: string, source: string | null, source
     return "GameValue / GOG store API";
   }
   if (source === "steam-store" || sourceName === "steam-store") {
-    return "GameValue / Steam Store";
+    return "Eksperymentalne źródło Steam Store";
   }
   if (confidence === "internal-real") {
     return "GameValue internal";
   }
   if (confidence === "experimental-store-api") {
-    return "Experimental store API";
+    return "Eksperymentalne źródło";
   }
   if (confidence === "internal-mock") {
-    return "Demo/mock seed";
+    return "Dane demonstracyjne";
   }
   if (confidence === "external-legacy") {
-    return "External legacy";
+    return "Legacy provider";
   }
-  return "No price data";
+  return "Brak śledzonych cen";
 }

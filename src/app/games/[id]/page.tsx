@@ -8,6 +8,7 @@ import { RefreshButton } from "@/components/forms/refresh-button";
 import { WatchlistButton } from "@/components/forms/watchlist-button";
 import { ScoreBadge } from "@/components/score-badge";
 import { formatNumber, formatPrice } from "@/lib/format";
+import { GameTagNormalizer } from "@/lib/services/category-service";
 import { recommendationLabel } from "@/lib/services/deal-score-service";
 import { gameSearchService } from "@/lib/services/game-search-service";
 
@@ -30,6 +31,10 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
   const priceSource = latestPrice?.sourceConfidence ?? bestOffer?.sourceConfidence ?? "no-price-data";
   const priceDataSource = latestPrice?.source ?? bestOffer?.source ?? null;
   const priceSourceName = latestPrice?.sourceName ?? bestOffer?.sourceName ?? null;
+  const categories = GameTagNormalizer.categoriesForGame(game);
+  const trackedPrice = bestOffer?.price ?? latestPrice?.price ?? null;
+  const trackedCurrency = bestOffer?.currency ?? latestPrice?.currency ?? "PLN";
+  const hasTrackedPrice = trackedPrice !== null;
 
   return (
     <div className="space-y-6">
@@ -37,10 +42,16 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
         <div className="surface overflow-hidden rounded-lg">
           <img src={game.coverUrl} alt={`${game.title} cover`} className="h-64 w-full object-cover" />
           <div className="p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Tagi i kategorie</p>
             <div className="flex flex-wrap gap-2">
               {game.genres.map((genre) => (
                 <span key={genre} className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300">
                   {genre}
+                </span>
+              ))}
+              {categories.map((category) => (
+                <span key={category} className="rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 text-xs font-semibold text-radar-violet">
+                  {category}
                 </span>
               ))}
             </div>
@@ -57,29 +68,33 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric icon={<ShoppingCart size={18} />} label="Best price" value={formatPrice(bestOffer?.price ?? latestPrice?.price)} />
-            <Metric icon={<BadgePercent size={18} />} label="Historical low" value={formatPrice(profile.historicalLow)} />
-            <Metric icon={<Activity size={18} />} label="Players online" value={formatNumber(latestPlayers?.playersOnline)} />
+            <Metric
+              icon={<ShoppingCart size={18} />}
+              label="Najlepsza cena"
+              value={hasTrackedPrice ? formatPrice(trackedPrice, trackedCurrency) : "Brak śledzonych cen"}
+            />
+            <Metric icon={<BadgePercent size={18} />} label="Historyczne minimum" value={formatPrice(profile.historicalLow)} />
+            <Metric icon={<Activity size={18} />} label="Gracze online" value={formatNumber(latestPlayers?.playersOnline)} />
             <Metric icon={<Hash size={18} />} label="Steam App ID" value={String(game.steamAppId)} />
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div className="rounded-lg border border-white/10 bg-black/20 p-4">
-              <p className="text-xs uppercase text-slate-500">Recommendation</p>
+              <p className="text-xs uppercase text-slate-500">Rekomendacja</p>
               <p className="mt-1 text-lg font-semibold text-white">{recommendationLabel(score.recommendation)}</p>
               <p className="mt-2 text-sm text-slate-400">{score.reason}</p>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/20 p-4">
-              <p className="text-xs uppercase text-slate-500">Price distance</p>
+              <p className="text-xs uppercase text-slate-500">Pozycja ceny</p>
               <p className="mt-1 text-lg font-semibold text-white">
-                {profile.priceDeltaPercent === null ? "Brak danych" : `${profile.priceDeltaPercent}% above low`}
+                {!hasTrackedPrice || profile.priceDeltaPercent === null ? "Brak śledzonych cen" : `${profile.priceDeltaPercent}% powyżej minimum`}
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                Current discount: {latestPrice?.discountPercent ?? 0}% from base price.
+                Aktualny rabat: {hasTrackedPrice ? (latestPrice?.discountPercent ?? bestOffer?.discountPercent ?? 0) : 0}% względem ceny bazowej.
               </p>
               {priceSource === "internal-mock" ? (
                 <p className="mt-3 rounded-md border border-radar-amber/30 bg-radar-amber/10 px-3 py-2 text-xs leading-5 text-radar-amber">
-                  Price data is demo/mock seed until GameValue Price API receives tracked offers.
+                  To jest demonstracyjna cena. Nie traktujemy jej jako zaufanej oferty w rankingach produkcyjnych.
                 </p>
               ) : null}
               <p className="mt-3 text-xs text-slate-500">{sourceConfidenceLabel(priceSource, priceDataSource, priceSourceName)}</p>
@@ -106,56 +121,62 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
 
       <section className="grid gap-6 lg:grid-cols-[1fr_0.72fr]">
         <div className="surface rounded-lg p-5">
-          <h2 className="text-lg font-semibold text-white">Store offers</h2>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[560px] text-left text-sm">
-              <thead className="text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="py-2">Store</th>
-                  <th className="py-2">Price</th>
-                  <th className="py-2">Discount</th>
-                  <th className="py-2">DRM</th>
-                  <th className="py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10">
-                {profile.offers.map((offer) => (
-                  <tr key={offer.id} className="text-slate-300">
-                    <td className="py-3 font-medium text-white">
-                      {offer.externalUrl ?? offer.url ? (
-                        <a
-                          href={offer.externalUrl ?? offer.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-2 hover:text-radar-cyan"
-                        >
-                          {offer.storeName}
-                        </a>
-                      ) : (
-                        offer.storeName
-                      )}
-                    </td>
-                    <td className="py-3">{formatPrice(offer.price, offer.currency)}</td>
-                    <td className="py-3">{offer.discountPercent}%</td>
-                    <td className="py-3">{offer.drm}</td>
-                    <td className="py-3">
-                      {offer.isOfficial ? "Official" : "Adapter-ready"}
-                      {offer.source === "gog" || offer.sourceName === "gog" ? (
-                        <p className="mt-1 text-xs text-radar-violet">GameValue / GOG store API</p>
-                      ) : offer.source === "steam-store" || offer.sourceName === "steam-store" ? (
-                        <p className="mt-1 text-xs text-radar-cyan">GameValue / Steam Store</p>
-                      ) : null}
-                    </td>
+          <h2 className="text-lg font-semibold text-white">Ceny śledzone</h2>
+          {profile.offers.length === 0 ? (
+            <p className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-300">
+              Brak śledzonych cen. Dodaj Steam Store, GOG albo manualne źródło ceny w panelu admina.
+            </p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left text-sm">
+                <thead className="text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="py-2">Sklep</th>
+                    <th className="py-2">Cena</th>
+                    <th className="py-2">Rabat</th>
+                    <th className="py-2">DRM</th>
+                    <th className="py-2">Źródło ceny</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {profile.offers.map((offer) => (
+                    <tr key={offer.id} className="text-slate-300">
+                      <td className="py-3 font-medium text-white">
+                        {offer.externalUrl ?? offer.url ? (
+                          <a
+                            href={offer.externalUrl ?? offer.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline underline-offset-2 hover:text-radar-cyan"
+                          >
+                            {offer.storeName}
+                          </a>
+                        ) : (
+                          offer.storeName
+                        )}
+                      </td>
+                      <td className="py-3">{formatPrice(offer.price, offer.currency)}</td>
+                      <td className="py-3">{offer.discountPercent}%</td>
+                      <td className="py-3">{offer.drm}</td>
+                      <td className="py-3">
+                        {offer.isOfficial ? "Oficjalny sklep" : "Adapter"}
+                        {offer.source === "gog" || offer.sourceName === "gog" ? (
+                          <p className="mt-1 text-xs text-radar-violet">GameValue / GOG store API</p>
+                        ) : offer.source === "steam-store" || offer.sourceName === "steam-store" ? (
+                          <p className="mt-1 text-xs text-radar-cyan">Eksperymentalne źródło Steam Store</p>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
           <div className="surface rounded-lg p-5">
-            <h2 className="text-lg font-semibold text-white">GameValue factors</h2>
+            <h2 className="text-lg font-semibold text-white">Czynniki GameValue</h2>
             <div className="mt-4 space-y-3">
               {factors.map(([key, value]) => (
                 <div key={key}>
@@ -174,7 +195,7 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
           <div className="surface rounded-lg p-5">
             <div className="mb-4 flex items-center gap-2 text-white">
               <Calendar size={18} className="text-radar-green" aria-hidden />
-              <h2 className="text-lg font-semibold">Price alert</h2>
+              <h2 className="text-lg font-semibold">Alert cenowy</h2>
             </div>
             <AlertForm gameId={game.id} />
           </div>
@@ -204,22 +225,22 @@ function Metric({
 
 function sourceConfidenceLabel(confidence: string, source: string | null, sourceName: string | null): string {
   if (source === "gog" || sourceName === "gog") {
-    return "GameValue / GOG store API price data";
+    return "GameValue / GOG store API";
   }
   if (source === "steam-store" || sourceName === "steam-store") {
-    return "GameValue / Steam Store price data";
+    return "Eksperymentalne źródło Steam Store";
   }
   if (confidence === "internal-real") {
-    return "GameValue internal price data";
+    return "GameValue internal";
   }
   if (confidence === "experimental-store-api") {
-    return "Experimental store API price data";
+    return "Eksperymentalne źródło sklepu";
   }
   if (confidence === "internal-mock") {
-    return "Demo/mock price data";
+    return "Dane demonstracyjne ceny";
   }
   if (confidence === "external-legacy") {
-    return "External legacy price data";
+    return "Legacy provider";
   }
-  return "No tracked price data";
+  return "Brak śledzonych cen";
 }

@@ -325,6 +325,8 @@ export type ApiIntegrationLog = {
 export type ApiSteamCatalogStatus = {
   steamCatalogEntryCount: number;
   activeGameCount: number;
+  catalogCompleteness: "partial" | "full" | "unknown";
+  fetchedTotal: number;
   lastSteamCatalogSync: DateString | null;
   nextSteamCatalogStartAfterAppId: number | null;
   lastSteamCatalogError: ApiIntegrationLog | null;
@@ -601,6 +603,7 @@ export type ApiSteamStorePriceRefreshResult = {
   steamAppId: number;
   refreshed: boolean;
   skipped: boolean;
+  preview: ApiSteamStorePricePreview | null;
   offerId: string | null;
   snapshotId: string | null;
   message: string | null;

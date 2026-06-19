@@ -144,6 +144,14 @@ describe("Steam Store price connector", () => {
 
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ sourceName: "steam-store", dryRun: true, requested: 1, refreshed: 0, skipped: 1 });
+    expect(body.results[0].preview).toMatchObject({
+      steamAppId: 570,
+      sourceName: "steam-store",
+      sourceType: "store-api-experimental",
+      price: 0,
+      currency: "PLN",
+      isFreeToPlay: true
+    });
     expect(afterOffers).toHaveLength(beforeOffers.length);
     expect(afterSnapshots).toHaveLength(beforeSnapshots.length);
   });

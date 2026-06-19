@@ -55,40 +55,40 @@ export function DiagnosticsView(): React.ReactElement {
 
       <section className="grid grid-cols-2 gap-3">
         <Metric label="Backend" value="OK" />
-        <Metric label="Backend mode" value={status.mode.toUpperCase()} />
-        <Metric label="Data source" value={dataModeLabel(stats?.mode)} />
-        <Metric label="Games" value={formatNumber(status.gameCount)} />
-        <Metric label="Offers" value={formatNumber(status.offerCount)} />
-        <Metric label="Alerts" value={formatNumber(status.alertCount)} />
-        <Metric label="Price provider" value={status.priceProvider} />
-        <Metric label="Price mode" value={status.priceMode.toUpperCase()} />
-        <Metric label="Stores" value={formatNumber(status.storeCount)} />
-        <Metric label="Price sources" value={formatNumber(status.priceSourceCount)} />
-        <Metric label="Price snapshots" value={formatNumber(status.priceSnapshotCount)} />
-        <Metric label="Internal price snaps" value={formatNumber(status.realInternalPriceSnapshots)} />
-        <Metric label="Real price snaps" value={formatNumber(status.realPriceSnapshots)} />
-        <Metric label="Mock price snaps" value={formatNumber(status.mockPriceSnapshots)} />
-        <Metric label="Real offers" value={formatNumber(status.realOffers)} />
-        <Metric label="GOG enabled" value={status.gogEnabled ? "true" : "false"} />
+        <Metric label="Tryb backendu" value={status.mode.toUpperCase()} />
+        <Metric label="Źródło danych" value={dataModeLabel(stats?.mode)} />
+        <Metric label="Gry" value={formatNumber(status.gameCount)} />
+        <Metric label="Oferty" value={formatNumber(status.offerCount)} />
+        <Metric label="Alerty" value={formatNumber(status.alertCount)} />
+        <Metric label="Provider cen" value={status.priceProvider} />
+        <Metric label="Tryb cen" value={status.priceMode.toUpperCase()} />
+        <Metric label="Sklepy" value={formatNumber(status.storeCount)} />
+        <Metric label="Źródła cen" value={formatNumber(status.priceSourceCount)} />
+        <Metric label="Snapshoty cen" value={formatNumber(status.priceSnapshotCount)} />
+        <Metric label="Wewn. ceny realne" value={formatNumber(status.realInternalPriceSnapshots)} />
+        <Metric label="Realne ceny" value={formatNumber(status.realPriceSnapshots)} />
+        <Metric label="Ceny demo" value={formatNumber(status.mockPriceSnapshots)} />
+        <Metric label="Realne oferty" value={formatNumber(status.realOffers)} />
+        <Metric label="GOG aktywny" value={status.gogEnabled ? "true" : "false"} />
         <Metric label="GOG mapped games" value={formatNumber(status.gogMappings)} />
         <Metric label="GOG offers" value={formatNumber(status.gogOfferCount)} />
         <Metric label="GOG country" value={status.gogCountryCode} />
         <Metric label="GOG currency" value={status.gogCurrency} />
-        <Metric label="Steam Store enabled" value={status.steamStorePriceEnabled ? "true" : "false"} />
-        <Metric label="Steam Store offers" value={formatNumber(status.steamStoreOfferCount)} />
+        <Metric label="Steam Store aktywny" value={status.steamStorePriceEnabled ? "true" : "false"} />
+        <Metric label="Oferty Steam Store" value={formatNumber(status.steamStoreOfferCount)} />
         <Metric label="Steam Store snaps" value={formatNumber(status.steamStorePriceSnapshotCount)} />
         <Metric label="Steam catalog" value={formatNumber(status.steamCatalogEntryCount)} />
-        <Metric label="Imported games" value={formatNumber(status.importedGameCount)} />
-        <Metric label="Last price refresh" value={status.lastPriceRefresh ? formatShortDate(status.lastPriceRefresh) : "n/a"} />
-        <Metric label="Last GOG refresh" value={status.lastGogPriceRefresh ? formatShortDate(status.lastGogPriceRefresh) : "n/a"} />
-        <Metric label="Last catalog sync" value={status.lastSteamCatalogSync ? formatShortDate(status.lastSteamCatalogSync) : "n/a"} />
-        <Metric label="Last player refresh" value={status.lastPlayerCountRefresh ? formatShortDate(status.lastPlayerCountRefresh) : "n/a"} />
-        <Metric label="Real snaps" value={formatNumber(stats?.sourceCounts.realPlayerSnapshots)} />
-        <Metric label="Mock snaps" value={formatNumber(stats?.sourceCounts.mockPlayerSnapshots)} />
+        <Metric label="Importowane gry" value={formatNumber(status.importedGameCount)} />
+        <Metric label="Ostatnie ceny" value={status.lastPriceRefresh ? formatShortDate(status.lastPriceRefresh) : "n/a"} />
+        <Metric label="Ostatni GOG" value={status.lastGogPriceRefresh ? formatShortDate(status.lastGogPriceRefresh) : "n/a"} />
+        <Metric label="Ostatni katalog" value={status.lastSteamCatalogSync ? formatShortDate(status.lastSteamCatalogSync) : "n/a"} />
+        <Metric label="Ostatni players" value={status.lastPlayerCountRefresh ? formatShortDate(status.lastPlayerCountRefresh) : "n/a"} />
+        <Metric label="Real players" value={formatNumber(stats?.sourceCounts.realPlayerSnapshots)} />
+        <Metric label="Demo players" value={formatNumber(stats?.sourceCounts.mockPlayerSnapshots)} />
       </section>
 
       <section className="surface rounded-lg p-4">
-        <h2 className="text-lg font-semibold text-white">Integration logs</h2>
+        <h2 className="text-lg font-semibold text-white">Logi integracji</h2>
         <div className="mt-3 space-y-3">
           {status.integrationLogs.map((log) => (
             <div key={log.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
@@ -108,12 +108,12 @@ export function DiagnosticsView(): React.ReactElement {
 
 function dataModeLabel(mode: ApiStatsOverview["mode"] | undefined): string {
   if (mode === "real") {
-    return "Real data";
+    return "Dane rzeczywiste";
   }
   if (mode === "mixed") {
-    return "Mixed data";
+    return "Dane mieszane";
   }
-  return "Mock fallback";
+  return "Dane demonstracyjne";
 }
 
 function DiagnosticsHeader({ ok }: { ok: boolean }): React.ReactElement {
@@ -132,7 +132,7 @@ function DiagnosticsHeader({ ok }: { ok: boolean }): React.ReactElement {
           {ok ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
         </span>
         <div>
-          <h1 className="text-xl font-semibold text-white">Diagnostics</h1>
+          <h1 className="text-xl font-semibold text-white">Diagnostyka</h1>
           <p className="text-sm text-slate-400">API base URL: {apiClient.baseUrl}</p>
           <p className="text-xs text-slate-500">Status backendu: {ok ? "OK" : "blad polaczenia"}</p>
         </div>
