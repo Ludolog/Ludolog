@@ -303,7 +303,32 @@ export function getMostActiveGames(limit = 5): GameSummary[] {
 export function getOffersForGame(gameId: string): StoreOffer[] {
   return storeOffers
     .filter((offer) => offer.gameId === gameId)
-    .sort((a, b) => a.price - b.price);
+    .sort(compareOffers);
+}
+
+function compareOffers(a: StoreOffer, b: StoreOffer): number {
+  const priceDiff = a.price - b.price;
+  if (priceDiff !== 0) {
+    return priceDiff;
+  }
+  const confidenceDiff = sourceConfidenceRank(a.sourceConfidence) - sourceConfidenceRank(b.sourceConfidence);
+  if (confidenceDiff !== 0) {
+    return confidenceDiff;
+  }
+  return b.updatedAt.getTime() - a.updatedAt.getTime();
+}
+
+function sourceConfidenceRank(source: StoreOffer["sourceConfidence"]): number {
+  if (source === "internal-real") {
+    return 0;
+  }
+  if (source === "external-legacy") {
+    return 1;
+  }
+  if (source === "internal-mock") {
+    return 2;
+  }
+  return 3;
 }
 
 export function upsertStoreOffers(gameId: string, offers: StoreOffer[]): void {

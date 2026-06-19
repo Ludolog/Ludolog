@@ -203,6 +203,31 @@ function sourceConfidence(source: DataSource): StoreOffer["sourceConfidence"] {
   return "no-price-data";
 }
 
+function compareOffers(a: StoreOffer, b: StoreOffer): number {
+  const priceDiff = a.price - b.price;
+  if (priceDiff !== 0) {
+    return priceDiff;
+  }
+  const confidenceDiff = sourceConfidenceRank(a.sourceConfidence) - sourceConfidenceRank(b.sourceConfidence);
+  if (confidenceDiff !== 0) {
+    return confidenceDiff;
+  }
+  return b.updatedAt.getTime() - a.updatedAt.getTime();
+}
+
+function sourceConfidenceRank(source: StoreOffer["sourceConfidence"]): number {
+  if (source === "internal-real") {
+    return 0;
+  }
+  if (source === "external-legacy") {
+    return 1;
+  }
+  if (source === "internal-mock") {
+    return 2;
+  }
+  return 3;
+}
+
 function slugify(value: string): string {
   return (
     value
@@ -513,8 +538,8 @@ class PrismaGameRepository implements GameRepository {
   }
 
   async listOffers(gameId: string): Promise<StoreOffer[]> {
-    const offers = await prisma.storeOffer.findMany({ where: { gameId }, orderBy: { price: "asc" } });
-    return offers.map(mapOffer);
+    const offers = await prisma.storeOffer.findMany({ where: { gameId } });
+    return offers.map(mapOffer).sort(compareOffers);
   }
 
   async upsertOffers(gameId: string, offers: StoreOffer[]): Promise<void> {
