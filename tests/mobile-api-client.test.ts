@@ -8,28 +8,31 @@ describe("mobile api client", () => {
   });
 
   it("calls backend endpoints relative to API_BASE_URL", async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ results: [] }), { status: 200 })) as unknown as Fetcher;
-    const client = createApiClient("http://10.0.2.2:3000/", fetcher);
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ results: [] }), { status: 200 }));
+    const client = createApiClient("http://10.0.2.2:3000/", fetcher as unknown as Fetcher);
 
     await client.getBestDeals(3);
 
-    expect(fetcher).toHaveBeenCalledWith(
-      "http://10.0.2.2:3000/api/deals/best?limit=3",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Accept: "application/json",
-          "Content-Type": "application/json"
-        })
-      })
-    );
+    const [url, options] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+    const headers = options.headers as Headers;
+
+    expect(url).toBe("http://10.0.2.2:3000/api/deals/best?limit=3");
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.has("Content-Type")).toBe(false);
   });
 
   it("wraps network failures in a readable mobile error", async () => {
     const fetcher = vi.fn(async () => {
       throw new Error("network down");
-    }) as unknown as Fetcher;
-    const client = createApiClient("http://10.0.2.2:3000", fetcher);
+    });
+    const client = createApiClient("http://10.0.2.2:3000", fetcher as unknown as Fetcher);
 
-    await expect(client.getAdminStatus()).rejects.toBeInstanceOf(ApiClientError);
+    await expect(client.getAdminStatus()).rejects.toMatchObject({
+      baseUrl: "http://10.0.2.2:3000",
+      endpoint: "/api/admin/status",
+      message: "network down",
+      type: "network",
+      url: "http://10.0.2.2:3000/api/admin/status"
+    });
   });
 });

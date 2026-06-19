@@ -21,8 +21,8 @@ DATABASE_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r-poole
 DIRECT_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
 REPOSITORY_PROVIDER=prisma
 DATA_MODE=mock
-NEXT_PUBLIC_APP_URL=https://ADRES-Z-VERCEL
-MOBILE_ALLOWED_ORIGINS=https://ADRES-Z-VERCEL,capacitor://localhost
+NEXT_PUBLIC_APP_URL=https://apka-seven.vercel.app
+MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
 ```
 
 Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT_URL`. Replace `TWOJE_HASLO` only inside Vercel settings or local ignored env files.
@@ -31,10 +31,10 @@ Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT
 7. After deployment, check:
 
 ```text
-https://ADRES-Z-VERCEL
-https://ADRES-Z-VERCEL/api/admin/status
-https://ADRES-Z-VERCEL/api/games/search?q=cyberpunk
-https://ADRES-Z-VERCEL/api/deals/best
+https://apka-seven.vercel.app
+https://apka-seven.vercel.app/api/admin/status
+https://apka-seven.vercel.app/api/games/search?q=cyberpunk
+https://apka-seven.vercel.app/api/deals/best
 ```
 
 If Prisma migrations were not executed yet, run them locally against Neon with the ignored `.env.local` file configured:
@@ -71,8 +71,8 @@ DATA_MODE=mock
 REPOSITORY_PROVIDER=prisma
 DATABASE_URL=...
 DIRECT_URL=...
-NEXT_PUBLIC_APP_URL=https://gamevalue-radar.vercel.app
-MOBILE_ALLOWED_ORIGINS=https://gamevalue-radar.vercel.app,capacitor://localhost
+NEXT_PUBLIC_APP_URL=https://apka-seven.vercel.app
+MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
 STEAM_API_KEY=
 PRICE_API_PROVIDER=mock
 PRICE_API_KEY=
@@ -131,9 +131,9 @@ Use seed only when you intentionally want demo games/offers/watchlist data in th
 After Vercel deployment and migration:
 
 ```text
-https://gamevalue-radar.vercel.app/api/admin/status
-https://gamevalue-radar.vercel.app/api/deals/best
-https://gamevalue-radar.vercel.app/api/games/cyberpunk-2077
+https://apka-seven.vercel.app/api/admin/status
+https://apka-seven.vercel.app/api/deals/best
+https://apka-seven.vercel.app/api/games/search?q=cyberpunk
 ```
 
 `/api/admin/status` should show non-zero game and snapshot counts after seed.
@@ -143,7 +143,7 @@ https://gamevalue-radar.vercel.app/api/games/cyberpunk-2077
 Production Android builds should call Vercel:
 
 ```env
-VITE_API_BASE_URL=https://gamevalue-radar.vercel.app
+VITE_API_BASE_URL=https://apka-seven.vercel.app
 ```
 
 Create `mobile/.env.production` from `mobile/.env.production.example`, then build:
@@ -151,9 +151,12 @@ Create `mobile/.env.production` from `mobile/.env.production.example`, then buil
 ```bash
 npm run mobile:build:prod
 npm run mobile:sync:prod
+npm run android:build
 ```
 
-The production fallback in code is also `https://gamevalue-radar.vercel.app`, so production builds do not fall back to `10.0.2.2`.
+`mobile/.env.production` is ignored by Git and must not be committed. It may contain only public mobile values such as `VITE_API_BASE_URL`. Do not add `DATABASE_URL`, `DIRECT_URL`, Neon credentials, API keys, signing secrets or Firebase secrets to the mobile app.
+
+The production fallback in code is also `https://apka-seven.vercel.app`, so production builds do not fall back to `10.0.2.2`, `localhost` or `127.0.0.1`.
 
 ## 8. Build debug APK
 
@@ -165,11 +168,13 @@ npm run android:build:debug
 
 The debug build allows HTTP so it can call `http://10.0.2.2:3000`.
 
+Do not use `npm run android:build:debug` when you are intentionally preparing an APK that should talk to the production Vercel API, because that script rebuilds and syncs the development mobile bundle.
+
 ## 9. Release AAB later
 
 Release signing is not configured in this repository. To prepare a Play Store-ready release later:
 
-1. Set `mobile/.env.production` to the deployed HTTPS backend.
+1. Set `mobile/.env.production` to `https://apka-seven.vercel.app`.
 2. Run `npm run mobile:sync:prod`.
 3. Configure signing keys in Android Studio or Gradle.
 4. Build a signed AAB from Android Studio.

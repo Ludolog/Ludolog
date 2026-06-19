@@ -8,21 +8,32 @@ const devAllowedOrigins = [
   "http://10.0.2.2:5173"
 ];
 
+const mobileRuntimeOrigins = ["capacitor://localhost", "http://localhost"];
+
 function configuredOrigins(): string[] {
   const configured = process.env.MOBILE_ALLOWED_ORIGINS;
+  const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "";
+  const productionDefaults = [process.env.NEXT_PUBLIC_APP_URL ?? "", vercelUrl, ...mobileRuntimeOrigins];
+
   if (configured?.trim()) {
-    return configured
+    return uniqueOrigins([
+      ...configured
       .split(",")
       .map((origin) => origin.trim())
-      .filter(Boolean);
+      .filter(Boolean),
+      ...productionDefaults
+    ]);
   }
 
   if (process.env.NODE_ENV === "production") {
-    const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "";
-    return [process.env.NEXT_PUBLIC_APP_URL ?? "", vercelUrl, "capacitor://localhost"].filter(Boolean);
+    return uniqueOrigins(productionDefaults);
   }
 
-  return devAllowedOrigins;
+  return uniqueOrigins(devAllowedOrigins);
+}
+
+function uniqueOrigins(origins: string[]): string[] {
+  return [...new Set(origins.filter(Boolean))];
 }
 
 function corsHeaders(origin: string | null): HeadersInit {
@@ -32,7 +43,7 @@ function corsHeaders(origin: string | null): HeadersInit {
   return {
     ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin } : {}),
     "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Accept, Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin"
   };

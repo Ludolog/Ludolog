@@ -1,7 +1,7 @@
 import { Activity, BadgePercent, Radar } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { apiClient } from "@/api/client";
+import { apiClient, describeApiClientError } from "@/api/client";
 import { GameCard } from "@/components/GameCard";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { formatNumber } from "@/format";
@@ -21,7 +21,7 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
       setDeals(bestDeals.results);
       setStatus(adminStatus);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Nieznany błąd połączenia.");
+      setError(describeApiClientError(loadError));
     } finally {
       setLoading(false);
     }
@@ -48,7 +48,7 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
           </span>
           <div>
             <h1 className="text-2xl font-semibold text-white">GameValue Radar</h1>
-            <p className="text-sm text-slate-400">Mobilny radar cen i aktywności graczy.</p>
+            <p className="text-sm text-slate-400">Mobilny radar cen i aktywnosci graczy.</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -62,7 +62,7 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
         {deals.length > 0 ? (
           deals.map((summary) => <GameCard key={summary.game.id} summary={summary} onOpen={onOpenGame} />)
         ) : (
-          <EmptyState message="Brak ofert do wyświetlenia." />
+          <EmptyState message="Brak ofert do wyswietlenia." />
         )}
       </section>
     </div>

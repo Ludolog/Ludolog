@@ -49,6 +49,8 @@ VITE_API_BASE_URL=http://10.0.2.2:3000
 
 `10.0.2.2` is the Android emulator alias for the host machine.
 
+Use this URL only for local development builds. Production Android builds should use the deployed Vercel backend instead.
+
 ## Physical Android phone
 
 Use your computer IP address in the same LAN:
@@ -82,6 +84,14 @@ Production build:
 npm run mobile:build:prod
 npm run mobile:sync:prod
 ```
+
+Production Android builds use the public API URL from `mobile/.env.production`:
+
+```env
+VITE_API_BASE_URL=https://apka-seven.vercel.app
+```
+
+`mobile/.env.production` is local-only and must not be committed. It may contain public `VITE_` values only. Do not put `DATABASE_URL`, `DIRECT_URL`, Neon credentials, API keys, signing secrets or Firebase secrets into any mobile env file.
 
 Open Android Studio:
 
@@ -146,14 +156,40 @@ Debug Android builds allow cleartext HTTP so the emulator can call `http://10.0.
 Production releases should use HTTPS and a deployed backend URL:
 
 ```env
-VITE_API_BASE_URL=https://gamevalue-radar.vercel.app
+VITE_API_BASE_URL=https://apka-seven.vercel.app
 ```
 
 For production CORS, set `MOBILE_ALLOWED_ORIGINS` explicitly on the backend. Do not rely on development defaults.
 
+Local Android development:
+
+```env
+VITE_API_BASE_URL=http://10.0.2.2:3000
+```
+
+Production Android build:
+
+```env
+VITE_API_BASE_URL=https://apka-seven.vercel.app
+```
+
 ## Release build notes
 
-For a release build, configure Android signing in Android Studio or Gradle, build the mobile client with the production `VITE_API_BASE_URL`, run `npm run mobile:sync`, then create a signed bundle/APK from Android Studio.
+For a production API debug APK, build and sync the mobile client with the production `VITE_API_BASE_URL`, then assemble the Android debug APK:
+
+```bash
+npm run mobile:build:prod
+npm run mobile:sync:prod
+npm run android:build
+```
+
+The debug APK is produced under:
+
+```text
+mobile/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+For a release build, configure Android signing in Android Studio or Gradle, build the mobile client with the production `VITE_API_BASE_URL`, run `npm run mobile:sync:prod`, then create a signed bundle/APK from Android Studio.
 
 The root script `npm run android:build:release` runs a production mobile build and Gradle `assembleRelease`, but release signing still needs to be configured before producing a store-ready artifact.
 
