@@ -10,8 +10,13 @@ describe("GET /api/stats/overview", () => {
     expect(response.status).toBe(200);
     expect(Array.isArray(body.topPlayers)).toBe(true);
     expect(Array.isArray(body.trending)).toBe(true);
+    expect(Array.isArray(body.trendingUp)).toBe(true);
+    expect(Array.isArray(body.trendingDown)).toBe(true);
     expect(Array.isArray(body.bestValue)).toBe(true);
+    expect(Array.isArray(body.freeToPlay)).toBe(true);
+    expect(Array.isArray(body.trackedDeals)).toBe(true);
     expect(Array.isArray(body.categories)).toBe(true);
+    expect(Array.isArray(body.missingDataHints)).toBe(true);
     expect(typeof body.updatedAt).toBe("string");
     expect(["mock", "mixed", "real"]).toContain(body.mode);
     expect(typeof body.ggdealsStatus).toBe("string");
@@ -23,7 +28,11 @@ describe("GET /api/stats/overview", () => {
       realOffers: expect.any(Number),
       mockOffers: expect.any(Number),
       realPlayerSnapshots: expect.any(Number),
-      mockPlayerSnapshots: expect.any(Number)
+      mockPlayerSnapshots: expect.any(Number),
+      gogOffers: expect.any(Number),
+      steamStoreOffers: expect.any(Number),
+      manualOffers: expect.any(Number),
+      gamesWithoutPrices: expect.any(Number)
     });
   });
 });

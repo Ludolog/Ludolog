@@ -5,7 +5,9 @@ export const searchQuerySchema = z.object({
     .string()
     .trim()
     .min(1, "Search query is required.")
-    .max(80, "Search query is too long.")
+    .max(80, "Search query is too long."),
+  limit: z.number().int().positive().max(50).default(16),
+  offset: z.number().int().min(0).max(5000).default(0)
 });
 
 export const gameIdSchema = z.object({

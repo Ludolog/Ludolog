@@ -33,11 +33,11 @@ The Android app is a client only. It never talks to Steam, Neon or Prisma direct
 
 ## Search flow
 
-1. Mobile/web calls `GET /api/games/search?q=...`.
+1. Mobile/web calls `GET /api/games/search?q=...&limit=...&offset=...`.
 2. `GameSearchService.searchCatalog()` searches imported/library games first.
 3. It searches `SteamCatalogEntry` in Neon through `repositories.steamCatalog.search()`.
 4. If the synced catalog has no matches, it falls back to the local mock catalog.
-5. Results are returned as `kind: "library"` or `kind: "catalog"` with `source: "database"`, `"steam-catalog"` or `"mock-catalog"`.
+5. Results are returned as `kind: "library"` or `kind: "catalog"` with `source: "database"`, `"steam-catalog"` or `"mock-catalog"`, plus pagination metadata.
 6. Library results can open details immediately. Catalog results are importable.
 
 ## Import game flow
@@ -96,10 +96,18 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 
 1. Mobile/web calls `GET /api/stats/overview`.
 2. `StatsService` loads game profiles, watchlists, catalog status and price/player snapshot counts.
-3. It calculates top players, trending, drops, best value, watchlist popularity, hidden gems and categories.
-4. It returns `mode: "real" | "mixed" | "mock"` based on real/mock player and price snapshot counts.
-5. The overview includes `realInternalPriceSnapshots`, mock/real offer counts, player counts and price provider mode.
-6. Home and Stats screens display `updatedAt`, source counts, player source badges, GameValue price source badges and category sections.
+3. `CategoryRankingService` and `GameTagNormalizer` classify games into trend, price, data-source and genre categories.
+4. It calculates top players, trending up/down, drops, best value, free-to-play, tracked deals, watchlist popularity, hidden gems and categories.
+5. It returns `mode: "real" | "mixed" | "mock"` based on real/mock player and price snapshot counts.
+6. The overview includes `realInternalPriceSnapshots`, GOG/Steam Store/manual offer counts, games without prices, missing-data hints, player counts and price provider mode.
+7. Home and Stats screens display `updatedAt`, source counts, player source badges, GameValue price source badges and category sections.
+
+## Category taxonomy flow
+
+1. `GET /api/categories/overview` returns category cards for Home, Stats and admin.
+2. `GET /api/categories/:slug` returns one category with its ranked games.
+3. Category sources are `Game.genres`, manual fallback mappings for popular Steam App IDs and data-state predicates such as no trusted price, real player data or demo/mock data.
+4. UI components consume category DTOs and do not hardcode category membership.
 
 ## Android diagnostics flow
 

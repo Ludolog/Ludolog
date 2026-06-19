@@ -1,29 +1,33 @@
-import { repositories } from "@/lib/repositories";
 import { getGGDealsApiKey, getPriceMode, getPriceProvider } from "@/lib/config";
+import { repositories } from "@/lib/repositories";
+import {
+  bestValueScore,
+  categoryRankingService,
+  toStatsGame,
+  type CategoryStatsSource
+} from "@/lib/services/category-service";
 import { resolveGGDealsStatusFromLogs } from "@/lib/services/ggdeals-diagnostics";
-import type { GameProfile } from "@/lib/types";
-import type { ApiStatsCategory, ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
-
-type StatsSource = {
-  profile: GameProfile;
-  trendPercent: number;
-};
+import type { StatsDataMode } from "@/lib/types";
+import type { ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
 
 export class StatsService {
   async overview(limit = 8): Promise<ApiStatsOverview> {
-    const games = await repositories.games.list();
-    const profiles = (
-      await Promise.all(games.map((game) => repositories.games.getProfile(game.id)))
-    ).filter((profile): profile is GameProfile => profile !== null);
-    const watchlist = await repositories.watchlist.list();
+    const sources = await categoryRankingService.loadSources();
     const [
       catalogStatus,
       realPlayerSnapshots,
       mockPlayerSnapshots,
-      realInternalPriceSnapshots,
-      realPriceSnapshots,
+      manualPriceSnapshots,
+      gogPriceSnapshots,
+      steamStorePriceSnapshots,
+      ggdealsPriceSnapshots,
+      priceApiSnapshots,
       mockPriceSnapshots,
-      realOffers,
+      manualOffers,
+      gogOffers,
+      steamStoreOffers,
+      ggdealsOffers,
+      priceApiOffers,
       mockOffers,
       importedGames,
       latestPlayerRefresh,
@@ -33,68 +37,65 @@ export class StatsService {
       repositories.steamCatalog.status(),
       repositories.snapshots.countPlayerSnapshotsBySource("steam-api"),
       repositories.snapshots.countPlayerSnapshotsBySource("mock"),
-      Promise.all([
-        repositories.snapshots.countPriceSnapshotsBySource("manual"),
-        repositories.snapshots.countPriceSnapshotsBySource("gog"),
-        repositories.snapshots.countPriceSnapshotsBySource("steam-store")
-      ]).then(([manual, gog, steamStore]) => manual + gog + steamStore),
-      Promise.all([
-        repositories.snapshots.countPriceSnapshotsBySource("manual"),
-        repositories.snapshots.countPriceSnapshotsBySource("gog"),
-        repositories.snapshots.countPriceSnapshotsBySource("steam-store"),
-        repositories.snapshots.countPriceSnapshotsBySource("ggdeals"),
-        repositories.snapshots.countPriceSnapshotsBySource("price-api")
-      ]).then(([manual, gog, steamStore, ggdeals, priceApi]) => manual + gog + steamStore + ggdeals + priceApi),
+      repositories.snapshots.countPriceSnapshotsBySource("manual"),
+      repositories.snapshots.countPriceSnapshotsBySource("gog"),
+      repositories.snapshots.countPriceSnapshotsBySource("steam-store"),
+      repositories.snapshots.countPriceSnapshotsBySource("ggdeals"),
+      repositories.snapshots.countPriceSnapshotsBySource("price-api"),
       repositories.snapshots.countPriceSnapshotsBySource("mock"),
-      Promise.all([
-        repositories.games.countOffersBySource("manual"),
-        repositories.games.countOffersBySource("gog"),
-        repositories.games.countOffersBySource("steam-store"),
-        repositories.games.countOffersBySource("ggdeals"),
-        repositories.games.countOffersBySource("price-api")
-      ]).then(([manual, gog, steamStore, ggdeals, priceApi]) => manual + gog + steamStore + ggdeals + priceApi),
+      repositories.games.countOffersBySource("manual"),
+      repositories.games.countOffersBySource("gog"),
+      repositories.games.countOffersBySource("steam-store"),
+      repositories.games.countOffersBySource("ggdeals"),
+      repositories.games.countOffersBySource("price-api"),
       repositories.games.countOffersBySource("mock"),
       repositories.games.listImported(500),
       repositories.snapshots.latestPlayerRefresh(),
       repositories.snapshots.latestPriceRefresh(),
       repositories.diagnostics.listIntegrationLogs()
     ]);
+
+    const realInternalPriceSnapshots = manualPriceSnapshots + gogPriceSnapshots + steamStorePriceSnapshots;
+    const realPriceSnapshots =
+      realInternalPriceSnapshots + ggdealsPriceSnapshots + priceApiSnapshots;
+    const realOffers = manualOffers + gogOffers + steamStoreOffers + ggdealsOffers + priceApiOffers;
+    const gamesWithoutPrices = sources.filter((source) => !source.profile.latestPrice && !source.profile.bestOffer).length;
     const ggdealsRuntime = resolveGGDealsStatusFromLogs({
       hasApiKey: Boolean(getGGDealsApiKey()),
       logs: integrationLogs,
       realOffers,
       realPriceSnapshots
     });
-    const watchlistCounts = new Map<string, number>();
 
-    for (const item of watchlist) {
-      watchlistCounts.set(item.gameId, (watchlistCounts.get(item.gameId) ?? 0) + 1);
-    }
-
-    const sources = profiles.map((profile) => ({
-      profile,
-      trendPercent: calculateTrendPercent(profile)
-    }));
-    const byPlayers = [...sources].sort((a, b) => statsGame(b).currentPlayers - statsGame(a).currentPlayers);
+    const byPlayers = [...sources].sort((a, b) => toStatsGame(b).currentPlayers - toStatsGame(a).currentPlayers);
     const byTrend = [...sources].sort((a, b) => b.trendPercent - a.trendPercent);
     const byDrop = [...sources].sort((a, b) => a.trendPercent - b.trendPercent);
     const byBestValue = [...sources].sort((a, b) => bestValueScore(b) - bestValueScore(a));
-    const byWatchlists = [...sources].sort(
-      (a, b) => (watchlistCounts.get(b.profile.game.id) ?? 0) - (watchlistCounts.get(a.profile.game.id) ?? 0)
-    );
-    const hiddenGems = [...sources]
-      .filter((source) => statsGame(source).currentPlayers <= 40000 && source.profile.score.score >= 70)
+    const byWatchlists = [...sources].sort((a, b) => b.watchlistCount - a.watchlistCount);
+    const freeToPlay = [...sources]
+      .filter((source) => toStatsGame(source).bestPrice === 0)
+      .sort((a, b) => toStatsGame(b).currentPlayers - toStatsGame(a).currentPlayers);
+    const trackedDeals = [...sources]
+      .filter((source) => toStatsGame(source).bestPrice !== null)
       .sort((a, b) => bestValueScore(b) - bestValueScore(a));
+    const hiddenGems = [...sources]
+      .filter((source) => toStatsGame(source).currentPlayers <= 40000 && source.profile.score.score >= 70)
+      .sort((a, b) => bestValueScore(b) - bestValueScore(a));
+    const categories = categoryRankingService.buildFromSources(sources, limit).categories;
 
     return {
-      topPlayers: byPlayers.slice(0, limit).map(statsGame),
-      trending: byTrend.slice(0, limit).map(statsGame),
-      biggestGrowth: byTrend.slice(0, limit).map(statsGame),
-      biggestDrop: byDrop.slice(0, limit).map(statsGame),
-      bestValue: byBestValue.slice(0, limit).map(statsGame),
-      popularWatchlists: byWatchlists.slice(0, limit).map(statsGame),
-      hiddenGems: hiddenGems.slice(0, limit).map(statsGame),
-      categories: buildCategories(sources),
+      topPlayers: byPlayers.slice(0, limit).map(toStatsGame),
+      trending: byTrend.slice(0, limit).map(toStatsGame),
+      trendingUp: byTrend.filter((source) => source.trendPercent > 0).slice(0, limit).map(toStatsGame),
+      trendingDown: byDrop.filter((source) => source.trendPercent < 0).slice(0, limit).map(toStatsGame),
+      biggestGrowth: byTrend.slice(0, limit).map(toStatsGame),
+      biggestDrop: byDrop.slice(0, limit).map(toStatsGame),
+      bestValue: byBestValue.slice(0, limit).map(toStatsGame),
+      freeToPlay: freeToPlay.slice(0, limit).map(toStatsGame),
+      trackedDeals: trackedDeals.slice(0, limit).map(toStatsGame),
+      popularWatchlists: byWatchlists.slice(0, limit).map(toStatsGame),
+      hiddenGems: hiddenGems.slice(0, limit).map(toStatsGame),
+      categories,
       dataFreshness: {
         latestSteamCatalogSync: catalogStatus.lastSyncedAt?.toISOString() ?? null,
         latestPlayerCountRefresh: latestPlayerRefresh?.toISOString() ?? null,
@@ -109,8 +110,20 @@ export class StatsService {
         realOffers,
         mockOffers,
         realPlayerSnapshots,
-        mockPlayerSnapshots
+        mockPlayerSnapshots,
+        gogOffers,
+        steamStoreOffers,
+        manualOffers,
+        gamesWithoutPrices
       },
+      missingDataHints: buildMissingDataHints({
+        catalogEntries: catalogStatus.entryCount,
+        importedGames: importedGames.length,
+        gamesWithoutPrices,
+        gogOffers,
+        steamStoreOffers,
+        mockPriceSnapshots
+      }),
       updatedAt: new Date().toISOString(),
       mode: resolveStatsMode({ mockPlayerSnapshots, mockPriceSnapshots, realPlayerSnapshots, realPriceSnapshots }),
       ggdealsStatus: ggdealsRuntime.status,
@@ -130,7 +143,7 @@ function resolveStatsMode({
   mockPriceSnapshots: number;
   realPlayerSnapshots: number;
   realPriceSnapshots: number;
-}): "real" | "mixed" | "mock" {
+}): StatsDataMode {
   if (realPlayerSnapshots > 0 && realPriceSnapshots > 0 && mockPlayerSnapshots === 0 && mockPriceSnapshots === 0) {
     return "real";
   }
@@ -140,134 +153,52 @@ function resolveStatsMode({
   return "mock";
 }
 
-function buildCategories(sources: StatsSource[]): ApiStatsCategory[] {
-  return [
-    category("top-current-players", "Top by current players", "Najwieksza aktywnosc graczy teraz.", sources, () => true, [
-      "players"
-    ]),
-    category("trending-now", "Trending now", "Najmocniejszy wzrost aktywnosci.", sources, () => true, ["trend"]),
-    category("biggest-growth", "Biggest player growth", "Gry z najwyzszym dodatnim trendem.", sources, () => true, [
-      "trend"
-    ]),
-    category("biggest-drop", "Biggest player drop", "Gry, ktore traca aktywnosc graczy.", sources, () => true, ["drop"]),
-    category("best-value", "Best value", "Niska cena, wysoka aktywnosc i dobry score.", sources, () => true, ["value"]),
-    category("popular-watchlists", "Popular on watchlists", "Tytuly czesto dodawane do obserwowanych.", sources, () => true, [
-      "score"
-    ]),
-    category("hidden-gems", "Hidden gems", "Mniejsze gry z mocnym stosunkiem wartosci do ceny.", sources, (source) => {
-      const game = statsGame(source);
-      return game.currentPlayers <= 40000 && game.gameValueScore >= 70;
-    }, ["value"]),
-    category("multiplayer-coop", "Multiplayer/Co-op leaders", "Najaktywniejsze gry do wspolnej gry.", sources, (source) =>
-      hasAnyTag(source, ["Multiplayer", "Co-op", "Team-Based"])
-    ),
-    category("rpg", "RPG leaders", "Najmocniejsze RPG i action RPG.", sources, (source) =>
-      hasAnyTag(source, ["RPG", "Action RPG"])
-    ),
-    category("indie", "Indie leaders", "Najciekawsze gry indie wedlug aktywnosci i score.", sources, (source) =>
-      hasAnyTag(source, ["Indie"])
-    ),
-    category("strategy", "Strategy leaders", "Strategie, symulacje i grand strategy.", sources, (source) =>
-      hasAnyTag(source, ["Strategy", "Grand Strategy", "4X", "Simulation"])
-    )
-  ];
-}
+function buildMissingDataHints({
+  catalogEntries,
+  importedGames,
+  gamesWithoutPrices,
+  gogOffers,
+  steamStoreOffers,
+  mockPriceSnapshots
+}: {
+  catalogEntries: number;
+  importedGames: number;
+  gamesWithoutPrices: number;
+  gogOffers: number;
+  steamStoreOffers: number;
+  mockPriceSnapshots: number;
+}): string[] {
+  const hints: string[] = [];
 
-function category(
-  id: string,
-  title: string,
-  description: string,
-  sources: StatsSource[],
-  predicate: (source: StatsSource) => boolean,
-  sortModes: Array<"players" | "trend" | "drop" | "value" | "score"> = ["players"]
-): ApiStatsCategory {
-  const sorted = sources.filter(predicate).sort((a, b) => compareSources(a, b, sortModes));
-  return {
-    id,
-    title,
-    description,
-    games: sorted.slice(0, 8).map(statsGame)
-  };
-}
-
-function compareSources(a: StatsSource, b: StatsSource, sortModes: Array<"players" | "trend" | "drop" | "value" | "score">): number {
-  for (const mode of sortModes) {
-    const diff =
-      mode === "players"
-        ? statsGame(b).currentPlayers - statsGame(a).currentPlayers
-        : mode === "trend"
-          ? b.trendPercent - a.trendPercent
-          : mode === "drop"
-            ? a.trendPercent - b.trendPercent
-            : mode === "value"
-              ? bestValueScore(b) - bestValueScore(a)
-              : b.profile.score.score - a.profile.score.score;
-    if (diff !== 0) {
-      return diff;
-    }
-  }
-  return b.profile.score.score - a.profile.score.score;
-}
-
-function hasAnyTag(source: StatsSource, tags: string[]): boolean {
-  const normalized = source.profile.game.genres.map((tag) => tag.toLowerCase());
-  return tags.some((tag) => normalized.includes(tag.toLowerCase()));
-}
-
-function statsGame(source: StatsSource): ApiStatsGame {
-  const { profile, trendPercent } = source;
-  const price = profile.latestPrice?.price ?? profile.bestOffer?.price ?? 0;
-  const priceSource = profile.latestPrice?.source ?? profile.bestOffer?.source ?? "mock";
-  const priceSourceConfidence =
-    profile.latestPrice?.sourceConfidence ??
-    profile.bestOffer?.sourceConfidence ??
-    (profile.latestPrice || profile.bestOffer ? "internal-mock" : "no-price-data");
-  const sourceOffer =
-    profile.bestOffer?.source === priceSource
-      ? profile.bestOffer
-      : profile.offers.find((offer) => offer.source === priceSource);
-  const priceExternalUrl =
-    sourceOffer?.externalUrl ??
-    sourceOffer?.url ??
-    (profile.latestPrice?.source === priceSource ? profile.latestPrice.externalUrl : null);
-
-  return {
-    id: profile.game.id,
-    steamAppId: profile.game.steamAppId,
-    title: profile.game.title,
-    coverUrl: profile.game.coverUrl,
-    currentPlayers: profile.latestPlayers?.playersOnline ?? 0,
-    playerTrendPercent: trendPercent,
-    currentPrice: price,
-    historicalLow: profile.latestPrice?.historicalLow ?? profile.historicalLow ?? price,
-    discountPercent: profile.latestPrice?.discountPercent ?? profile.bestOffer?.discountPercent ?? 0,
-    gameValueScore: profile.score.score,
-    recommendation: profile.score.recommendation,
-    playerSource: profile.latestPlayers?.source ?? "mock",
-    priceSource,
-    priceSourceConfidence,
-    priceExternalUrl,
-    tags: profile.game.genres
-  };
-}
-
-function bestValueScore(source: StatsSource): number {
-  const game = statsGame(source);
-  const pricePenalty = game.currentPrice === 0 ? 0 : Math.min(35, game.currentPrice / 8);
-  const playerBoost = Math.min(30, Math.log10(game.currentPlayers + 1) * 6);
-  const discountBoost = Math.min(20, game.discountPercent / 4);
-  return game.gameValueScore + playerBoost + discountBoost - pricePenalty;
-}
-
-function calculateTrendPercent(summary: GameProfile): number {
-  const latest = summary.playerHistory.at(-1);
-  const previous = summary.playerHistory.at(-2);
-
-  if (!latest || !previous || previous.playersOnline <= 0) {
-    return 0;
+  if (catalogEntries < 5000) {
+    hints.push("Lista gier Steam jest częściowa. Synchronizuj kolejne pakiety katalogu w panelu admina.");
   }
 
-  return Math.round(((latest.playersOnline - previous.playersOnline) / previous.playersOnline) * 1000) / 10;
+  if (importedGames < 20) {
+    hints.push("Tabela Game zawiera tylko gry śledzone. Importuj wybrane gry z katalogu Steam zamiast całego katalogu.");
+  }
+
+  if (gamesWithoutPrices > 0) {
+    hints.push("Część gier nie ma zaufanej ceny. Dodaj cenę manualną, GOG mapping albo Steam Store refresh.");
+  }
+
+  if (gogOffers === 0) {
+    hints.push("GOG jest skonfigurowany, ale nie ma jeszcze widocznych ofert po mapowaniu.");
+  }
+
+  if (steamStoreOffers === 0) {
+    hints.push("Steam Store connector jest eksperymentalny i wymaga testowego refreshu 1-2 gier.");
+  }
+
+  if (mockPriceSnapshots > 0) {
+    hints.push("W bazie są jeszcze demonstracyjne ceny. Uruchom cleanup dopiero po bezpiecznym preview.");
+  }
+
+  return hints;
+}
+
+export function topStatsGame(games: ApiStatsGame[]): ApiStatsGame | null {
+  return games[0] ?? null;
 }
 
 export const statsService = new StatsService();

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { apiClient } from "@/api/client";
+import { apiClient, describeApiClientError } from "@/api/client";
 import { GameCard } from "@/components/GameCard";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import type { ApiGameSummary } from "@shared/api-types";
@@ -17,7 +17,7 @@ export function DealsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
       const response = await apiClient.getBestDeals(10);
       setDeals(response.results);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Nie udało się pobrać okazji.");
+      setError(describeApiClientError(loadError));
     } finally {
       setLoading(false);
     }
@@ -30,13 +30,17 @@ export function DealsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
   return (
     <div className="space-y-4">
       <section className="surface rounded-lg p-4">
-        <h1 className="text-xl font-semibold text-white">Best deals</h1>
-        <p className="mt-1 text-sm text-slate-400">Oferty posortowane według GameValue Score.</p>
+        <h1 className="text-xl font-semibold text-white">Ceny śledzone</h1>
+        <p className="mt-1 text-sm text-slate-400">Tylko ceny z wewnętrznych, GOG albo Steam Store źródeł.</p>
       </section>
       {loading ? <LoadingState /> : null}
       {error ? <ErrorState message={error} onRetry={load} /> : null}
-      {!loading && !error && deals.length === 0 ? <EmptyState message="Brak ofert." /> : null}
-      {!loading && !error && deals.map((summary) => <GameCard key={summary.game.id} summary={summary} onOpen={onOpenGame} />)}
+      {!loading && !error && deals.length === 0 ? (
+        <EmptyState message="Brak śledzonych cen. Dodaj źródło ceny w panelu admina." />
+      ) : null}
+      {!loading && !error
+        ? deals.map((summary) => <GameCard key={summary.game.id} summary={summary} onOpen={onOpenGame} />)
+        : null}
     </div>
   );
 }

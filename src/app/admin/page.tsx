@@ -1,11 +1,12 @@
 ﻿import Link from "next/link";
-import { AlertTriangle, Database, RefreshCw, Server, ShoppingCart } from "lucide-react";
+import { AlertTriangle, Database, Layers, RefreshCw, Server, ShoppingCart } from "lucide-react";
 
 import { RefreshButton } from "@/components/forms/refresh-button";
 import { AdminActionButton } from "@/components/forms/admin-action-button";
 import { AdminSecretPanel } from "@/components/forms/admin-secret-panel";
 import { formatDate, formatNumber, formatPrice } from "@/lib/format";
 import { repositories } from "@/lib/repositories";
+import { categoryRankingService } from "@/lib/services/category-service";
 import { gameSearchService } from "@/lib/services/game-search-service";
 import { steamCatalogStatusService } from "@/lib/services/steam-catalog-status-service";
 
@@ -19,6 +20,7 @@ const starterSteamAppIds = [
 export default async function AdminPage(): Promise<React.ReactElement> {
   const status = await repositories.diagnostics.getAdminStatus();
   const steamStatus = await steamCatalogStatusService.getStatus();
+  const categoryOverview = await categoryRankingService.overview(4);
   const games = await gameSearchService.list();
   const gameRows = await Promise.all(
     games.map(async (game) => ({
@@ -79,6 +81,32 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <StatusCard icon={<RefreshCw size={18} />} label="Player snapshots" value={String(status.playerSnapshotCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Real player snaps" value={String(status.realPlayerSnapshots)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Mock player snaps" value={String(status.mockPlayerSnapshots)} />
+      </section>
+
+      <section className="surface rounded-lg p-5">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-lg border border-radar-violet/35 bg-radar-violet/10 text-radar-violet">
+            <Layers size={20} aria-hidden />
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold text-white">Game categories</h2>
+            <p className="text-sm text-slate-400">Backend taxonomy used by Home, Stats and category endpoints.</p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {categoryOverview.categories.slice(0, 8).map((category) => (
+            <div key={category.slug} className="rounded-md border border-white/10 bg-black/20 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-semibold text-white">{category.title}</p>
+                <span className="rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2 py-1 text-xs font-semibold text-radar-cyan">
+                  {category.gameCount}
+                </span>
+              </div>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-400">{category.description}</p>
+              <p className="mt-2 text-xs text-slate-500">/{category.slug}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="surface rounded-lg p-5">

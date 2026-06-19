@@ -98,17 +98,17 @@ export function getRuntimeInfo(transportKind = getDefaultTransport().kind): Runt
 
 export function describeApiClientError(error: unknown): string {
   if (!(error instanceof ApiClientError)) {
-    return error instanceof Error ? error.message : "Nie udalo sie polaczyc z API.";
+    return error instanceof Error ? error.message : "Nie udało się połączyć z API.";
   }
 
   const status = error.status === undefined ? "n/a" : String(error.status);
   return [
-    `Typ bledu: ${error.type}`,
+    `Typ błędu: ${error.type}`,
     `HTTP status: ${status}`,
     `Base URL: ${error.baseUrl}`,
     `Endpoint: ${error.endpoint}`,
     `URL: ${error.url}`,
-    `Szczegoly: ${error.details}`
+    `Szczegóły: ${error.details}`
   ].join(" | ");
 }
 
@@ -143,7 +143,7 @@ export function createApiClient(baseUrl: string, transport: ApiClientTransport =
         throw error;
       }
 
-      const details = error instanceof Error ? error.message : "Nie udalo sie polaczyc z API.";
+      const details = error instanceof Error ? error.message : "Nie udało się połączyć z API.";
       throw new ApiClientError({
         baseUrl: normalizedBaseUrl,
         details,
@@ -158,7 +158,16 @@ export function createApiClient(baseUrl: string, transport: ApiClientTransport =
   return {
     baseUrl: normalizedBaseUrl,
     getRuntimeInfo: () => getRuntimeInfo(transport.kind),
-    searchGames: (query: string) => request<SearchResponse>(`/api/games/search?q=${encodeURIComponent(query)}`),
+    searchGames: (query: string, options: { limit?: number; offset?: number } = {}) => {
+      const params = new URLSearchParams({ q: query });
+      if (options.limit !== undefined) {
+        params.set("limit", String(options.limit));
+      }
+      if (options.offset !== undefined) {
+        params.set("offset", String(options.offset));
+      }
+      return request<SearchResponse>(`/api/games/search?${params.toString()}`);
+    },
     importGame: (input: { steamAppId?: number; slug?: string }) =>
       request<ApiImportGameResponse>("/api/games/import", {
         method: "POST",
@@ -195,9 +204,9 @@ export function createFetchTransport(fetcher: Fetcher = fetch): ApiClientTranspo
       } catch (parseError) {
         throw new ApiClientError({
           baseUrl: baseUrlFromUrl(url),
-          details: parseError instanceof Error ? parseError.message : "Nie udalo sie sparsowac JSON z API.",
+          details: parseError instanceof Error ? parseError.message : "Nie udało się sparsować JSON z API.",
           endpoint: endpointFromUrl(url),
-          message: "Nie udalo sie sparsowac JSON z API.",
+          message: "Nie udało się sparsować JSON z API.",
           type: "parse",
           url
         });
@@ -282,9 +291,9 @@ function normalizeCapacitorData(response: HttpResponse): unknown {
   } catch (error) {
     throw new ApiClientError({
       baseUrl: baseUrlFromUrl(response.url),
-      details: error instanceof Error ? error.message : "Nie udalo sie sparsowac JSON z API.",
+      details: error instanceof Error ? error.message : "Nie udało się sparsować JSON z API.",
       endpoint: endpointFromUrl(response.url),
-      message: "Nie udalo sie sparsowac JSON z API.",
+      message: "Nie udało się sparsować JSON z API.",
       type: "parse",
       url: response.url
     });

@@ -8,13 +8,17 @@ import { gameSearchService } from "@/lib/services/game-search-service";
 export const dynamic = "force-dynamic";
 
 type SearchPageProps = {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; offset?: string }>;
 };
 
 export default async function SearchPage({ searchParams }: SearchPageProps): Promise<React.ReactElement> {
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
-  const searchResults = query ? await gameSearchService.searchCatalog(query) : [];
+  const offset = Number(params.offset ?? 0);
+  const searchResponse = query
+    ? await gameSearchService.searchCatalog(query, { limit: 24, offset: Number.isFinite(offset) ? offset : 0 })
+    : null;
+  const searchResults = searchResponse?.results ?? [];
   const recommended = query ? [] : await gameSearchService.bestDeals(8);
 
   return (
@@ -35,7 +39,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps): Pro
               {query ? `Results for "${query}"` : "Recommended deals"}
             </h2>
             <p className="mt-1 text-sm text-slate-400">
-              {query ? `${searchResults.length} games found` : `${recommended.length} recommended games`}
+              {query
+                ? `${searchResponse?.total ?? 0} wyników, pokazuję ${searchResults.length}`
+                : `${recommended.length} polecanych gier`}
             </p>
           </div>
         </div>

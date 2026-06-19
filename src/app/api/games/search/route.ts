@@ -7,9 +7,12 @@ import { searchQuerySchema } from "@/lib/validation";
 export async function GET(request: Request): Promise<NextResponse> {
   try {
     const url = new URL(request.url);
-    const { q } = searchQuerySchema.parse({ q: url.searchParams.get("q") ?? "" });
-    const results = await gameSearchService.searchCatalog(q);
-    return NextResponse.json({ query: q, results });
+    const { q, limit, offset } = searchQuerySchema.parse({
+      q: url.searchParams.get("q") ?? "",
+      limit: Number(url.searchParams.get("limit") ?? 16),
+      offset: Number(url.searchParams.get("offset") ?? 0)
+    });
+    return NextResponse.json(await gameSearchService.searchCatalog(q, { limit, offset }));
   } catch (error) {
     if (isZodError(error)) {
       return zodError(error);

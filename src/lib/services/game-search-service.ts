@@ -7,7 +7,8 @@ import type {
   ApiGameSearchResult,
   ApiImportGameSource,
   ApiImportGameRequest,
-  ApiImportGameResponse
+  ApiImportGameResponse,
+  SearchResponse
 } from "@shared/api-types";
 
 type ResolvedCatalogGame = {
@@ -17,6 +18,11 @@ type ResolvedCatalogGame = {
 
 type ImportGameOptions = {
   refreshPlayers?: boolean;
+};
+
+type SearchCatalogOptions = {
+  limit?: number;
+  offset?: number;
 };
 
 export class GameImportNotFoundError extends Error {
@@ -35,16 +41,19 @@ export class GameSearchService {
     return repositories.games.search(query);
   }
 
-  async searchCatalog(query: string): Promise<ApiGameSearchResult[]> {
+  async searchCatalog(query: string, options: SearchCatalogOptions = {}): Promise<SearchResponse> {
+    const limit = Math.min(Math.max(options.limit ?? 16, 1), 50);
+    const offset = Math.max(options.offset ?? 0, 0);
+    const fetchLimit = Math.min(offset + limit + 25, 150);
     const localResults = await repositories.games.search(query);
-    const databaseCatalogResults = await this.searchDatabaseCatalog(query);
-    const fallbackCatalogResults = databaseCatalogResults.length > 0 ? [] : steamAppCatalogService.search(query, 16);
+    const databaseCatalogResults = await this.searchDatabaseCatalog(query, fetchLimit);
+    const fallbackCatalogResults = databaseCatalogResults.length > 0 ? [] : steamAppCatalogService.search(query, fetchLimit);
     const seenSteamIds = new Set<number>();
-    const results: ApiGameSearchResult[] = [];
+    const allResults: ApiGameSearchResult[] = [];
 
     for (const summary of localResults) {
       seenSteamIds.add(summary.game.steamAppId);
-      results.push(libraryResult(summary));
+      allResults.push(libraryResult(summary));
     }
 
     for (const entry of databaseCatalogResults) {
@@ -57,13 +66,13 @@ export class GameSearchService {
         const summary = await repositories.games.getSummary(existing.id);
         if (summary) {
           seenSteamIds.add(existing.steamAppId);
-          results.push(libraryResult(summary));
+          allResults.push(libraryResult(summary));
         }
         continue;
       }
 
       seenSteamIds.add(entry.steamAppId);
-      results.push(catalogResult(gameImportInputFromSteamCatalogEntry(entry), "steam-catalog"));
+      allResults.push(catalogResult(gameImportInputFromSteamCatalogEntry(entry), "steam-catalog"));
     }
 
     for (const catalogGame of fallbackCatalogResults) {
@@ -76,16 +85,24 @@ export class GameSearchService {
         const summary = await repositories.games.getSummary(existing.id);
         if (summary) {
           seenSteamIds.add(existing.steamAppId);
-          results.push(libraryResult(summary));
+          allResults.push(libraryResult(summary));
         }
         continue;
       }
 
       seenSteamIds.add(catalogGame.steamAppId);
-      results.push(catalogResult(catalogGame, "mock-catalog"));
+      allResults.push(catalogResult(catalogGame, "mock-catalog"));
     }
 
-    return results;
+    const results = allResults.slice(offset, offset + limit);
+    return {
+      query,
+      limit,
+      offset,
+      total: allResults.length,
+      nextOffset: offset + limit < allResults.length ? offset + limit : null,
+      results
+    };
   }
 
   async importGame(request: ApiImportGameRequest, options: ImportGameOptions = {}): Promise<ApiImportGameResponse> {
@@ -139,9 +156,9 @@ export class GameSearchService {
     return repositories.games.mostActive(limit);
   }
 
-  private async searchDatabaseCatalog(query: string): Promise<SteamCatalogEntry[]> {
+  private async searchDatabaseCatalog(query: string, limit = 16): Promise<SteamCatalogEntry[]> {
     try {
-      return await repositories.steamCatalog.search(query, 16);
+      return await repositories.steamCatalog.search(query, limit);
     } catch (error) {
       await repositories.diagnostics.recordIntegrationLog({
         service: "search",

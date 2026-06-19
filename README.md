@@ -111,7 +111,7 @@ CRON_SECRET=""
 
 ## API endpoints
 
-- `GET /api/games/search?q=`
+- `GET /api/games/search?q=&limit=&offset=`
 - `POST /api/games/import`
 - `POST /api/games/resolve`
 - `GET /api/games/:id`
@@ -123,6 +123,8 @@ CRON_SECRET=""
 - `GET /api/stats/overview`
 - `GET /api/stats/steam`
 - `GET /api/stats/categories`
+- `GET /api/categories/overview`
+- `GET /api/categories/:slug`
 - `GET /api/stats/trending`
 - `GET /api/stats/top-players`
 - `GET /api/stats/best-value`
@@ -158,9 +160,11 @@ The scoring algorithm is implemented in `src/lib/services/deal-score-service.ts`
 
 ## Expanded search and Steam Stats
 
-Search now combines local database results, synced Steam catalog entries stored in PostgreSQL and the larger mock fallback catalog. If a result is already stored, clients can open its profile immediately. If it only exists in the catalog, the client can call `POST /api/games/import` with a `steamAppId`, `query` or legacy `slug`; the backend creates the game, attempts a current-player refresh and keeps the import working even when Steam is unavailable. The response includes `created`, `source`, `steamAppId`, `gameId`, `summary` and the backwards-compatible `imported` flag. UI components never hardcode the catalog.
+Search now combines local database results, synced Steam catalog entries stored in PostgreSQL and the larger mock fallback catalog. Results are ordered as library, Steam catalog, then mock fallback, and `GET /api/games/search?q=&limit=&offset=` returns pagination metadata (`total`, `nextOffset`). If a result is already stored, clients can open its profile immediately. If it only exists in the catalog, the client can call `POST /api/games/import` with a `steamAppId`, `query` or legacy `slug`; the backend creates the game, attempts a current-player refresh and keeps the import working even when Steam is unavailable. The response includes `created`, `source`, `steamAppId`, `gameId`, `summary` and the backwards-compatible `imported` flag. UI components never hardcode the catalog.
 
-Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending games, biggest growth/drop, best value, watchlist popularity, hidden gems, genre categories, data freshness and source counts. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app uses mock snapshots and logs the fallback.
+Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending up/down, best value, free-to-play games, tracked deals, watchlist popularity, hidden gems, genre categories, missing-data hints, data freshness and source counts. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app uses mock snapshots and logs the fallback.
+
+Game taxonomy is built server-side by `CategoryRankingService` and `GameTagNormalizer`. It uses `Game.genres`, known Steam App ID fallback mappings and data-source/price status to return production-friendly categories through `GET /api/categories/overview`, `GET /api/categories/:slug` and `GET /api/stats/categories`. Current category groups include Popularne teraz, Największy wzrost graczy, Największy spadek graczy, Najlepsza wartość, Darmowe gry, Gry premium, Ceny śledzone, Brak danych cenowych, Real player data, Dane mieszane, Dane demonstracyjne and genre categories such as Action, RPG, Strategy, Simulation, Indie, Multiplayer, Co-op, Survival, Shooter, Sports/Racing, Management, Sandbox, Horror and Adventure.
 
 Android never calls Steam directly and never receives API keys. The mobile app calls the Vercel/Next.js API, and backend services own Steam catalog sync and player-count refreshes.
 

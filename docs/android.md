@@ -165,13 +165,15 @@ VITE_API_BASE_URL=https://apka-seven.vercel.app
 
 The Android app now uses backend endpoints for expanded search and Steam/player statistics:
 
-- `GET /api/games/search?q=`
+- `GET /api/games/search?q=&limit=&offset=`
 - `POST /api/games/import`
 - `GET /api/games/{id}/prices`
 - `GET /api/stats/overview`
+- `GET /api/categories/overview`
+- `GET /api/categories/:slug`
 - `GET /api/admin/status`
 
-Search results can come from the local database, the backend-synced Steam catalog or the backend mock fallback catalog. Mobile search shows source badges:
+Search results can come from the local database, the backend-synced Steam catalog or the backend mock fallback catalog. The API returns pagination metadata so mobile can request more results without importing the whole Steam catalog into `Game`. Mobile search shows source badges:
 
 - `In library` for games already imported into `Game`,
 - `Steam catalog` for synced `SteamCatalogEntry` rows from Neon,
@@ -187,7 +189,7 @@ The Stats screen shows a data mode badge:
 - `Mixed data` when real and fallback data are combined,
 - `Mock fallback` when the app is running on demonstration data.
 
-Game details shows the current player-count source, best price, historical low, store, GameValue price source, store type and last price snapshot. Deals and Stats show price source badges such as `GameValue internal`, `GameValue / GOG store API`, `GameValue / Steam Store`, `Mock price`, `External legacy` or `No price data`, plus official/keyshop/marketplace badges when available.
+Game details shows the current player-count source, best price, historical low, store, GameValue price source, store type and last price snapshot. Deals and Stats show price source badges such as `GameValue internal`, `GameValue / GOG store API`, `Eksperymentalne źródło Steam Store`, `Cena demo`, `External legacy` or `Brak danych cenowych`, plus official/keyshop/marketplace badges when available. Category sections are loaded from backend DTOs, not hardcoded in mobile views.
 
 It does not run admin write actions from Android. `POST /api/games/{id}/refresh-players`, `POST /api/admin/games/bulk-import`, `POST /api/admin/prices/manual-offer`, `POST /api/admin/prices/import-json`, `POST /api/admin/prices/import-csv`, `POST /api/admin/prices/snapshot`, `POST /api/admin/prices/recalculate`, `GET/POST /api/admin/prices/mock-cleanup/*`, `POST /api/admin/gog/*`, `POST /api/admin/steam-store-prices/*` and `POST /api/admin/player-counts/refresh` are backend/admin endpoints protected by `ADMIN_API_SECRET`, so the APK must not call them or contain that secret.
 

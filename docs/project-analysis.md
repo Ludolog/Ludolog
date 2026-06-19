@@ -149,7 +149,11 @@ Rekomendacje:
 
 Search now goes beyond the records already stored in the active repository. `GameSearchService` first asks the `Game` repository, then checks synced `SteamCatalogEntry` records stored in PostgreSQL, and finally falls back to `SteamAppCatalogService`, a local catalog of popular Steam titles used when external access is not configured. Catalog results are marked as importable. `POST /api/games/import` accepts `steamAppId`, `query` or legacy `slug`, turns an importable catalog game into a normal observable game and attempts a backend player-count refresh.
 
+Search responses include pagination metadata (`limit`, `offset`, `total`, `nextOffset`) and keep ordering stable: library games first, synced Steam catalog entries second and mock fallback last.
+
 `SteamCatalogEntry` stores the synced Steam application catalog separately from imported games. This prevents the app from creating thousands of full `Game` records before a title is actually observed by the user. Catalog sync is manual/admin-only and uses capped pagination through `IStoreService/GetAppList`; it must not run during Next.js build or on every page visit.
+
+`CategoryRankingService` centralizes product taxonomy for Home, Stats, admin and mobile. It classifies games from `Game.genres`, known Steam App ID fallback mappings and data-state checks. UI surfaces receive DTOs with `slug`, `title`, `description`, `type`, `gameCount`, `topGames` and `updatedAt`, so category membership is not hardcoded in components.
 
 ## GameValue Price API layer
 
@@ -177,12 +181,13 @@ Legacy `PriceProviderService` and GG.deals diagnostics remain as disabled safety
 `StatsService` builds analytical sections from `PlayerCountSnapshot`, price snapshots and GameValue Score:
 
 - top current players,
-- trending now,
+- trending up/down,
 - biggest player growth and drop,
 - best value,
+- free-to-play and tracked deals,
 - popular watchlists,
 - hidden gems,
-- multiplayer/co-op, RPG, indie and strategy leaders.
+- data-source categories and genre categories.
 
 Trend percentage is calculated from the latest two player-count snapshots. If live Steam access is not configured or fails, backend services fall back to mock values and record an integration log. Android remains a client of the backend API and never calls Steam or receives API keys.
 

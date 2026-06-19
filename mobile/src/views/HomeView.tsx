@@ -1,4 +1,4 @@
-import { Activity, BadgePercent, Radar, Search, TrendingUp } from "lucide-react";
+import { Activity, BadgePercent, Layers, Radar, Search, TrendingUp } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { apiClient, describeApiClientError } from "@/api/client";
@@ -86,24 +86,24 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
           </span>
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-white">GameValue Radar</h1>
-            <p className="truncate text-sm text-slate-400">Steam activity, prices and buy signals.</p>
+            <p className="truncate text-sm text-slate-400">Aktywność Steam, ceny i sygnały zakupowe.</p>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <SmallMetric icon={<BadgePercent size={17} />} label="Mode" value={status?.mode.toUpperCase() ?? "API"} />
-          <SmallMetric icon={<Activity size={17} />} label="Games" value={formatNumber(status?.gameCount)} />
-          <SmallMetric icon={<TrendingUp size={17} />} label="Players" value={formatNumber(overview?.topPlayers[0]?.currentPlayers)} />
+          <SmallMetric icon={<BadgePercent size={17} />} label="Tryb" value={status?.mode.toUpperCase() ?? "API"} />
+          <SmallMetric icon={<Activity size={17} />} label="Gry" value={formatNumber(status?.gameCount)} />
+          <SmallMetric icon={<TrendingUp size={17} />} label="Gracze" value={formatNumber(overview?.topPlayers[0]?.currentPlayers)} />
         </div>
         {overview ? (
           <p className="mt-3 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-slate-300">
-            {statsModeLabel(overview.mode)} - catalog {formatNumber(overview.sourceCounts.steamCatalogEntries)} - real snaps{" "}
+            {statsModeLabel(overview.mode)} - katalog {formatNumber(overview.sourceCounts.steamCatalogEntries)} - real snaps{" "}
             {formatNumber(overview.sourceCounts.realPlayerSnapshots)}
           </p>
         ) : null}
       </section>
 
       <section className="surface rounded-lg p-4">
-        <h2 className="text-lg font-semibold text-white">Quick search</h2>
+        <h2 className="text-lg font-semibold text-white">Szybkie wyszukiwanie</h2>
         <form onSubmit={quickSearch} className="mt-3 flex gap-2">
           <input
             value={query}
@@ -115,7 +115,7 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
             <Search size={18} />
           </button>
         </form>
-        {quickLoading ? <p className="mt-3 text-xs text-slate-400">Searching Steam catalog...</p> : null}
+        {quickLoading ? <p className="mt-3 text-xs text-slate-400">Szukam w bibliotece i katalogu Steam...</p> : null}
         {quickResults.length > 0 ? (
           <div className="mt-3 space-y-2">
             {quickResults.map((result) => (
@@ -126,7 +126,7 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
                 className="flex w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-left"
               >
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{result.game.title}</span>
-                <span className="text-xs text-radar-cyan">{result.importable ? "Import" : "Open"}</span>
+                <span className="text-xs text-radar-cyan">{result.importable ? "Importuj" : "Otwórz"}</span>
               </button>
             ))}
           </div>
@@ -135,18 +135,38 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
 
       {overview ? (
         <>
-          <StatsStrip title="Top Steam now" games={overview.topPlayers.slice(0, 3)} onOpenGame={onOpenGame} />
-          <StatsStrip title="Trending" games={overview.trending.slice(0, 3)} onOpenGame={onOpenGame} />
-          <StatsStrip title="Best value" games={overview.bestValue.slice(0, 3)} onOpenGame={onOpenGame} />
+          <StatsStrip title="Popularne teraz" games={overview.topPlayers.slice(0, 3)} onOpenGame={onOpenGame} />
+          <StatsStrip title="Największy wzrost graczy" games={overview.trendingUp.slice(0, 3)} onOpenGame={onOpenGame} />
+          <StatsStrip title="Najlepsza wartość" games={overview.bestValue.slice(0, 3)} onOpenGame={onOpenGame} />
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Layers size={17} className="text-radar-cyan" />
+              <h2 className="text-lg font-semibold text-white">Kategorie</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {overview.categories.slice(0, 6).map((category) => (
+                <div key={category.slug} className="surface rounded-lg p-3">
+                  <p className="line-clamp-2 text-sm font-semibold text-white">{category.title}</p>
+                  <p className="mt-1 text-xs text-slate-400">{formatNumber(category.gameCount)} gier</p>
+                </div>
+              ))}
+            </div>
+          </section>
+          {overview.missingDataHints.length > 0 ? (
+            <section className="surface rounded-lg p-4">
+              <h2 className="text-sm font-semibold text-white">Braki danych</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-400">{overview.missingDataHints[0]}</p>
+            </section>
+          ) : null}
         </>
       ) : null}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-white">Best deals</h2>
+        <h2 className="text-lg font-semibold text-white">Ceny śledzone</h2>
         {deals.length > 0 ? (
           deals.map((summary) => <GameCard key={summary.game.id} summary={summary} onOpen={onOpenGame} />)
         ) : (
-          <EmptyState message="No offers available." />
+          <EmptyState message="Brak śledzonych cen. Dodaj źródło ceny w panelu admina." />
         )}
       </section>
     </div>
@@ -155,12 +175,12 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
 
 function statsModeLabel(mode: ApiStatsOverview["mode"]): string {
   if (mode === "real") {
-    return "Real data";
+    return "Dane rzeczywiste";
   }
   if (mode === "mixed") {
-    return "Mixed data";
+    return "Dane mieszane";
   }
-  return "Mock fallback";
+  return "Dane demonstracyjne";
 }
 
 function StatsStrip({
@@ -186,7 +206,7 @@ function StatsStrip({
               <div className="min-w-0">
                 <p className="truncate font-semibold text-white">{game.title}</p>
                 <p className="text-xs text-slate-400">
-                  {formatNumber(game.currentPlayers)} online - {formatPrice(game.currentPrice)}
+                  {formatNumber(game.currentPlayers)} online - {game.bestPrice === null ? "Brak śledzonych cen" : formatPrice(game.bestPrice)}
                 </p>
               </div>
               <span className="shrink-0 rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 text-xs font-semibold text-radar-violet">

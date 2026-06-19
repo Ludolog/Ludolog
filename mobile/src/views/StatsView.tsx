@@ -36,7 +36,7 @@ export function StatsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
   }
 
   if (!overview) {
-    return <EmptyState message="No stats available yet." />;
+    return <EmptyState message="Brak statystyk." />;
   }
 
   return (
@@ -47,30 +47,32 @@ export function StatsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
             <Activity size={20} />
           </span>
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-white">Steam Stats</h1>
+            <h1 className="text-xl font-semibold text-white">Statystyki Steam</h1>
             <p className="truncate text-xs text-slate-400">
-              {modeLabel(overview.mode)} - updated {new Date(overview.updatedAt).toLocaleTimeString("pl-PL")}
+              {modeLabel(overview.mode)} - aktualizacja {new Date(overview.updatedAt).toLocaleTimeString("pl-PL")}
             </p>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-          <MiniMetric label="Catalog" value={formatNumber(overview.sourceCounts.steamCatalogEntries)} />
-          <MiniMetric label="Imported" value={formatNumber(overview.sourceCounts.importedGames)} />
-          <MiniMetric label="Internal prices" value={formatNumber(overview.sourceCounts.realInternalPriceSnapshots)} />
-          <MiniMetric label="Real prices" value={formatNumber(overview.sourceCounts.realPriceSnapshots)} />
-          <MiniMetric label="Mock prices" value={formatNumber(overview.sourceCounts.mockPriceSnapshots)} />
+          <MiniMetric label="Katalog" value={formatNumber(overview.sourceCounts.steamCatalogEntries)} />
+          <MiniMetric label="Importowane" value={formatNumber(overview.sourceCounts.importedGames)} />
+          <MiniMetric label="Ceny realne" value={formatNumber(overview.sourceCounts.realInternalPriceSnapshots)} />
+          <MiniMetric label="GOG" value={formatNumber(overview.sourceCounts.gogOffers)} />
+          <MiniMetric label="Steam Store" value={formatNumber(overview.sourceCounts.steamStoreOffers)} />
+          <MiniMetric label="Brak cen" value={formatNumber(overview.sourceCounts.gamesWithoutPrices)} />
+          <MiniMetric label="Mock ceny" value={formatNumber(overview.sourceCounts.mockPriceSnapshots)} />
           <MiniMetric label="Real snaps" value={formatNumber(overview.sourceCounts.realPlayerSnapshots)} />
-          <MiniMetric label="Mock snaps" value={formatNumber(overview.sourceCounts.mockPlayerSnapshots)} />
         </div>
       </section>
 
-      <StatsSection title="Top Steam now" icon={<Activity size={17} />} games={overview.topPlayers} onOpenGame={onOpenGame} />
-      <StatsSection title="Trending" icon={<TrendingUp size={17} />} games={overview.trending} onOpenGame={onOpenGame} />
-      <StatsSection title="Best value" icon={<BadgePercent size={17} />} games={overview.bestValue} onOpenGame={onOpenGame} />
-      <StatsSection title="Biggest drops" icon={<TrendingDown size={17} />} games={overview.biggestDrop} onOpenGame={onOpenGame} />
+      <StatsSection title="Popularne teraz" icon={<Activity size={17} />} games={overview.topPlayers} onOpenGame={onOpenGame} />
+      <StatsSection title="Największy wzrost graczy" icon={<TrendingUp size={17} />} games={overview.trendingUp} onOpenGame={onOpenGame} />
+      <StatsSection title="Najlepsza wartość" icon={<BadgePercent size={17} />} games={overview.bestValue} onOpenGame={onOpenGame} />
+      <StatsSection title="Największy spadek graczy" icon={<TrendingDown size={17} />} games={overview.trendingDown} onOpenGame={onOpenGame} />
+      <StatsSection title="Darmowe gry" icon={<BadgePercent size={17} />} games={overview.freeToPlay} onOpenGame={onOpenGame} />
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-white">Categories</h2>
+        <h2 className="text-lg font-semibold text-white">Kategorie</h2>
         {overview.categories.map((category) => (
           <div key={category.id} className="surface rounded-lg p-4">
             <div className="mb-3">
@@ -91,12 +93,12 @@ export function StatsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
 
 function modeLabel(mode: ApiStatsOverview["mode"]): string {
   if (mode === "real") {
-    return "Real data";
+    return "Dane rzeczywiste";
   }
   if (mode === "mixed") {
-    return "Mixed data";
+    return "Dane mieszane";
   }
-  return "Mock fallback";
+  return "Dane demonstracyjne";
 }
 
 function MiniMetric({ label, value }: { label: string; value: string }): React.ReactElement {
@@ -131,7 +133,7 @@ function StatsSection({
             <StatsGameCard key={game.id} game={game} onOpenGame={onOpenGame} />
           ))
         ) : (
-          <EmptyState message={`No games available for ${title.toLowerCase()}.`} />
+          <EmptyState message={`Brak gier w sekcji: ${title.toLowerCase()}.`} />
         )}
       </div>
     </section>
@@ -177,7 +179,7 @@ function StatsGameCard({
               {game.playerTrendPercent}%
             </span>
             <span className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-slate-300">
-              {formatPrice(game.currentPrice)}
+              {game.bestPrice === null ? "Brak śledzonych cen" : formatPrice(game.bestPrice)}
             </span>
             <span className="rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 font-semibold text-radar-violet">
               {game.gameValueScore}/100
@@ -196,7 +198,7 @@ function playerSourceLabel(source: ApiStatsGame["playerSource"]): string {
   if (source === "mock") {
     return "Mock";
   }
-  return "Cached";
+    return "Cache";
 }
 
 function playerSourceClass(source: ApiStatsGame["playerSource"]): string {
@@ -214,21 +216,21 @@ function priceSourceLabel(confidence: ApiStatsGame["priceSourceConfidence"], sou
     return "GameValue / GOG";
   }
   if (source === "steam-store") {
-    return "GameValue / Steam";
+    return "Eksperymentalne źródło Steam Store";
   }
   if (confidence === "internal-real") {
     return "GameValue internal";
   }
   if (confidence === "experimental-store-api") {
-    return "Experimental store API";
+    return "Eksperymentalne źródło";
   }
   if (confidence === "internal-mock") {
-    return "Mock price";
+    return "Cena demo";
   }
   if (confidence === "external-legacy") {
     return "External legacy";
   }
-  return "No price data";
+  return "Brak danych cenowych";
 }
 
 function priceSourceClass(source: ApiStatsGame["priceSourceConfidence"]): string {

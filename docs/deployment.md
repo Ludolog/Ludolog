@@ -42,7 +42,7 @@ Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT
 ```text
 https://apka-seven.vercel.app
 https://apka-seven.vercel.app/api/admin/status
-https://apka-seven.vercel.app/api/games/search?q=cyberpunk
+https://apka-seven.vercel.app/api/games/search?q=cyberpunk&limit=16&offset=0
 https://apka-seven.vercel.app/api/deals/best
 ```
 
@@ -194,6 +194,8 @@ https://apka-seven.vercel.app/api/deals/best
 https://apka-seven.vercel.app/api/games/search?q=cyberpunk
 https://apka-seven.vercel.app/api/games/dota-2/prices
 https://apka-seven.vercel.app/api/stats/overview
+https://apka-seven.vercel.app/api/categories/overview
+https://apka-seven.vercel.app/api/categories/popularne-teraz
 https://apka-seven.vercel.app/api/admin/steam-catalog/status
 https://apka-seven.vercel.app/api/admin/gog/status
 ```
@@ -222,13 +224,14 @@ The production fallback in code is also `https://apka-seven.vercel.app`, so prod
 
 ## Expanded search and Steam Stats deployment notes
 
-The Vercel backend owns Steam catalog sync, search fallback, player-count refreshes and stats aggregation. Mobile builds only receive the public `VITE_API_BASE_URL`.
+The Vercel backend owns Steam catalog sync, search fallback, game taxonomy, player-count refreshes and stats aggregation. Mobile builds only receive the public `VITE_API_BASE_URL`.
 
 Useful production checks after deploy:
 
 ```text
-https://apka-seven.vercel.app/api/games/search?q=palworld
+https://apka-seven.vercel.app/api/games/search?q=palworld&limit=16&offset=0
 https://apka-seven.vercel.app/api/stats/overview
+https://apka-seven.vercel.app/api/categories/overview
 https://apka-seven.vercel.app/api/stats/top-players
 https://apka-seven.vercel.app/api/stats/best-value
 https://apka-seven.vercel.app/api/admin/steam-catalog/status

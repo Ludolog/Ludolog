@@ -26,7 +26,7 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
     setImportSuccess(null);
     setSearched(true);
     try {
-      const response = await apiClient.searchGames(trimmed);
+      const response = await apiClient.searchGames(trimmed, { limit: 25 });
       setResults(response.results);
     } catch (searchError) {
       setError(describeApiClientError(searchError));
@@ -84,13 +84,13 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
   return (
     <div className="space-y-5">
       <section className="surface rounded-lg p-4">
-        <h1 className="text-xl font-semibold text-white">Search Steam catalog</h1>
+        <h1 className="text-xl font-semibold text-white">Szukaj gier</h1>
         <p className="mt-1 text-sm leading-6 text-slate-400">
-          Results combine imported games, synced Steam catalog entries and mock fallback data.
+          Wyniki pokazują najpierw bibliotekę, potem katalog Steam i dopiero fallback.
         </p>
         <form onSubmit={onSubmit} className="mt-4 flex gap-2">
           <label className="sr-only" htmlFor="mobile-search">
-            Search game
+            Szukaj gry
           </label>
           <input
             id="mobile-search"
@@ -105,23 +105,23 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
         </form>
       </section>
 
-      {loading ? <LoadingState label="Searching catalog" /> : null}
+      {loading ? <LoadingState label="Szukam w katalogu" /> : null}
       {importSuccess ? (
         <section className="surface rounded-lg border border-radar-green/25 p-4">
           <p className="text-sm font-semibold text-radar-green">
-            {importSuccess.created ? "Imported" : "Already in library"}: {importSuccess.title}
+            {importSuccess.created ? "Zaimportowano" : "Już w bibliotece"}: {importSuccess.title}
           </p>
           <button
             type="button"
             onClick={() => onOpenGame(importSuccess.gameId)}
             className="mt-3 min-h-11 rounded-md bg-radar-cyan px-4 text-sm font-semibold text-slate-950"
           >
-            Open details
+            Otwórz szczegóły
           </button>
         </section>
       ) : null}
       {error ? <ErrorState message={error} onRetry={search} /> : null}
-      {!loading && !error && searched && results.length === 0 ? <EmptyState message="No games matched this query." /> : null}
+      {!loading && !error && searched && results.length === 0 ? <EmptyState message="Brak wyników dla tej frazy." /> : null}
       {!loading && !error
         ? results.map((result) => (
             <SearchResultCard
@@ -132,7 +132,7 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
             />
           ))
         : null}
-      {!searched ? <EmptyState message="Type a game name to search local data and the Steam fallback catalog." /> : null}
+      {!searched ? <EmptyState message="Wpisz nazwę gry, żeby przeszukać bibliotekę i katalog Steam." /> : null}
     </div>
   );
 }
@@ -165,7 +165,7 @@ function SearchResultCard({
             </div>
             <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2 py-1 text-xs font-semibold text-radar-cyan">
               {result.importable ? <Download size={13} /> : <Search size={13} />}
-              {importing ? "Importing" : result.importable ? "Import" : "Open"}
+              {importing ? "Importuję" : result.importable ? "Importuj" : "Otwórz"}
             </span>
           </div>
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -174,7 +174,7 @@ function SearchResultCard({
               {formatNumber(result.currentPlayers)}
             </span>
             <span className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-slate-300">
-              {formatPrice(result.currentPrice)}
+              {result.currentPrice > 0 ? formatPrice(result.currentPrice) : "Brak śledzonych cen"}
             </span>
             {result.tags.slice(0, 2).map((tag) => (
               <span key={tag} className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-slate-300">
@@ -190,12 +190,12 @@ function SearchResultCard({
 
 function sourceLabel(result: ApiGameSearchResult): string {
   if (!result.importable) {
-    return "In library";
+    return "W bibliotece";
   }
   if (result.source === "steam-catalog") {
-    return "Steam catalog";
+    return "Katalog Steam";
   }
-  return "Mock fallback";
+  return "Fallback demo";
 }
 
 function sourceClass(result: ApiGameSearchResult): string {

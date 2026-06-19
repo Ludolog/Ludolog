@@ -1,5 +1,5 @@
 ﻿import { Suspense } from "react";
-import { Activity, BadgePercent, Radar, TrendingUp } from "lucide-react";
+import { Activity, BadgePercent, Layers, Radar } from "lucide-react";
 
 import { GameCard } from "@/components/game-card";
 import { SearchBox } from "@/components/forms/search-box";
@@ -45,13 +45,13 @@ export default async function HomePage(): Promise<React.ReactElement> {
           </div>
           <div className="surface rounded-lg p-4">
             <Activity className="mb-3 text-radar-cyan" size={20} aria-hidden />
-            <p className="text-xs uppercase text-slate-500">Tracked players</p>
+            <p className="text-xs uppercase text-slate-500">Gracze online</p>
             <p className="mt-1 text-2xl font-semibold text-white">{formatNumber(totalPlayers)}</p>
           </div>
           <div className="surface rounded-lg p-4">
-            <TrendingUp className="mb-3 text-radar-violet" size={20} aria-hidden />
-            <p className="text-xs uppercase text-slate-500">Mock snapshots</p>
-            <p className="mt-1 text-2xl font-semibold text-white">14 days</p>
+            <Layers className="mb-3 text-radar-violet" size={20} aria-hidden />
+            <p className="text-xs uppercase text-slate-500">Brak cen</p>
+            <p className="mt-1 text-2xl font-semibold text-white">{formatNumber(stats.sourceCounts.gamesWithoutPrices)}</p>
           </div>
         </div>
       </section>
@@ -60,7 +60,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-xl font-semibold text-white">Najlepsze okazje</h2>
           <span className="rounded-md border border-radar-green/30 bg-radar-green/10 px-2 py-1 text-xs font-semibold text-radar-green">
-            Best deal
+            Ceny śledzone
           </span>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -72,15 +72,15 @@ export default async function HomePage(): Promise<React.ReactElement> {
 
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold text-white">Steam Stats overview</h2>
+          <h2 className="text-xl font-semibold text-white">Dashboard danych</h2>
           <span className="rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 text-xs font-semibold text-radar-violet">
             {stats.mode.toUpperCase()}
           </span>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
-          <StatsPanel title="Top players" games={stats.topPlayers.slice(0, 4)} />
-          <StatsPanel title="Trending" games={stats.trending.slice(0, 4)} />
-          <StatsPanel title="Best value" games={stats.bestValue.slice(0, 4)} />
+          <StatsPanel title="Popularne teraz" games={stats.topPlayers.slice(0, 4)} />
+          <StatsPanel title="Największy wzrost graczy" games={stats.trendingUp.slice(0, 4)} />
+          <StatsPanel title="Najlepsza wartość" games={stats.bestValue.slice(0, 4)} />
         </div>
       </section>
 
@@ -88,7 +88,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-xl font-semibold text-white">Najbardziej aktywne gry</h2>
           <span className="rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2 py-1 text-xs font-semibold text-radar-cyan">
-            High activity
+            Real player data
           </span>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -99,14 +99,14 @@ export default async function HomePage(): Promise<React.ReactElement> {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold text-white">Categories</h2>
+        <h2 className="text-xl font-semibold text-white">Kategorie</h2>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {stats.categories.slice(0, 6).map((category) => (
             <article key={category.id} className="surface rounded-lg p-4">
               <h3 className="font-semibold text-white">{category.title}</h3>
               <p className="mt-1 text-sm leading-6 text-slate-400">{category.description}</p>
               <div className="mt-4 space-y-2">
-                {category.games.slice(0, 3).map((game) => (
+                {category.topGames.slice(0, 3).map((game) => (
                   <div key={game.id} className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
                     <span className="truncate text-sm font-semibold text-white">{game.title}</span>
                     <span className="text-xs text-radar-cyan">{formatNumber(game.currentPlayers)}</span>
@@ -131,7 +131,7 @@ function StatsPanel({ games, title }: { games: ApiStatsGame[]; title: string }):
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">{game.title}</p>
               <p className="text-xs text-slate-400">
-                {formatNumber(game.currentPlayers)} players - {game.playerTrendPercent >= 0 ? "+" : ""}
+                {formatNumber(game.currentPlayers)} graczy - {game.playerTrendPercent >= 0 ? "+" : ""}
                 {game.playerTrendPercent}%
               </p>
             </div>

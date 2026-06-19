@@ -24,7 +24,8 @@ describe("StatsService", () => {
 
     expect(overview.bestValue.length).toBeGreaterThan(0);
     expect(overview.categories.find((category) => category.id === "strategy")?.games.length).toBeGreaterThan(0);
-    expect(overview.categories.find((category) => category.id === "multiplayer-coop")?.games.length).toBeGreaterThan(0);
+    expect(overview.categories.find((category) => category.id === "multiplayer")?.games.length).toBeGreaterThan(0);
+    expect(overview.categories.find((category) => category.id === "popularne-teraz")?.topGames.length).toBeGreaterThan(0);
   });
 
   it("includes an imported Steam catalog game after a player snapshot is stored", async () => {
@@ -76,6 +77,8 @@ describe("StatsService", () => {
     expect(overview.sourceCounts.importedGames).toBeGreaterThan(0);
     expect(overview.sourceCounts.realPlayerSnapshots).toBeGreaterThan(0);
     expect(overview.sourceCounts.realPriceSnapshots).toBeGreaterThan(0);
+    expect(overview.sourceCounts.gamesWithoutPrices).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(overview.missingDataHints)).toBe(true);
     expect(overview.topPlayers.some((game) => game.steamAppId === 7654322)).toBe(true);
     expect(overview.topPlayers.find((game) => game.steamAppId === 7654322)?.playerSource).toBe("steam-api");
     expect(overview.topPlayers.find((game) => game.steamAppId === 7654322)?.priceSource).toBe("ggdeals");

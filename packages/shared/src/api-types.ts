@@ -6,6 +6,8 @@ export type StatsDataMode = "real" | "mixed" | "mock";
 
 export type DataSource = "mock" | "steam-api" | "steam-store" | "price-api" | "prisma" | "ggdeals" | "manual" | "gog";
 
+export type ApiPriceDataSource = DataSource | "none";
+
 export type PriceProviderName = "gamevalue" | "mock" | "ggdeals" | "itad" | "cheapshark" | "gog" | "steam-store";
 
 export type PriceMode = "internal" | "mock" | "api";
@@ -213,30 +215,56 @@ export type ApiStatsGame = {
   currentPlayers: number;
   playerTrendPercent: number;
   currentPrice: number;
+  bestPrice: number | null;
   historicalLow: number;
   discountPercent: number;
   gameValueScore: number;
   recommendation: Recommendation;
   playerSource: DataSource;
-  priceSource: DataSource;
+  priceSource: ApiPriceDataSource;
   priceSourceConfidence: PriceSourceConfidence;
+  priceConfidence: PriceSourceConfidence;
   priceExternalUrl: string | null;
+  storeName: string | null;
+  freshness: "fresh" | "stale" | "missing";
+  categories: string[];
   tags: string[];
 };
 
-export type ApiStatsCategory = {
+export type ApiCategoryType = "genre" | "trend" | "price" | "data-source" | "system";
+
+export type ApiCategorySummary = {
   id: string;
+  slug: string;
   title: string;
   description: string;
+  type: ApiCategoryType;
+  gameCount: number;
+  topGames: ApiStatsGame[];
+  updatedAt: DateString;
+};
+
+export type ApiCategoryDetails = ApiCategorySummary & {
   games: ApiStatsGame[];
+};
+
+export type ApiStatsCategory = ApiCategoryDetails;
+
+export type ApiCategoriesOverview = {
+  categories: ApiCategorySummary[];
+  updatedAt: DateString;
 };
 
 export type ApiStatsOverview = {
   topPlayers: ApiStatsGame[];
   trending: ApiStatsGame[];
+  trendingUp: ApiStatsGame[];
+  trendingDown: ApiStatsGame[];
   biggestGrowth: ApiStatsGame[];
   biggestDrop: ApiStatsGame[];
   bestValue: ApiStatsGame[];
+  freeToPlay: ApiStatsGame[];
+  trackedDeals: ApiStatsGame[];
   popularWatchlists: ApiStatsGame[];
   hiddenGems: ApiStatsGame[];
   categories: ApiStatsCategory[];
@@ -255,7 +283,12 @@ export type ApiStatsOverview = {
     mockOffers: number;
     realPlayerSnapshots: number;
     mockPlayerSnapshots: number;
+    gogOffers: number;
+    steamStoreOffers: number;
+    manualOffers: number;
+    gamesWithoutPrices: number;
   };
+  missingDataHints: string[];
   updatedAt: DateString;
   mode: StatsDataMode;
   ggdealsStatus: GGDealsProviderStatus;
@@ -791,6 +824,10 @@ export type ApiBulkImportResponse = {
 
 export type SearchResponse = {
   query: string;
+  limit: number;
+  offset: number;
+  total: number;
+  nextOffset: number | null;
   results: ApiGameSearchResult[];
 };
 

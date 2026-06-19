@@ -5,14 +5,14 @@ import { gameSearchService } from "@/lib/services/game-search-service";
 
 describe("GameSearchService", () => {
   it("finds games by partial name across local data and the catalog", async () => {
-    const results = await gameSearchService.searchCatalog("zomb");
+    const { results } = await gameSearchService.searchCatalog("zomb");
 
     expect(results.some((result) => result.game.title === "Project Zomboid")).toBe(true);
     expect(results.every((result) => result.currentPlayers >= 0)).toBe(true);
   });
 
   it("marks catalog results as importable when they are not local library summaries", async () => {
-    const results = await gameSearchService.searchCatalog("palworld");
+    const { results } = await gameSearchService.searchCatalog("palworld");
     const palworld = results.find((result) => result.game.slug === "palworld");
 
     expect(palworld).toBeDefined();
@@ -40,7 +40,7 @@ describe("GameSearchService", () => {
     expect(duplicate.source).toBe("library");
     expect(duplicate.summary.game.id).toBe(response.summary.game.id);
 
-    const results = await gameSearchService.searchCatalog("palworld");
+    const { results } = await gameSearchService.searchCatalog("palworld");
     expect(results[0]?.kind).toBe("library");
   });
 
@@ -60,7 +60,7 @@ describe("GameSearchService", () => {
       }
     ]);
 
-    const results = await gameSearchService.searchCatalog("quantum catalog fixture");
+    const { results } = await gameSearchService.searchCatalog("quantum catalog fixture");
 
     expect(results[0]?.kind).toBe("catalog");
     expect(results[0]?.source).toBe("steam-catalog");
@@ -83,7 +83,7 @@ describe("GameSearchService", () => {
       }
     ]);
 
-    const results = await gameSearchService.searchCatalog("cyberpunk");
+    const { results } = await gameSearchService.searchCatalog("cyberpunk");
 
     expect(results[0]?.kind).toBe("library");
     expect(results[0]?.game.steamAppId).toBe(1091500);
@@ -115,9 +115,20 @@ describe("GameSearchService", () => {
     expect(response.summary.game.title).toBe("Import Fixture Arena");
     expect(response.summary.game.source).toBe("steam-api");
 
-    const results = await gameSearchService.searchCatalog("import fixture arena");
+    const { results } = await gameSearchService.searchCatalog("import fixture arena");
     expect(results[0]?.kind).toBe("library");
     expect(results[0]?.source).toBe("database");
+  });
+
+  it("paginates search results while keeping ordering metadata", async () => {
+    const firstPage = await gameSearchService.searchCatalog("a", { limit: 2, offset: 0 });
+    const secondPage = await gameSearchService.searchCatalog("a", { limit: 2, offset: 2 });
+
+    expect(firstPage.limit).toBe(2);
+    expect(firstPage.offset).toBe(0);
+    expect(firstPage.total).toBeGreaterThanOrEqual(firstPage.results.length);
+    expect(firstPage.nextOffset).toBe(firstPage.total > 2 ? 2 : null);
+    expect(secondPage.offset).toBe(2);
   });
 
   it("imports by query from the synced Steam catalog", async () => {
