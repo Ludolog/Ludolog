@@ -6,9 +6,10 @@
   "description": "Mobile Android client for GameValue Radar.",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
-    "build:dev": "tsc -p tsconfig.json --noEmit && vite build --mode development",
-    "build:prod": "tsc -p tsconfig.json --noEmit && vite build --mode production",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "npm run typecheck && vite build",
+    "build:dev": "npm run typecheck && vite build --mode development",
+    "build:prod": "npm run typecheck && vite build --mode production",
     "preview": "vite preview --host 0.0.0.0",
     "sync": "cap sync android",
     "android:open": "cap open android",

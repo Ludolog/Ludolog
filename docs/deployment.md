@@ -134,6 +134,7 @@ After Vercel deployment and migration:
 https://apka-seven.vercel.app/api/admin/status
 https://apka-seven.vercel.app/api/deals/best
 https://apka-seven.vercel.app/api/games/search?q=cyberpunk
+https://apka-seven.vercel.app/api/stats/overview
 ```
 
 `/api/admin/status` should show non-zero game and snapshot counts after seed.
@@ -157,6 +158,21 @@ npm run android:build
 `mobile/.env.production` is ignored by Git and must not be committed. It may contain only public mobile values such as `VITE_API_BASE_URL`. Do not add `DATABASE_URL`, `DIRECT_URL`, Neon credentials, API keys, signing secrets or Firebase secrets to the mobile app.
 
 The production fallback in code is also `https://apka-seven.vercel.app`, so production builds do not fall back to `10.0.2.2`, `localhost` or `127.0.0.1`.
+
+## Expanded search and Steam Stats deployment notes
+
+The Vercel backend owns Steam catalog/search fallback, player-count refreshes and stats aggregation. Mobile builds only receive the public `VITE_API_BASE_URL`.
+
+Useful production checks after deploy:
+
+```text
+https://apka-seven.vercel.app/api/games/search?q=palworld
+https://apka-seven.vercel.app/api/stats/overview
+https://apka-seven.vercel.app/api/stats/top-players
+https://apka-seven.vercel.app/api/stats/best-value
+```
+
+If `STEAM_API_KEY` or provider-specific API keys are not configured, the app should continue in mock/fallback mode and record integration logs. Never add those secrets to `mobile/.env.production` or any committed file.
 
 ## 8. Build debug APK
 

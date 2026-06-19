@@ -8,7 +8,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   try {
     const url = new URL(request.url);
     const { q } = searchQuerySchema.parse({ q: url.searchParams.get("q") ?? "" });
-    const results = await gameSearchService.search(q);
+    const results = await gameSearchService.searchCatalog(q);
     return NextResponse.json({ query: q, results });
   } catch (error) {
     if (isZodError(error)) {

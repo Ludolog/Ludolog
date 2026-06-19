@@ -82,6 +82,62 @@ export type ApiGameSummary = {
   score: GameValueResult;
 };
 
+export type ApiGameSearchResult = {
+  kind: "library" | "catalog";
+  importable: boolean;
+  game: ApiGame;
+  summary: ApiGameSummary | null;
+  currentPlayers: number;
+  currentPrice: number;
+  historicalLow: number;
+  tags: string[];
+};
+
+export type ApiImportGameRequest = {
+  steamAppId?: number;
+  slug?: string;
+};
+
+export type ApiImportGameResponse = {
+  imported: boolean;
+  summary: ApiGameSummary;
+};
+
+export type ApiStatsGame = {
+  id: string;
+  steamAppId: number;
+  title: string;
+  coverUrl: string;
+  currentPlayers: number;
+  playerTrendPercent: number;
+  currentPrice: number;
+  historicalLow: number;
+  discountPercent: number;
+  gameValueScore: number;
+  recommendation: Recommendation;
+  tags: string[];
+};
+
+export type ApiStatsCategory = {
+  id: string;
+  title: string;
+  description: string;
+  games: ApiStatsGame[];
+};
+
+export type ApiStatsOverview = {
+  topPlayers: ApiStatsGame[];
+  trending: ApiStatsGame[];
+  biggestGrowth: ApiStatsGame[];
+  biggestDrop: ApiStatsGame[];
+  bestValue: ApiStatsGame[];
+  popularWatchlists: ApiStatsGame[];
+  hiddenGems: ApiStatsGame[];
+  categories: ApiStatsCategory[];
+  updatedAt: DateString;
+  mode: DataMode;
+};
+
 export type ApiGameProfile = ApiGameSummary & {
   priceHistory: ApiGamePriceSnapshot[];
   playerHistory: ApiPlayerCountSnapshot[];
@@ -121,7 +177,7 @@ export type ApiAdminStatus = {
 
 export type SearchResponse = {
   query: string;
-  results: ApiGameSummary[];
+  results: ApiGameSearchResult[];
 };
 
 export type BestDealsResponse = {

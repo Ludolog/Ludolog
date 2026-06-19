@@ -137,3 +137,19 @@ Rekomendacje:
 - Integracje API mogą wymagać kluczy, limitów lub indywidualnych warunków licencyjnych.
 - Aplikacja nie deklaruje oficjalnej relacji ze Steam, Valve, GG.deals ani SteamDB.
 - Historia danych w MVP powstaje przez snapshoty aplikacji, więc realna wartość analityczna rośnie wraz z czasem działania systemu.
+
+## Expanded catalog search and Steam Stats
+
+Search now goes beyond the records already stored in the active repository. `GameSearchService` first asks the repository, then augments sparse results with `SteamAppCatalogService`, a fallback catalog of popular Steam titles. Catalog results are marked as importable. `POST /api/games/import` turns an importable catalog game into a normal observable game with mock price/player snapshots and a Steam offer.
+
+`StatsService` builds analytical sections from `PlayerCountSnapshot`, price snapshots and GameValue Score:
+
+- top current players,
+- trending now,
+- biggest player growth and drop,
+- best value,
+- popular watchlists,
+- hidden gems,
+- multiplayer/co-op, RPG, indie and strategy leaders.
+
+Trend percentage is calculated from the latest two player-count snapshots. If live Steam access is not configured or fails, backend services fall back to mock values and record an integration log. Android remains a client of the backend API and never calls Steam or receives API keys.

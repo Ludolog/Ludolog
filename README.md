@@ -102,11 +102,19 @@ MOBILE_ALLOWED_ORIGINS="capacitor://localhost,http://localhost,http://localhost:
 ## API endpoints
 
 - `GET /api/games/search?q=`
+- `POST /api/games/import`
+- `POST /api/games/resolve`
 - `GET /api/games/:id`
 - `GET /api/games/:id/prices`
 - `GET /api/games/:id/players`
 - `POST /api/games/:id/refresh`
 - `GET /api/deals/best`
+- `GET /api/stats/overview`
+- `GET /api/stats/steam`
+- `GET /api/stats/categories`
+- `GET /api/stats/trending`
+- `GET /api/stats/top-players`
+- `GET /api/stats/best-value`
 - `GET /api/watchlist`
 - `POST /api/watchlist`
 - `DELETE /api/watchlist/:id`
@@ -116,6 +124,14 @@ MOBILE_ALLOWED_ORIGINS="capacitor://localhost,http://localhost,http://localhost:
 ## GameValue Score
 
 The scoring algorithm is implemented in `src/lib/services/deal-score-service.ts`. It returns a 0-100 score, factor breakdown and recommendation.
+
+## Expanded search and Steam Stats
+
+Search now combines local database results with a larger Steam fallback catalog. If a result is already stored, clients can open its profile immediately. If it only exists in the catalog, the client can call `POST /api/games/import` with a `steamAppId` or `slug`; the backend creates the game, mock price/player snapshots and a Steam offer. UI components never hardcode the catalog.
+
+Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending games, biggest growth/drop, best value, watchlist popularity, hidden gems and genre categories. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app uses mock snapshots and logs the fallback.
+
+Android never calls Steam directly and never receives API keys. The mobile app calls the Vercel/Next.js API, and backend services own Steam/player-count refreshes.
 
 Weights:
 

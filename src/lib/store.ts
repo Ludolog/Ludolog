@@ -12,6 +12,7 @@ import { calculateGameValueScore } from "@/lib/services/deal-score-service";
 import type {
   AdminStatus,
   Game,
+  GameImportInput,
   GamePriceSnapshot,
   GameProfile,
   GameSummary,
@@ -30,6 +31,7 @@ const playerSnapshots: PlayerCountSnapshot[] = [...mockPlayerSnapshots];
 const users: User[] = [...mockUsers];
 const watchlistItems: WatchlistItem[] = [...mockWatchlistItems];
 const priceAlerts: PriceAlert[] = [...mockPriceAlerts];
+const dayMs = 24 * 60 * 60 * 1000;
 const integrationLogs: IntegrationLog[] = [
   {
     id: "log-mock-mode",
@@ -68,6 +70,85 @@ export function listGames(): Game[] {
 
 export function getGameById(id: string): Game | null {
   return games.find((game) => game.id === id || game.slug === id) ?? null;
+}
+
+export function getGameBySteamAppId(steamAppId: number): Game | null {
+  return games.find((game) => game.steamAppId === steamAppId) ?? null;
+}
+
+export function importGameFromCatalog(input: GameImportInput): GameSummary {
+  const existing = getGameBySteamAppId(input.steamAppId) ?? getGameById(input.id);
+  if (existing) {
+    return getGameSummary(existing);
+  }
+
+  const now = new Date();
+  const game: Game = {
+    id: input.id,
+    steamAppId: input.steamAppId,
+    title: input.title,
+    slug: input.slug,
+    platform: input.platform,
+    description: input.description,
+    coverUrl: input.coverUrl,
+    genres: input.genres,
+    developer: input.developer,
+    publisher: input.publisher,
+    releaseDate: input.releaseDate,
+    reviewScore: input.reviewScore,
+    createdAt: now,
+    updatedAt: now
+  };
+  games.push(game);
+
+  const previousPlayers = Math.max(0, Math.round(input.currentPlayers / Math.max(input.trendFactor, 0.1)));
+  playerSnapshots.push(
+    {
+      id: `players-${input.id}-import-previous`,
+      gameId: input.id,
+      steamAppId: input.steamAppId,
+      playersOnline: previousPlayers,
+      capturedAt: new Date(now.getTime() - dayMs),
+      source: "mock"
+    },
+    {
+      id: `players-${input.id}-import-current`,
+      gameId: input.id,
+      steamAppId: input.steamAppId,
+      playersOnline: input.currentPlayers,
+      capturedAt: now,
+      source: "mock"
+    }
+  );
+
+  priceSnapshots.push({
+    id: `price-${input.id}-import-current`,
+    gameId: input.id,
+    price: input.currentPrice,
+    historicalLow: input.historicalLow,
+    basePrice: input.basePrice,
+    discountPercent: input.basePrice === 0 ? 0 : Math.max(0, Math.round((1 - input.currentPrice / input.basePrice) * 100)),
+    storeName: "Steam",
+    currency: "PLN",
+    capturedAt: now,
+    source: "mock"
+  });
+
+  storeOffers.push({
+    id: `offer-${input.id}-import-steam`,
+    gameId: input.id,
+    storeName: "Steam",
+    price: input.currentPrice,
+    currency: "PLN",
+    discountPercent: input.basePrice === 0 ? 0 : Math.max(0, Math.round((1 - input.currentPrice / input.basePrice) * 100)),
+    url: `https://store.steampowered.com/app/${input.steamAppId}`,
+    isOfficial: true,
+    drm: "Steam",
+    updatedAt: now,
+    source: "mock"
+  });
+
+  return getGameSummary(game);
 }
 
 export function searchGames(query: string): GameSummary[] {

@@ -1,4 +1,4 @@
-export type RouteName = "home" | "search" | "deals" | "watchlist" | "diagnostics" | "about" | "game";
+export type RouteName = "home" | "search" | "stats" | "deals" | "watchlist" | "diagnostics" | "about" | "game";
 
 export type RouteState =
   | { name: Exclude<RouteName, "game"> }

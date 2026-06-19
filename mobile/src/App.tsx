@@ -9,6 +9,7 @@ import { DiagnosticsView } from "@/views/DiagnosticsView";
 import { GameDetailsView } from "@/views/GameDetailsView";
 import { HomeView } from "@/views/HomeView";
 import { SearchView } from "@/views/SearchView";
+import { StatsView } from "@/views/StatsView";
 import { WatchlistView } from "@/views/WatchlistView";
 import type { RouteName, RouteState } from "@/routes";
 
@@ -41,6 +42,7 @@ export function App(): React.ReactElement {
       <main className="mx-auto max-w-md px-4 py-5">
         {route.name === "home" ? <HomeView onOpenGame={(gameId) => openGame(gameId, "home")} /> : null}
         {route.name === "search" ? <SearchView onOpenGame={(gameId) => openGame(gameId, "search")} /> : null}
+        {route.name === "stats" ? <StatsView onOpenGame={(gameId) => openGame(gameId, "stats")} /> : null}
         {route.name === "deals" ? <DealsView onOpenGame={(gameId) => openGame(gameId, "deals")} /> : null}
         {route.name === "watchlist" ? <WatchlistView onOpenGame={(gameId) => openGame(gameId, "watchlist")} /> : null}
         {route.name === "diagnostics" ? <DiagnosticsView /> : null}

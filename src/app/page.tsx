@@ -5,13 +5,16 @@ import { GameCard } from "@/components/game-card";
 import { SearchBox } from "@/components/forms/search-box";
 import { formatNumber } from "@/lib/format";
 import { gameSearchService } from "@/lib/services/game-search-service";
+import { statsService } from "@/lib/services/stats-service";
+import type { ApiStatsGame } from "@shared/api-types";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage(): Promise<React.ReactElement> {
-  const [bestDeals, activeGames] = await Promise.all([
+  const [bestDeals, activeGames, stats] = await Promise.all([
     gameSearchService.bestDeals(4),
-    gameSearchService.mostActive(4)
+    gameSearchService.mostActive(4),
+    statsService.overview(6)
   ]);
   const topScore = bestDeals[0]?.score.score ?? 0;
   const totalPlayers = activeGames.reduce((sum, summary) => sum + (summary.latestPlayers?.playersOnline ?? 0), 0);
@@ -69,6 +72,20 @@ export default async function HomePage(): Promise<React.ReactElement> {
 
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-semibold text-white">Steam Stats overview</h2>
+          <span className="rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 text-xs font-semibold text-radar-violet">
+            {stats.mode.toUpperCase()}
+          </span>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <StatsPanel title="Top players" games={stats.topPlayers.slice(0, 4)} />
+          <StatsPanel title="Trending" games={stats.trending.slice(0, 4)} />
+          <StatsPanel title="Best value" games={stats.bestValue.slice(0, 4)} />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
           <h2 className="text-xl font-semibold text-white">Najbardziej aktywne gry</h2>
           <span className="rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2 py-1 text-xs font-semibold text-radar-cyan">
             High activity
@@ -80,7 +97,51 @@ export default async function HomePage(): Promise<React.ReactElement> {
           ))}
         </div>
       </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold text-white">Categories</h2>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {stats.categories.slice(0, 6).map((category) => (
+            <article key={category.id} className="surface rounded-lg p-4">
+              <h3 className="font-semibold text-white">{category.title}</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-400">{category.description}</p>
+              <div className="mt-4 space-y-2">
+                {category.games.slice(0, 3).map((game) => (
+                  <div key={game.id} className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
+                    <span className="truncate text-sm font-semibold text-white">{game.title}</span>
+                    <span className="text-xs text-radar-cyan">{formatNumber(game.currentPlayers)}</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
+  );
+}
+
+function StatsPanel({ games, title }: { games: ApiStatsGame[]; title: string }): React.ReactElement {
+  return (
+    <article className="surface rounded-lg p-4">
+      <h3 className="font-semibold text-white">{title}</h3>
+      <div className="mt-4 space-y-3">
+        {games.map((game) => (
+          <div key={game.id} className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{game.title}</p>
+              <p className="text-xs text-slate-400">
+                {formatNumber(game.currentPlayers)} players - {game.playerTrendPercent >= 0 ? "+" : ""}
+                {game.playerTrendPercent}%
+              </p>
+            </div>
+            <span className="rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2 py-1 text-xs font-semibold text-radar-cyan">
+              {game.gameValueScore}
+            </span>
+          </div>
+        ))}
+      </div>
+    </article>
   );
 }
 

@@ -21,6 +21,45 @@ export class SteamApiService {
     return repositories.snapshots.latestPlayersBySteamAppId(steamAppId);
   }
 
+  async refreshPlayerCount(steamAppId: number): Promise<PlayerCountSnapshot | null> {
+    const game = (await repositories.games.list()).find((item) => item.steamAppId === steamAppId);
+    if (!game) {
+      await repositories.diagnostics.recordIntegrationLog({
+        service: "steam",
+        level: "warning",
+        message: `Steam player refresh skipped for unknown app ${steamAppId}.`
+      });
+      return null;
+    }
+
+    const current = await this.getCurrentPlayers(steamAppId);
+    if (!current) {
+      return null;
+    }
+
+    const snapshot: PlayerCountSnapshot = {
+      ...current,
+      id: `players-${game.id}-refresh-${Date.now()}`,
+      gameId: game.id,
+      capturedAt: new Date()
+    };
+    await repositories.snapshots.appendPlayers(snapshot);
+    return snapshot;
+  }
+
+  async refreshManyPlayerCounts(steamAppIds: number[], limit = 10): Promise<PlayerCountSnapshot[]> {
+    const results: PlayerCountSnapshot[] = [];
+
+    for (const steamAppId of steamAppIds.slice(0, limit)) {
+      const snapshot = await this.refreshPlayerCount(steamAppId);
+      if (snapshot) {
+        results.push(snapshot);
+      }
+    }
+
+    return results;
+  }
+
   private async trySteamPlayerEndpoint(steamAppId: number): Promise<PlayerCountSnapshot | null> {
     try {
       const url = `https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${steamAppId}`;

@@ -1,11 +1,11 @@
-import { BadgePercent, Home, Info, Search, Server, Star } from "lucide-react";
+import { Activity, Home, Info, Search, Server, Star } from "lucide-react";
 
 import type { RouteName } from "@/routes";
 
 const items: Array<{ route: RouteName; label: string; icon: React.ComponentType<{ size?: number }> }> = [
   { route: "home", label: "Home", icon: Home },
   { route: "search", label: "Search", icon: Search },
-  { route: "deals", label: "Deals", icon: BadgePercent },
+  { route: "stats", label: "Stats", icon: Activity },
   { route: "watchlist", label: "Watch", icon: Star },
   { route: "diagnostics", label: "Status", icon: Server },
   { route: "about", label: "About", icon: Info }

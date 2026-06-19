@@ -124,6 +124,14 @@ export type GameSummary = {
   score: GameValueResult;
 };
 
+export type GameImportInput = Omit<Game, "createdAt" | "updatedAt"> & {
+  basePrice: number;
+  currentPrice: number;
+  historicalLow: number;
+  currentPlayers: number;
+  trendFactor: number;
+};
+
 export type GameProfile = GameSummary & {
   priceHistory: GamePriceSnapshot[];
   playerHistory: PlayerCountSnapshot[];

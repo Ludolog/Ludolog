@@ -19,19 +19,25 @@ export function GameCard({
       onClick={() => onOpen(summary.game.id)}
       className="surface w-full overflow-hidden rounded-lg text-left active:scale-[0.99]"
     >
-      <img src={summary.game.coverUrl} alt="" className="h-28 w-full object-cover" loading="lazy" />
+      <img src={summary.game.coverUrl} alt="" className="h-32 w-full object-cover" loading="lazy" />
       <div className="space-y-4 p-4">
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="line-clamp-2 font-semibold text-white">{summary.game.title}</h3>
+              <h3 className="line-clamp-2 text-lg font-semibold leading-snug text-white">{summary.game.title}</h3>
               <p className="mt-1 text-xs text-slate-400">{summary.game.platform}</p>
             </div>
             <span className="rounded-md border border-radar-green/30 bg-radar-green/10 px-2 py-1 text-xs font-semibold text-radar-green">
               -{summary.latestPrice?.discountPercent ?? 0}%
             </span>
           </div>
-          <ScoreBadge score={summary.score} />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2.5 py-1 text-xs font-semibold text-radar-cyan">
+              <Activity size={14} />
+              {formatNumber(summary.latestPlayers?.playersOnline)} online
+            </span>
+            <ScoreBadge score={summary.score} />
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-xs text-slate-400">

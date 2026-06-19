@@ -159,6 +159,18 @@ Production releases should use HTTPS and a deployed backend URL:
 VITE_API_BASE_URL=https://apka-seven.vercel.app
 ```
 
+## Search, Steam Stats and backend ownership
+
+The Android app now uses backend endpoints for expanded search and Steam/player statistics:
+
+- `GET /api/games/search?q=`
+- `POST /api/games/import`
+- `GET /api/stats/overview`
+
+Search results can come from the local database or from the backend fallback Steam catalog. Importing a catalog result is also a backend operation. The APK never calls Steam directly and must never contain `STEAM_API_KEY`, database URLs, Neon credentials or signing secrets.
+
+Steam Stats in the mobile UI are based on backend `PlayerCountSnapshot` records. Trends use the latest two player snapshots. If live Steam access is unavailable, the backend returns mock/fallback values and records an integration log; the Android app simply displays the API response.
+
 For production CORS, set `MOBILE_ALLOWED_ORIGINS` explicitly on the backend. Do not rely on development defaults.
 
 Local Android development:

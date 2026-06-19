@@ -3,6 +3,8 @@ import type { HttpResponse } from "@capacitor/core";
 import type {
   ApiAdminStatus,
   ApiGameProfile,
+  ApiImportGameResponse,
+  ApiStatsOverview,
   BestDealsResponse,
   SearchResponse,
   WatchlistCreateResponse,
@@ -67,7 +69,7 @@ export class ApiClientError extends Error {
 }
 
 type RequestOptions = RequestInit & {
-  expectedStatus?: number;
+  expectedStatus?: number | number[];
 };
 
 export const DEFAULT_ANDROID_EMULATOR_API_URL = "http://10.0.2.2:3000";
@@ -113,13 +115,15 @@ export function createApiClient(baseUrl: string, transport: ApiClientTransport =
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
 
   async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const expectedStatus = options.expectedStatus ?? 200;
+    const expectedStatuses = Array.isArray(options.expectedStatus)
+      ? options.expectedStatus
+      : [options.expectedStatus ?? 200];
     const url = `${normalizedBaseUrl}${path}`;
 
     try {
       const response = await transport.request(url, options);
 
-      if (response.status !== expectedStatus) {
+      if (!expectedStatuses.includes(response.status)) {
         const details = errorMessageFromData(response.data, response.status);
         throw new ApiClientError({
           baseUrl: normalizedBaseUrl,
@@ -154,8 +158,15 @@ export function createApiClient(baseUrl: string, transport: ApiClientTransport =
     baseUrl: normalizedBaseUrl,
     getRuntimeInfo: () => getRuntimeInfo(transport.kind),
     searchGames: (query: string) => request<SearchResponse>(`/api/games/search?q=${encodeURIComponent(query)}`),
+    importGame: (input: { steamAppId?: number; slug?: string }) =>
+      request<ApiImportGameResponse>("/api/games/import", {
+        method: "POST",
+        expectedStatus: [200, 201],
+        body: JSON.stringify(input)
+      }),
     getGameProfile: (id: string) => request<ApiGameProfile>(`/api/games/${encodeURIComponent(id)}`),
     getBestDeals: (limit = 8) => request<BestDealsResponse>(`/api/deals/best?limit=${limit}`),
+    getStatsOverview: () => request<ApiStatsOverview>("/api/stats/overview"),
     getWatchlist: () => request<WatchlistResponse>("/api/watchlist"),
     addToWatchlist: (gameId: string) =>
       request<WatchlistCreateResponse>("/api/watchlist", {

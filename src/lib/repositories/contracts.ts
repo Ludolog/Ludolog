@@ -1,6 +1,7 @@
 import type {
   AdminStatus,
   Game,
+  GameImportInput,
   GamePriceSnapshot,
   GameProfile,
   GameSummary,
@@ -20,7 +21,9 @@ export type WatchlistWithSummary = WatchlistItem & {
 export interface GameRepository {
   list(): Promise<Game[]>;
   findById(id: string): Promise<Game | null>;
+  findBySteamAppId(steamAppId: number): Promise<Game | null>;
   search(query: string): Promise<GameSummary[]>;
+  importFromCatalog(input: GameImportInput): Promise<GameSummary>;
   getSummary(id: string): Promise<GameSummary | null>;
   getProfile(id: string): Promise<GameProfile | null>;
   bestDeals(limit?: number): Promise<GameSummary[]>;

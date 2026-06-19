@@ -15,6 +15,7 @@ import type {
   AdminStatus,
   DataSource,
   Game,
+  GameImportInput,
   GamePriceSnapshot,
   GameProfile,
   GameSummary,
@@ -164,6 +165,11 @@ class PrismaGameRepository implements GameRepository {
     return game ? mapGame(game) : null;
   }
 
+  async findBySteamAppId(steamAppId: number): Promise<Game | null> {
+    const game = await prisma.game.findUnique({ where: { steamAppId } });
+    return game ? mapGame(game) : null;
+  }
+
   async search(query: string): Promise<GameSummary[]> {
     const normalized = query.trim();
     const games = await prisma.game.findMany({
@@ -177,6 +183,117 @@ class PrismaGameRepository implements GameRepository {
     });
     const summaries = await Promise.all(games.map((game) => this.summaryForGame(mapGame(game))));
     return summaries.filter((summary): summary is GameSummary => summary !== null).sort((a, b) => b.score.score - a.score.score);
+  }
+
+  async importFromCatalog(input: GameImportInput): Promise<GameSummary> {
+    const existing = await this.findBySteamAppId(input.steamAppId);
+    if (existing) {
+      const summary = await this.summaryForGame(existing);
+      if (summary) {
+        return summary;
+      }
+    }
+
+    const now = new Date();
+    const game = await prisma.game.upsert({
+      where: { steamAppId: input.steamAppId },
+      update: {
+        title: input.title,
+        slug: input.slug,
+        platform: input.platform,
+        description: input.description,
+        coverUrl: input.coverUrl,
+        genres: input.genres,
+        developer: input.developer,
+        publisher: input.publisher,
+        releaseDate: new Date(input.releaseDate),
+        reviewScore: input.reviewScore
+      },
+      create: {
+        id: input.id,
+        steamAppId: input.steamAppId,
+        title: input.title,
+        slug: input.slug,
+        platform: input.platform,
+        description: input.description,
+        coverUrl: input.coverUrl,
+        genres: input.genres,
+        developer: input.developer,
+        publisher: input.publisher,
+        releaseDate: new Date(input.releaseDate),
+        reviewScore: input.reviewScore,
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+
+    const gameId = game.id;
+    const discountPercent =
+      input.basePrice === 0 ? 0 : Math.max(0, Math.round((1 - input.currentPrice / input.basePrice) * 100));
+    await prisma.storeOffer.upsert({
+      where: { id: `offer-${input.id}-import-steam` },
+      update: {
+        price: input.currentPrice,
+        discountPercent,
+        updatedAt: now
+      },
+      create: {
+        id: `offer-${input.id}-import-steam`,
+        gameId,
+        storeName: "Steam",
+        price: input.currentPrice,
+        currency: "PLN",
+        discountPercent,
+        url: `https://store.steampowered.com/app/${input.steamAppId}`,
+        isOfficial: true,
+        drm: "Steam",
+        source: "mock",
+        updatedAt: now
+      }
+    });
+
+    await prisma.gamePriceSnapshot.create({
+      data: {
+        id: `price-${input.id}-import-${now.getTime()}`,
+        gameId,
+        price: input.currentPrice,
+        historicalLow: input.historicalLow,
+        basePrice: input.basePrice,
+        discountPercent,
+        storeName: "Steam",
+        currency: "PLN",
+        capturedAt: now,
+        source: "mock"
+      }
+    });
+
+    const previousPlayers = Math.max(0, Math.round(input.currentPlayers / Math.max(input.trendFactor, 0.1)));
+    await prisma.playerCountSnapshot.createMany({
+      data: [
+        {
+          id: `players-${input.id}-import-previous-${now.getTime()}`,
+          gameId,
+          steamAppId: input.steamAppId,
+          playersOnline: previousPlayers,
+          capturedAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+          source: "mock"
+        },
+        {
+          id: `players-${input.id}-import-current-${now.getTime()}`,
+          gameId,
+          steamAppId: input.steamAppId,
+          playersOnline: input.currentPlayers,
+          capturedAt: now,
+          source: "mock"
+        }
+      ]
+    });
+
+    const summary = await this.getSummary(gameId);
+    if (!summary) {
+      throw new Error(`Imported game ${input.title} could not be summarized.`);
+    }
+    return summary;
   }
 
   async getSummary(id: string): Promise<GameSummary | null> {

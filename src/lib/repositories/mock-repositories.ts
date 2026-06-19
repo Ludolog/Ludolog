@@ -8,6 +8,7 @@ import {
   getAdminStatus,
   getBestDeals,
   getGameById,
+  getGameBySteamAppId,
   getGameProfile,
   getGameSummary,
   getLatestPlayersBySteamAppId,
@@ -15,6 +16,7 @@ import {
   getOffersForGame,
   getPlayerHistory,
   getPriceHistory,
+  importGameFromCatalog,
   listGames,
   listIntegrationLogs,
   listPriceAlerts,
@@ -31,7 +33,7 @@ import type {
   SnapshotRepository,
   WatchlistRepository
 } from "@/lib/repositories/contracts";
-import type { GamePriceSnapshot, PlayerCountSnapshot } from "@/lib/types";
+import type { GameImportInput, GamePriceSnapshot, PlayerCountSnapshot } from "@/lib/types";
 
 class MockGameRepository implements GameRepository {
   async list() {
@@ -42,8 +44,16 @@ class MockGameRepository implements GameRepository {
     return getGameById(id);
   }
 
+  async findBySteamAppId(steamAppId: number) {
+    return getGameBySteamAppId(steamAppId);
+  }
+
   async search(query: string) {
     return searchGames(query);
+  }
+
+  async importFromCatalog(input: GameImportInput) {
+    return importGameFromCatalog(input);
   }
 
   async getSummary(id: string) {

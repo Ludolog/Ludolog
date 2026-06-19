@@ -17,6 +17,15 @@ export const watchlistCreateSchema = z.object({
   targetPrice: z.number().positive().max(9999).nullable().optional()
 });
 
+export const gameImportSchema = z
+  .object({
+    steamAppId: z.number().int().positive().optional(),
+    slug: z.string().trim().min(1).max(120).optional()
+  })
+  .refine((value) => value.steamAppId !== undefined || value.slug !== undefined, {
+    message: "steamAppId or slug is required."
+  });
+
 export const priceAlertCreateSchema = z.object({
   gameId: z.string().trim().min(1),
   thresholdPrice: z.number().positive().max(9999)

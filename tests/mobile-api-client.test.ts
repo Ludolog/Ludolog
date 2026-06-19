@@ -82,4 +82,27 @@ describe("mobile api client", () => {
       url: "https://apka-seven.vercel.app/api/admin/status"
     } satisfies Partial<ApiClientError>);
   });
+
+  it("calls the stats overview endpoint", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ topPlayers: [], trending: [], bestValue: [], categories: [], mode: "mock", updatedAt: "2026-06-19T00:00:00.000Z" }), { status: 200 }));
+    const client = createApiClient("https://apka-seven.vercel.app", createFetchTransport(fetcher as unknown as Fetcher));
+
+    await client.getStatsOverview();
+
+    expect(fetcher.mock.calls[0]?.[0]).toBe("https://apka-seven.vercel.app/api/stats/overview");
+  });
+
+  it("posts catalog imports as JSON", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ imported: true, summary: { game: { id: "palworld" } } }), { status: 201 }));
+    const client = createApiClient("https://apka-seven.vercel.app", createFetchTransport(fetcher as unknown as Fetcher));
+
+    await client.importGame({ steamAppId: 1623730 });
+
+    const [url, options] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+    const headers = options.headers as Headers;
+    expect(url).toBe("https://apka-seven.vercel.app/api/games/import");
+    expect(options.method).toBe("POST");
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(options.body).toBe(JSON.stringify({ steamAppId: 1623730 }));
+  });
 });
