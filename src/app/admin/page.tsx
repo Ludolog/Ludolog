@@ -2,6 +2,7 @@
 import { AlertTriangle, Database, RefreshCw, Server } from "lucide-react";
 
 import { RefreshButton } from "@/components/forms/refresh-button";
+import { AdminActionButton } from "@/components/forms/admin-action-button";
 import { formatDate, formatNumber, formatPrice } from "@/lib/format";
 import { repositories } from "@/lib/repositories";
 import { gameSearchService } from "@/lib/services/game-search-service";
@@ -35,9 +36,35 @@ export default async function AdminPage(): Promise<React.ReactElement> {
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatusCard icon={<Database size={18} />} label="Mode" value={status.mode.toUpperCase()} />
         <StatusCard icon={<Database size={18} />} label="Games" value={String(status.gameCount)} />
+        <StatusCard icon={<Database size={18} />} label="Steam catalog" value={String(status.steamCatalogEntryCount)} />
+        <StatusCard icon={<Database size={18} />} label="Imported" value={String(status.importedGameCount)} />
         <StatusCard icon={<Database size={18} />} label="Offers" value={String(status.offerCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Price snapshots" value={String(status.priceSnapshotCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Player snapshots" value={String(status.playerSnapshotCount)} />
+      </section>
+
+      <section className="surface rounded-lg p-5">
+        <h2 className="text-lg font-semibold text-white">Steam catalog status</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Manual admin actions only. Do not run large syncs during normal user traffic.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <AdminActionButton
+            endpoint="/api/admin/steam-catalog/sync"
+            label="Sync catalog dry run"
+            body={{ dryRun: true, maxPages: 1, maxResults: 1000 }}
+          />
+          <AdminActionButton
+            endpoint="/api/admin/steam-catalog/sync"
+            label="Sync catalog limited"
+            body={{ dryRun: false, maxPages: 1, maxResults: 1000 }}
+          />
+          <AdminActionButton
+            endpoint="/api/admin/player-counts/refresh"
+            label="Refresh top players"
+            body={{ mode: "top", limit: 25 }}
+          />
+        </div>
       </section>
 
       <section className="surface rounded-lg p-5">

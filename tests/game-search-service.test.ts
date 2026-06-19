@@ -17,5 +17,16 @@ describe("GameSearchService", () => {
     expect(palworld).toBeDefined();
     expect(palworld?.kind).toMatch(/library|catalog/);
     expect(typeof palworld?.importable).toBe("boolean");
+    expect(["database", "steam-catalog", "mock-catalog"]).toContain(palworld?.source);
+  });
+
+  it("imports a fallback catalog game as a normal library game", async () => {
+    const response = await gameSearchService.importGame({ steamAppId: 1623730 });
+
+    expect(response.summary.game.title).toBe("Palworld");
+    expect(response.summary.game.source).toBe("mock");
+
+    const results = await gameSearchService.searchCatalog("palworld");
+    expect(results[0]?.kind).toBe("library");
   });
 });

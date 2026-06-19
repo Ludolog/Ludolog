@@ -2,6 +2,8 @@ export type DateString = string;
 
 export type DataMode = "mock" | "api";
 
+export type StatsDataMode = "real" | "mixed" | "mock";
+
 export type DataSource = "mock" | "steam-api" | "price-api" | "prisma";
 
 export type Recommendation = "buy_now" | "wait" | "weak_deal";
@@ -19,6 +21,7 @@ export type ApiGame = {
   publisher: string;
   releaseDate: DateString;
   reviewScore: number;
+  source: DataSource;
   createdAt: DateString;
   updatedAt: DateString;
 };
@@ -85,6 +88,7 @@ export type ApiGameSummary = {
 export type ApiGameSearchResult = {
   kind: "library" | "catalog";
   importable: boolean;
+  source: "database" | "steam-catalog" | "mock-catalog";
   game: ApiGame;
   summary: ApiGameSummary | null;
   currentPlayers: number;
@@ -134,8 +138,18 @@ export type ApiStatsOverview = {
   popularWatchlists: ApiStatsGame[];
   hiddenGems: ApiStatsGame[];
   categories: ApiStatsCategory[];
+  dataFreshness: {
+    latestSteamCatalogSync: DateString | null;
+    latestPlayerCountRefresh: DateString | null;
+  };
+  sourceCounts: {
+    importedGames: number;
+    steamCatalogEntries: number;
+    realPlayerSnapshots: number;
+    mockPlayerSnapshots: number;
+  };
   updatedAt: DateString;
-  mode: DataMode;
+  mode: StatsDataMode;
 };
 
 export type ApiGameProfile = ApiGameSummary & {
@@ -167,6 +181,10 @@ export type ApiIntegrationLog = {
 export type ApiAdminStatus = {
   mode: DataMode;
   gameCount: number;
+  steamCatalogEntryCount: number;
+  importedGameCount: number;
+  lastSteamCatalogSync: DateString | null;
+  lastPlayerCountRefresh: DateString | null;
   offerCount: number;
   priceSnapshotCount: number;
   playerSnapshotCount: number;

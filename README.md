@@ -77,12 +77,16 @@ DATA_MODE=mock
 REPOSITORY_PROVIDER=mock
 DATABASE_URL="postgresql://gamevalue:gamevalue@localhost:5432/gamevalue_radar?schema=public"
 DIRECT_URL="postgresql://gamevalue:gamevalue@localhost:5432/gamevalue_radar?schema=public"
+# Backend-only Steam Web API key. Never expose this to mobile.
+STEAM_WEB_API_KEY=""
+# Legacy name accepted for backward compatibility; prefer STEAM_WEB_API_KEY.
 STEAM_API_KEY=""
 PRICE_API_PROVIDER="mock"
 PRICE_API_KEY=""
 ISTHEREANYDEAL_API_KEY=""
 GG_DEALS_API_KEY=""
 MOBILE_ALLOWED_ORIGINS="capacitor://localhost,http://localhost,http://localhost:5173,http://127.0.0.1:5173"
+CRON_SECRET=""
 ```
 
 ## Data modes
@@ -115,6 +119,11 @@ MOBILE_ALLOWED_ORIGINS="capacitor://localhost,http://localhost,http://localhost:
 - `GET /api/stats/trending`
 - `GET /api/stats/top-players`
 - `GET /api/stats/best-value`
+- `GET /api/admin/steam-catalog/status`
+- `POST /api/admin/steam-catalog/sync`
+- `POST /api/admin/player-counts/refresh`
+- `POST /api/games/:id/refresh-players`
+- `POST /api/cron/refresh-player-counts`
 - `GET /api/watchlist`
 - `POST /api/watchlist`
 - `DELETE /api/watchlist/:id`
@@ -127,11 +136,25 @@ The scoring algorithm is implemented in `src/lib/services/deal-score-service.ts`
 
 ## Expanded search and Steam Stats
 
-Search now combines local database results with a larger Steam fallback catalog. If a result is already stored, clients can open its profile immediately. If it only exists in the catalog, the client can call `POST /api/games/import` with a `steamAppId` or `slug`; the backend creates the game, mock price/player snapshots and a Steam offer. UI components never hardcode the catalog.
+Search now combines local database results, synced Steam catalog entries stored in PostgreSQL and the larger mock fallback catalog. If a result is already stored, clients can open its profile immediately. If it only exists in the catalog, the client can call `POST /api/games/import` with a `steamAppId` or `slug`; the backend creates the game, attempts a current-player refresh and keeps the import working even when Steam is unavailable. UI components never hardcode the catalog.
 
-Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending games, biggest growth/drop, best value, watchlist popularity, hidden gems and genre categories. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app uses mock snapshots and logs the fallback.
+Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending games, biggest growth/drop, best value, watchlist popularity, hidden gems, genre categories, data freshness and source counts. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app uses mock snapshots and logs the fallback.
 
-Android never calls Steam directly and never receives API keys. The mobile app calls the Vercel/Next.js API, and backend services own Steam/player-count refreshes.
+Android never calls Steam directly and never receives API keys. The mobile app calls the Vercel/Next.js API, and backend services own Steam catalog sync and player-count refreshes.
+
+Admin/dev Steam operations:
+
+```bash
+curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync \
+  -H "Content-Type: application/json" \
+  -d "{\"dryRun\":true,\"maxPages\":1,\"maxResults\":1000}"
+
+curl -X POST https://apka-seven.vercel.app/api/admin/player-counts/refresh \
+  -H "Content-Type: application/json" \
+  -d "{\"mode\":\"top\",\"limit\":25}"
+```
+
+`POST /api/cron/refresh-player-counts` is prepared for a future Vercel Cron job and is protected by `CRON_SECRET` in production. Do not commit `STEAM_WEB_API_KEY`, `CRON_SECRET`, database URLs or mobile signing secrets.
 
 Weights:
 
@@ -170,6 +193,7 @@ src/lib/mock-data.ts    Demonstration fixtures
 src/lib/store.ts        Mock repository layer
 src/lib/repositories    Repository contracts and mock/prisma implementations
 prisma/schema.prisma    PostgreSQL data model
+prisma/migrations       Database migrations, including Steam catalog storage
 prisma/seed.ts          Demonstration seed
 docs/project-analysis.md
 tests

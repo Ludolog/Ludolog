@@ -48,6 +48,7 @@ model Game {
   publisher            String
   releaseDate          DateTime
   reviewScore          Int
+  source               DataSource            @default(mock)
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   offers               StoreOffer[]
@@ -56,6 +57,25 @@ model Game {
   watchlistItems       Watchlist[]
   priceAlerts          PriceAlert[]
   scoreSnapshots       DealScoreSnapshot[]
+}
+
+model SteamCatalogEntry {
+  id                String     @id
+  steamAppId        Int        @unique
+  title             String
+  appType           String
+  lastModified      Int?
+  priceChangeNumber Int?
+  isGame            Boolean    @default(true)
+  isActive          Boolean    @default(true)
+  source            DataSource @default(steam_api)
+  syncedAt          DateTime
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([title])
+  @@index([isGame, isActive])
+  @@index([syncedAt])
 }
 
 model StoreOffer {

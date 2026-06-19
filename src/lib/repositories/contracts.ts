@@ -8,6 +8,8 @@ import type {
   IntegrationLog,
   PlayerCountSnapshot,
   PriceAlert,
+  SteamCatalogEntry,
+  SteamCatalogStatus,
   StoreOffer,
   WatchlistItem
 } from "@/lib/types";
@@ -20,6 +22,7 @@ export type WatchlistWithSummary = WatchlistItem & {
 
 export interface GameRepository {
   list(): Promise<Game[]>;
+  listImported(limit?: number): Promise<Game[]>;
   findById(id: string): Promise<Game | null>;
   findBySteamAppId(steamAppId: number): Promise<Game | null>;
   search(query: string): Promise<GameSummary[]>;
@@ -29,6 +32,20 @@ export interface GameRepository {
   bestDeals(limit?: number): Promise<GameSummary[]>;
   mostActive(limit?: number): Promise<GameSummary[]>;
   listOffers(gameId: string): Promise<StoreOffer[]>;
+}
+
+export type SteamCatalogUpsertInput = Omit<SteamCatalogEntry, "createdAt" | "updatedAt">;
+
+export type SteamCatalogUpsertResult = {
+  created: number;
+  updated: number;
+};
+
+export interface SteamCatalogRepository {
+  search(query: string, limit?: number): Promise<SteamCatalogEntry[]>;
+  findBySteamAppId(steamAppId: number): Promise<SteamCatalogEntry | null>;
+  upsertMany(entries: SteamCatalogUpsertInput[]): Promise<SteamCatalogUpsertResult>;
+  status(): Promise<SteamCatalogStatus>;
 }
 
 export interface WatchlistRepository {
@@ -47,6 +64,8 @@ export interface SnapshotRepository {
   listPrices(gameId: string): Promise<GamePriceSnapshot[]>;
   listPlayers(gameId: string): Promise<PlayerCountSnapshot[]>;
   latestPlayersBySteamAppId(steamAppId: number): Promise<PlayerCountSnapshot | null>;
+  latestPlayerRefresh(): Promise<Date | null>;
+  countPlayerSnapshotsBySource(source: "mock" | "steam-api"): Promise<number>;
   appendPrice(snapshot: GamePriceSnapshot): Promise<void>;
   appendPlayers(snapshot: PlayerCountSnapshot): Promise<void>;
 }
@@ -60,6 +79,7 @@ export interface DiagnosticsRepository {
 export interface AppRepositories {
   provider: RepositoryProvider;
   games: GameRepository;
+  steamCatalog: SteamCatalogRepository;
   watchlist: WatchlistRepository;
   alerts: AlertRepository;
   snapshots: SnapshotRepository;

@@ -165,11 +165,37 @@ The Android app now uses backend endpoints for expanded search and Steam/player 
 
 - `GET /api/games/search?q=`
 - `POST /api/games/import`
+- `POST /api/games/{id}/refresh-players`
 - `GET /api/stats/overview`
+- `GET /api/admin/status`
 
-Search results can come from the local database or from the backend fallback Steam catalog. Importing a catalog result is also a backend operation. The APK never calls Steam directly and must never contain `STEAM_API_KEY`, database URLs, Neon credentials or signing secrets.
+Search results can come from the local database, the backend-synced Steam catalog or the backend mock fallback catalog. Mobile search shows source badges:
+
+- `In library` for games already imported into `Game`,
+- `Steam catalog` for synced `SteamCatalogEntry` rows from Neon,
+- `Mock fallback` when the real catalog is empty or unavailable.
+
+Importing a catalog result is also a backend operation. The APK never calls Steam directly and must never contain `STEAM_WEB_API_KEY`, `STEAM_API_KEY`, database URLs, Neon credentials or signing secrets.
 
 Steam Stats in the mobile UI are based on backend `PlayerCountSnapshot` records. Trends use the latest two player snapshots. If live Steam access is unavailable, the backend returns mock/fallback values and records an integration log; the Android app simply displays the API response.
+
+The Stats screen shows a data mode badge:
+
+- `Real data` when catalog and player snapshots are real,
+- `Mixed data` when real and fallback data are combined,
+- `Mock fallback` when the app is running on demonstration data.
+
+Game details can call `POST /api/games/{id}/refresh-players`. This still goes through the Next.js backend, which owns the Steam Web API key and stores the refreshed `PlayerCountSnapshot`.
+
+Diagnostics should show:
+
+- `API base URL`,
+- backend status,
+- Steam catalog entry count,
+- imported game count,
+- last Steam catalog sync,
+- last player-count refresh,
+- current data mode.
 
 For production CORS, set `MOBILE_ALLOWED_ORIGINS` explicitly on the backend. Do not rely on development defaults.
 
@@ -184,6 +210,21 @@ Production Android build:
 ```env
 VITE_API_BASE_URL=https://apka-seven.vercel.app
 ```
+
+For a production API debug APK, build in this order:
+
+```bash
+npm run mobile:build:prod
+npm run mobile:sync:prod
+npm run android:build
+```
+
+After installation on the emulator, open Diagnostics and confirm:
+
+- API base URL is `https://apka-seven.vercel.app`,
+- backend status is OK,
+- Home, Search, Deals, Game Details and Stats load through the Vercel API,
+- no screen reports `10.0.2.2`, `localhost` or `127.0.0.1` in the production bundle.
 
 ## Release build notes
 

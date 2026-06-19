@@ -1,4 +1,3 @@
-import { getDataMode } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
 import type { GameProfile } from "@/lib/types";
 import type { ApiStatsCategory, ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
@@ -15,6 +14,13 @@ export class StatsService {
       await Promise.all(games.map((game) => repositories.games.getProfile(game.id)))
     ).filter((profile): profile is GameProfile => profile !== null);
     const watchlist = await repositories.watchlist.list();
+    const [catalogStatus, realPlayerSnapshots, mockPlayerSnapshots, importedGames, latestPlayerRefresh] = await Promise.all([
+      repositories.steamCatalog.status(),
+      repositories.snapshots.countPlayerSnapshotsBySource("steam-api"),
+      repositories.snapshots.countPlayerSnapshotsBySource("mock"),
+      repositories.games.listImported(500),
+      repositories.snapshots.latestPlayerRefresh()
+    ]);
     const watchlistCounts = new Map<string, number>();
 
     for (const item of watchlist) {
@@ -45,10 +51,30 @@ export class StatsService {
       popularWatchlists: byWatchlists.slice(0, limit).map(statsGame),
       hiddenGems: hiddenGems.slice(0, limit).map(statsGame),
       categories: buildCategories(sources),
+      dataFreshness: {
+        latestSteamCatalogSync: catalogStatus.lastSyncedAt?.toISOString() ?? null,
+        latestPlayerCountRefresh: latestPlayerRefresh?.toISOString() ?? null
+      },
+      sourceCounts: {
+        importedGames: importedGames.length,
+        steamCatalogEntries: catalogStatus.entryCount,
+        realPlayerSnapshots,
+        mockPlayerSnapshots
+      },
       updatedAt: new Date().toISOString(),
-      mode: getDataMode()
+      mode: resolveStatsMode(realPlayerSnapshots, mockPlayerSnapshots)
     };
   }
+}
+
+function resolveStatsMode(realPlayerSnapshots: number, mockPlayerSnapshots: number): "real" | "mixed" | "mock" {
+  if (realPlayerSnapshots > 0 && mockPlayerSnapshots === 0) {
+    return "real";
+  }
+  if (realPlayerSnapshots > 0 && mockPlayerSnapshots > 0) {
+    return "mixed";
+  }
+  return "mock";
 }
 
 function buildCategories(sources: StatsSource[]): ApiStatsCategory[] {

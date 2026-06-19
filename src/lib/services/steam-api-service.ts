@@ -1,4 +1,4 @@
-import { getDataMode } from "@/lib/config";
+import { getDataMode, getSteamWebApiKey } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
 import type { PlayerCountSnapshot } from "@/lib/types";
 
@@ -11,11 +11,17 @@ type SteamPlayersResponse = {
 
 export class SteamApiService {
   async getCurrentPlayers(steamAppId: number): Promise<PlayerCountSnapshot | null> {
-    if (getDataMode() === "api") {
+    if (getDataMode() === "api" && getSteamWebApiKey()) {
       const live = await this.trySteamPlayerEndpoint(steamAppId);
       if (live) {
         return live;
       }
+    } else if (getDataMode() === "api" && !getSteamWebApiKey()) {
+      await repositories.diagnostics.recordIntegrationLog({
+        service: "steam",
+        level: "warning",
+        message: `STEAM_WEB_API_KEY is not configured. Player count for app ${steamAppId} used cached/mock fallback.`
+      });
     }
 
     return repositories.snapshots.latestPlayersBySteamAppId(steamAppId);
@@ -47,7 +53,7 @@ export class SteamApiService {
     return snapshot;
   }
 
-  async refreshManyPlayerCounts(steamAppIds: number[], limit = 10): Promise<PlayerCountSnapshot[]> {
+  async refreshManyPlayerCounts(steamAppIds: number[], limit = 25): Promise<PlayerCountSnapshot[]> {
     const results: PlayerCountSnapshot[] = [];
 
     for (const steamAppId of steamAppIds.slice(0, limit)) {
@@ -61,39 +67,54 @@ export class SteamApiService {
   }
 
   private async trySteamPlayerEndpoint(steamAppId: number): Promise<PlayerCountSnapshot | null> {
-    try {
-      const url = `https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=${steamAppId}`;
-      const response = await fetch(url, { next: { revalidate: 300 } });
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const url = new URL("https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/");
+        url.searchParams.set("appid", String(steamAppId));
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8_000);
+        const response = await fetch(url, { next: { revalidate: 300 }, signal: controller.signal }).finally(() =>
+          clearTimeout(timeout)
+        );
 
-      if (!response.ok) {
-        throw new Error(`Steam API responded with ${response.status}`);
+        if (response.status === 404) {
+          throw new Error("Steam API has no player-count data for this app.");
+        }
+
+        if (!response.ok) {
+          throw new Error(`Steam API responded with ${response.status}`);
+        }
+
+        const payload = (await response.json()) as SteamPlayersResponse;
+        const playersOnline = payload.response?.player_count;
+
+        if (typeof playersOnline !== "number") {
+          throw new Error("Steam API response did not include player_count.");
+        }
+
+        return {
+          id: `steam-api-${steamAppId}-${Date.now()}`,
+          gameId: `steam-app-${steamAppId}`,
+          steamAppId,
+          playersOnline,
+          capturedAt: new Date(),
+          source: "steam-api"
+        };
+      } catch (error) {
+        if (attempt === 2) {
+          await repositories.diagnostics.recordIntegrationLog({
+            service: "steam",
+            level: "warning",
+            message: `Steam player endpoint failed for app ${steamAppId}: ${
+              error instanceof Error ? error.message : "unknown error"
+            }. Cached/mock fallback was used.`
+          });
+          return null;
+        }
       }
-
-      const payload = (await response.json()) as SteamPlayersResponse;
-      const playersOnline = payload.response?.player_count;
-
-      if (typeof playersOnline !== "number") {
-        throw new Error("Steam API response did not include player_count.");
-      }
-
-      return {
-        id: `steam-api-${steamAppId}-${Date.now()}`,
-        gameId: `steam-app-${steamAppId}`,
-        steamAppId,
-        playersOnline,
-        capturedAt: new Date(),
-        source: "steam-api"
-      };
-    } catch (error) {
-      await repositories.diagnostics.recordIntegrationLog({
-        service: "steam",
-        level: "warning",
-        message: `Steam player endpoint failed for app ${steamAppId}: ${
-          error instanceof Error ? error.message : "unknown error"
-        }. Mock fallback was used.`
-      });
-      return null;
     }
+
+    return null;
   }
 }
 

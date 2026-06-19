@@ -165,6 +165,10 @@ export function createApiClient(baseUrl: string, transport: ApiClientTransport =
         body: JSON.stringify(input)
       }),
     getGameProfile: (id: string) => request<ApiGameProfile>(`/api/games/${encodeURIComponent(id)}`),
+    refreshGamePlayers: (id: string) =>
+      request<{ profile: ApiGameProfile | null; snapshot: unknown }>(`/api/games/${encodeURIComponent(id)}/refresh-players`, {
+        method: "POST"
+      }),
     getBestDeals: (limit = 8) => request<BestDealsResponse>(`/api/deals/best?limit=${limit}`),
     getStatsOverview: () => request<ApiStatsOverview>("/api/stats/overview"),
     getWatchlist: () => request<WatchlistResponse>("/api/watchlist"),

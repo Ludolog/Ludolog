@@ -56,6 +56,10 @@ export function DiagnosticsView(): React.ReactElement {
         <Metric label="Offers" value={formatNumber(status.offerCount)} />
         <Metric label="Alerts" value={formatNumber(status.alertCount)} />
         <Metric label="Price snapshots" value={formatNumber(status.priceSnapshotCount)} />
+        <Metric label="Steam catalog" value={formatNumber(status.steamCatalogEntryCount)} />
+        <Metric label="Imported games" value={formatNumber(status.importedGameCount)} />
+        <Metric label="Last catalog sync" value={status.lastSteamCatalogSync ? formatShortDate(status.lastSteamCatalogSync) : "n/a"} />
+        <Metric label="Last player refresh" value={status.lastPlayerCountRefresh ? formatShortDate(status.lastPlayerCountRefresh) : "n/a"} />
       </section>
 
       <section className="surface rounded-lg p-4">

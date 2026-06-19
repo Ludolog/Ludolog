@@ -4,7 +4,9 @@ import {
   appendPlayerSnapshot,
   appendPriceSnapshot,
   checkTriggeredAlerts,
+  countPlayerSnapshotsBySource,
   createPriceAlert,
+  findSteamCatalogEntryBySteamAppId,
   getAdminStatus,
   getBestDeals,
   getGameById,
@@ -12,18 +14,23 @@ import {
   getGameProfile,
   getGameSummary,
   getLatestPlayersBySteamAppId,
+  getLatestPlayerRefresh,
   getMostActiveGames,
   getOffersForGame,
   getPlayerHistory,
   getPriceHistory,
   importGameFromCatalog,
+  listImportedGames,
   listGames,
   listIntegrationLogs,
   listPriceAlerts,
   listWatchlist,
   recordIntegrationLog,
   removeWatchlistItem,
-  searchGames
+  searchGames,
+  searchSteamCatalogEntries,
+  upsertSteamCatalogEntries,
+  getSteamCatalogStatus
 } from "@/lib/store";
 import type {
   AlertRepository,
@@ -31,6 +38,8 @@ import type {
   DiagnosticsRepository,
   GameRepository,
   SnapshotRepository,
+  SteamCatalogRepository,
+  SteamCatalogUpsertInput,
   WatchlistRepository
 } from "@/lib/repositories/contracts";
 import type { GameImportInput, GamePriceSnapshot, PlayerCountSnapshot } from "@/lib/types";
@@ -38,6 +47,10 @@ import type { GameImportInput, GamePriceSnapshot, PlayerCountSnapshot } from "@/
 class MockGameRepository implements GameRepository {
   async list() {
     return listGames();
+  }
+
+  async listImported(limit?: number) {
+    return listImportedGames(limit);
   }
 
   async findById(id: string) {
@@ -74,6 +87,24 @@ class MockGameRepository implements GameRepository {
 
   async listOffers(gameId: string) {
     return getOffersForGame(gameId);
+  }
+}
+
+class MockSteamCatalogRepository implements SteamCatalogRepository {
+  async search(query: string, limit?: number) {
+    return searchSteamCatalogEntries(query, limit);
+  }
+
+  async findBySteamAppId(steamAppId: number) {
+    return findSteamCatalogEntryBySteamAppId(steamAppId);
+  }
+
+  async upsertMany(entries: SteamCatalogUpsertInput[]) {
+    return upsertSteamCatalogEntries(entries);
+  }
+
+  async status() {
+    return getSteamCatalogStatus();
   }
 }
 
@@ -118,6 +149,14 @@ class MockSnapshotRepository implements SnapshotRepository {
     return getLatestPlayersBySteamAppId(steamAppId);
   }
 
+  async latestPlayerRefresh() {
+    return getLatestPlayerRefresh();
+  }
+
+  async countPlayerSnapshotsBySource(source: "mock" | "steam-api") {
+    return countPlayerSnapshotsBySource(source);
+  }
+
   async appendPrice(snapshot: GamePriceSnapshot) {
     appendPriceSnapshot(snapshot);
   }
@@ -145,6 +184,7 @@ export function createMockRepositories(): AppRepositories {
   return {
     provider: "mock",
     games: new MockGameRepository(),
+    steamCatalog: new MockSteamCatalogRepository(),
     watchlist: new MockWatchlistRepository(),
     alerts: new MockAlertRepository(),
     snapshots: new MockSnapshotRepository(),

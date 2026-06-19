@@ -26,6 +26,17 @@ export const gameImportSchema = z
     message: "steamAppId or slug is required."
   });
 
+export const steamCatalogSyncSchema = z.object({
+  dryRun: z.boolean().optional(),
+  maxPages: z.number().int().positive().max(10).optional(),
+  maxResults: z.number().int().positive().max(5000).optional()
+});
+
+export const playerCountsRefreshSchema = z.object({
+  mode: z.enum(["watchlist", "top", "all-imported"]).default("top"),
+  limit: z.number().int().positive().max(50).default(25)
+});
+
 export const priceAlertCreateSchema = z.object({
   gameId: z.string().trim().min(1),
   thresholdPrice: z.number().positive().max(9999)

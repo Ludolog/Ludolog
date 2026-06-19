@@ -19,6 +19,8 @@ import type {
   IntegrationLog,
   PlayerCountSnapshot,
   PriceAlert,
+  SteamCatalogEntry,
+  SteamCatalogStatus,
   StoreOffer,
   User,
   WatchlistItem
@@ -28,6 +30,7 @@ const games: Game[] = [...mockGames];
 const storeOffers: StoreOffer[] = [...mockStoreOffers];
 const priceSnapshots: GamePriceSnapshot[] = [...mockPriceSnapshots];
 const playerSnapshots: PlayerCountSnapshot[] = [...mockPlayerSnapshots];
+const steamCatalogEntries: SteamCatalogEntry[] = [];
 const users: User[] = [...mockUsers];
 const watchlistItems: WatchlistItem[] = [...mockWatchlistItems];
 const priceAlerts: PriceAlert[] = [...mockPriceAlerts];
@@ -68,6 +71,13 @@ export function listGames(): Game[] {
   return [...games].sort((a, b) => a.title.localeCompare(b.title));
 }
 
+export function listImportedGames(limit = 50): Game[] {
+  return games
+    .filter((game) => game.source !== "mock")
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, limit);
+}
+
 export function getGameById(id: string): Game | null {
   return games.find((game) => game.id === id || game.slug === id) ?? null;
 }
@@ -96,6 +106,7 @@ export function importGameFromCatalog(input: GameImportInput): GameSummary {
     publisher: input.publisher,
     releaseDate: input.releaseDate,
     reviewScore: input.reviewScore,
+    source: input.source,
     createdAt: now,
     updatedAt: now
   };
@@ -259,12 +270,66 @@ export function getLatestPlayersBySteamAppId(steamAppId: number): PlayerCountSna
   return latestByDate(playerSnapshots.filter((snapshot) => snapshot.steamAppId === steamAppId));
 }
 
+export function getLatestPlayerRefresh(): Date | null {
+  return latestByDate(playerSnapshots)?.capturedAt ?? null;
+}
+
+export function countPlayerSnapshotsBySource(source: "mock" | "steam-api"): number {
+  return playerSnapshots.filter((snapshot) => snapshot.source === source).length;
+}
+
 export function appendPriceSnapshot(snapshot: GamePriceSnapshot): void {
   priceSnapshots.push(snapshot);
 }
 
 export function appendPlayerSnapshot(snapshot: PlayerCountSnapshot): void {
   playerSnapshots.push(snapshot);
+}
+
+export function searchSteamCatalogEntries(query: string, limit = 12): SteamCatalogEntry[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+
+  return steamCatalogEntries
+    .filter((entry) => entry.isGame && entry.isActive && entry.title.toLowerCase().includes(normalized))
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .slice(0, limit);
+}
+
+export function findSteamCatalogEntryBySteamAppId(steamAppId: number): SteamCatalogEntry | null {
+  return steamCatalogEntries.find((entry) => entry.steamAppId === steamAppId) ?? null;
+}
+
+export function upsertSteamCatalogEntries(
+  entries: Array<Omit<SteamCatalogEntry, "createdAt" | "updatedAt">>
+): { created: number; updated: number } {
+  let created = 0;
+  let updated = 0;
+  const now = new Date();
+
+  for (const entry of entries) {
+    const existing = steamCatalogEntries.find((item) => item.steamAppId === entry.steamAppId);
+    if (existing) {
+      Object.assign(existing, entry, { updatedAt: now });
+      updated += 1;
+    } else {
+      steamCatalogEntries.push({ ...entry, createdAt: now, updatedAt: now });
+      created += 1;
+    }
+  }
+
+  return { created, updated };
+}
+
+export function getSteamCatalogStatus(): SteamCatalogStatus {
+  const latest = latestByDate(steamCatalogEntries.map((entry) => ({ capturedAt: entry.syncedAt })));
+  return {
+    entryCount: steamCatalogEntries.length,
+    activeGameCount: steamCatalogEntries.filter((entry) => entry.isGame && entry.isActive).length,
+    lastSyncedAt: latest?.capturedAt ?? null
+  };
 }
 
 export function listWatchlist(userId = DEMO_USER_ID): Array<WatchlistItem & { summary: GameSummary | null }> {
@@ -366,6 +431,10 @@ export function getAdminStatus(): AdminStatus {
   return {
     mode: getDataMode(),
     gameCount: games.length,
+    steamCatalogEntryCount: steamCatalogEntries.length,
+    importedGameCount: games.filter((game) => game.source !== "mock").length,
+    lastSteamCatalogSync: getSteamCatalogStatus().lastSyncedAt,
+    lastPlayerCountRefresh: getLatestPlayerRefresh(),
     offerCount: storeOffers.length,
     priceSnapshotCount: priceSnapshots.length,
     playerSnapshotCount: playerSnapshots.length,

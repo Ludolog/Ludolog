@@ -23,6 +23,8 @@ REPOSITORY_PROVIDER=prisma
 DATA_MODE=mock
 NEXT_PUBLIC_APP_URL=https://apka-seven.vercel.app
 MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
+STEAM_WEB_API_KEY=
+CRON_SECRET=
 ```
 
 Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT_URL`. Replace `TWOJE_HASLO` only inside Vercel settings or local ignored env files.
@@ -73,7 +75,10 @@ DATABASE_URL=...
 DIRECT_URL=...
 NEXT_PUBLIC_APP_URL=https://apka-seven.vercel.app
 MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
+STEAM_WEB_API_KEY=
+# Legacy fallback name is still accepted, but new environments should use STEAM_WEB_API_KEY.
 STEAM_API_KEY=
+CRON_SECRET=
 PRICE_API_PROVIDER=mock
 PRICE_API_KEY=
 ISTHEREANYDEAL_API_KEY=
@@ -85,6 +90,8 @@ Notes:
 - `REPOSITORY_PROVIDER=prisma` makes API routes use PostgreSQL through Prisma repositories.
 - `DATA_MODE` controls external integrations/mock fallbacks, not the database provider.
 - `MOBILE_ALLOWED_ORIGINS` should be explicit in production. Do not use `*`.
+- `STEAM_WEB_API_KEY` is backend-only. It enables real Steam catalog sync and real current-player refreshes.
+- `CRON_SECRET` protects `/api/cron/refresh-player-counts` in production. Do not expose it to mobile.
 - Mobile public config uses `VITE_API_BASE_URL`; secrets must never use the `VITE_` prefix.
 
 ## 3. Deploy to Vercel
@@ -116,6 +123,12 @@ The first migration is stored in:
 prisma/migrations/000001_init/migration.sql
 ```
 
+The Steam catalog migration is stored in:
+
+```text
+prisma/migrations/000002_steam_catalog/migration.sql
+```
+
 ## 5. Seed demo data
 
 For a demo production database:
@@ -135,6 +148,7 @@ https://apka-seven.vercel.app/api/admin/status
 https://apka-seven.vercel.app/api/deals/best
 https://apka-seven.vercel.app/api/games/search?q=cyberpunk
 https://apka-seven.vercel.app/api/stats/overview
+https://apka-seven.vercel.app/api/admin/steam-catalog/status
 ```
 
 `/api/admin/status` should show non-zero game and snapshot counts after seed.
@@ -161,7 +175,7 @@ The production fallback in code is also `https://apka-seven.vercel.app`, so prod
 
 ## Expanded search and Steam Stats deployment notes
 
-The Vercel backend owns Steam catalog/search fallback, player-count refreshes and stats aggregation. Mobile builds only receive the public `VITE_API_BASE_URL`.
+The Vercel backend owns Steam catalog sync, search fallback, player-count refreshes and stats aggregation. Mobile builds only receive the public `VITE_API_BASE_URL`.
 
 Useful production checks after deploy:
 
@@ -170,9 +184,40 @@ https://apka-seven.vercel.app/api/games/search?q=palworld
 https://apka-seven.vercel.app/api/stats/overview
 https://apka-seven.vercel.app/api/stats/top-players
 https://apka-seven.vercel.app/api/stats/best-value
+https://apka-seven.vercel.app/api/admin/steam-catalog/status
 ```
 
-If `STEAM_API_KEY` or provider-specific API keys are not configured, the app should continue in mock/fallback mode and record integration logs. Never add those secrets to `mobile/.env.production` or any committed file.
+If `STEAM_WEB_API_KEY`, legacy `STEAM_API_KEY` or provider-specific API keys are not configured, the app continues in mock/fallback mode and records integration logs. Never add those secrets to `mobile/.env.production` or any committed file.
+
+Manual Steam catalog sync:
+
+```bash
+curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync \
+  -H "Content-Type: application/json" \
+  -d "{\"dryRun\":true,\"maxPages\":1,\"maxResults\":1000}"
+```
+
+After verifying the dry run, run a limited write sync:
+
+```bash
+curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync \
+  -H "Content-Type: application/json" \
+  -d "{\"dryRun\":false,\"maxPages\":1,\"maxResults\":1000}"
+```
+
+Manual player-count refresh:
+
+```bash
+curl -X POST https://apka-seven.vercel.app/api/admin/player-counts/refresh \
+  -H "Content-Type: application/json" \
+  -d "{\"mode\":\"top\",\"limit\":25}"
+```
+
+Cron readiness:
+
+- `POST /api/cron/refresh-player-counts` is ready for a future Vercel Cron job.
+- In production it requires `CRON_SECRET` through the `x-cron-secret` or `authorization: Bearer ...` header.
+- Do not refresh the entire Steam catalog on every user request or every build. Catalog sync is manual/admin-only at this stage, and player-count refreshes are capped to small batches.
 
 ## 8. Build debug APK
 

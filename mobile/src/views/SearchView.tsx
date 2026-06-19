@@ -61,7 +61,7 @@ export function SearchView({ onOpenGame }: { onOpenGame: (gameId: string) => voi
       <section className="surface rounded-lg p-4">
         <h1 className="text-xl font-semibold text-white">Search Steam catalog</h1>
         <p className="mt-1 text-sm leading-6 text-slate-400">
-          Results combine your database with a larger fallback Steam catalog.
+          Results combine imported games, synced Steam catalog entries and mock fallback data.
         </p>
         <form onSubmit={onSubmit} className="mt-4 flex gap-2">
           <label className="sr-only" htmlFor="mobile-search">
@@ -119,7 +119,7 @@ function SearchResultCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2 className="line-clamp-2 font-semibold text-white">{result.game.title}</h2>
-            <p className="mt-1 text-xs text-slate-400">{result.importable ? "Steam catalog" : "In library"}</p>
+            <p className="mt-1 text-xs text-slate-400">{sourceLabel(result)}</p>
           </div>
           <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2 py-1 text-xs font-semibold text-radar-cyan">
             {result.importable ? <Download size={13} /> : <Search size={13} />}
@@ -143,4 +143,14 @@ function SearchResultCard({
       </div>
     </button>
   );
+}
+
+function sourceLabel(result: ApiGameSearchResult): string {
+  if (!result.importable) {
+    return "In library";
+  }
+  if (result.source === "steam-catalog") {
+    return "Steam catalog";
+  }
+  return "Mock fallback";
 }

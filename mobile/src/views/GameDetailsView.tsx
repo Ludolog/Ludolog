@@ -1,4 +1,4 @@
-import { ArrowLeft, Star } from "lucide-react";
+import { ArrowLeft, RefreshCw, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiClient } from "@/api/client";
@@ -19,6 +19,7 @@ export function GameDetailsView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [watchStatus, setWatchStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [refreshStatus, setRefreshStatus] = useState<"idle" | "refreshing" | "done" | "error">("idle");
 
   async function load(): Promise<void> {
     setLoading(true);
@@ -40,6 +41,19 @@ export function GameDetailsView({
       setWatchStatus("saved");
     } catch {
       setWatchStatus("error");
+    }
+  }
+
+  async function refreshPlayers(): Promise<void> {
+    setRefreshStatus("refreshing");
+    try {
+      const response = await apiClient.refreshGamePlayers(gameId);
+      if (response.profile) {
+        setProfile(response.profile);
+      }
+      setRefreshStatus("done");
+    } catch {
+      setRefreshStatus("error");
     }
   }
 
@@ -90,6 +104,29 @@ export function GameDetailsView({
       </section>
 
       <section className="surface rounded-lg p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase text-slate-500">Player count source</p>
+            <p className="mt-1 text-lg font-semibold text-white">{playerSourceLabel(profile.latestPlayers?.source)}</p>
+            <p className="mt-1 text-xs text-slate-400">
+              Last refreshed: {profile.latestPlayers ? new Date(profile.latestPlayers.capturedAt).toLocaleString("pl-PL") : "n/a"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={refreshPlayers}
+            disabled={refreshStatus === "refreshing"}
+            className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md bg-radar-cyan px-3 text-xs font-semibold text-slate-950 disabled:opacity-70"
+          >
+            <RefreshCw size={15} className={refreshStatus === "refreshing" ? "animate-spin" : ""} />
+            Refresh
+          </button>
+        </div>
+        {refreshStatus === "error" ? <p className="mt-2 text-sm text-radar-red">Player refresh failed.</p> : null}
+        {refreshStatus === "done" ? <p className="mt-2 text-sm text-radar-green">Player count refreshed.</p> : null}
+      </section>
+
+      <section className="surface rounded-lg p-4">
         <p className="text-xs uppercase text-slate-500">Recommendation</p>
         <p className="mt-1 text-lg font-semibold text-white">{recommendationLabel(profile.score.recommendation)}</p>
         <p className="mt-2 text-sm leading-6 text-slate-400">{profile.score.reason}</p>
@@ -123,6 +160,16 @@ export function GameDetailsView({
       </section>
     </div>
   );
+}
+
+function playerSourceLabel(source: string | undefined): string {
+  if (source === "steam-api") {
+    return "Real Steam";
+  }
+  if (source === "mock") {
+    return "Mock";
+  }
+  return "Cached";
 }
 
 function Metric({ label, value }: { label: string; value: string }): React.ReactElement {

@@ -140,7 +140,9 @@ Rekomendacje:
 
 ## Expanded catalog search and Steam Stats
 
-Search now goes beyond the records already stored in the active repository. `GameSearchService` first asks the repository, then augments sparse results with `SteamAppCatalogService`, a fallback catalog of popular Steam titles. Catalog results are marked as importable. `POST /api/games/import` turns an importable catalog game into a normal observable game with mock price/player snapshots and a Steam offer.
+Search now goes beyond the records already stored in the active repository. `GameSearchService` first asks the `Game` repository, then checks synced `SteamCatalogEntry` records stored in PostgreSQL, and finally falls back to `SteamAppCatalogService`, a local catalog of popular Steam titles used when external access is not configured. Catalog results are marked as importable. `POST /api/games/import` turns an importable catalog game into a normal observable game and attempts a backend player-count refresh.
+
+`SteamCatalogEntry` stores the synced Steam application catalog separately from imported games. This prevents the app from creating thousands of full `Game` records before a title is actually observed by the user. Catalog sync is manual/admin-only and uses capped pagination through `IStoreService/GetAppList`; it must not run during Next.js build or on every page visit.
 
 `StatsService` builds analytical sections from `PlayerCountSnapshot`, price snapshots and GameValue Score:
 
@@ -153,3 +155,13 @@ Search now goes beyond the records already stored in the active repository. `Gam
 - multiplayer/co-op, RPG, indie and strategy leaders.
 
 Trend percentage is calculated from the latest two player-count snapshots. If live Steam access is not configured or fails, backend services fall back to mock values and record an integration log. Android remains a client of the backend API and never calls Steam or receives API keys.
+
+The stats overview exposes a data mode:
+
+- `real` when both catalog and player snapshots come from real integrations,
+- `mixed` when real data and fallback data coexist,
+- `mock` when the app operates fully on demonstration data.
+
+This transparency is important for the thesis because the application can be demonstrated without secrets while still showing where real integrations are active.
+
+Player-count refresh is available through backend routes for a single game, admin batches and a future cron endpoint. The cron route is protected by `CRON_SECRET` in production, and batch sizes stay intentionally small to avoid unnecessary Steam API traffic.

@@ -49,9 +49,15 @@ export function StatsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
           <div className="min-w-0">
             <h1 className="text-xl font-semibold text-white">Steam Stats</h1>
             <p className="truncate text-xs text-slate-400">
-              {overview.mode.toUpperCase()} data - updated {new Date(overview.updatedAt).toLocaleTimeString("pl-PL")}
+              {modeLabel(overview.mode)} - updated {new Date(overview.updatedAt).toLocaleTimeString("pl-PL")}
             </p>
           </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+          <MiniMetric label="Catalog" value={formatNumber(overview.sourceCounts.steamCatalogEntries)} />
+          <MiniMetric label="Imported" value={formatNumber(overview.sourceCounts.importedGames)} />
+          <MiniMetric label="Real snaps" value={formatNumber(overview.sourceCounts.realPlayerSnapshots)} />
+          <MiniMetric label="Mock snaps" value={formatNumber(overview.sourceCounts.mockPlayerSnapshots)} />
         </div>
       </section>
 
@@ -76,6 +82,25 @@ export function StatsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
           </div>
         ))}
       </section>
+    </div>
+  );
+}
+
+function modeLabel(mode: ApiStatsOverview["mode"]): string {
+  if (mode === "real") {
+    return "Real data";
+  }
+  if (mode === "mixed") {
+    return "Mixed data";
+  }
+  return "Mock fallback";
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }): React.ReactElement {
+  return (
+    <div className="rounded-md border border-white/10 bg-black/20 px-3 py-2">
+      <p className="uppercase text-slate-500">{label}</p>
+      <p className="mt-1 font-semibold text-white">{value}</p>
     </div>
   );
 }

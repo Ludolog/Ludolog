@@ -8,6 +8,8 @@ import type {
   DiagnosticsRepository,
   GameRepository,
   SnapshotRepository,
+  SteamCatalogRepository,
+  SteamCatalogUpsertInput,
   WatchlistRepository
 } from "@/lib/repositories/contracts";
 import { calculateGameValueScore } from "@/lib/services/deal-score-service";
@@ -22,6 +24,7 @@ import type {
   IntegrationLog,
   PlayerCountSnapshot,
   PriceAlert,
+  SteamCatalogEntry,
   StoreOffer,
   WatchlistItem
 } from "@/lib/types";
@@ -30,6 +33,7 @@ type PrismaGame = Prisma.GameGetPayload<Record<string, never>>;
 type PrismaOffer = Prisma.StoreOfferGetPayload<Record<string, never>>;
 type PrismaPrice = Prisma.GamePriceSnapshotGetPayload<Record<string, never>>;
 type PrismaPlayers = Prisma.PlayerCountSnapshotGetPayload<Record<string, never>>;
+type PrismaSteamCatalogEntry = Prisma.SteamCatalogEntryGetPayload<Record<string, never>>;
 type PrismaWatchlist = Prisma.WatchlistGetPayload<Record<string, never>>;
 type PrismaAlert = Prisma.PriceAlertGetPayload<Record<string, never>>;
 type PrismaLog = Prisma.IntegrationLogGetPayload<Record<string, never>>;
@@ -68,8 +72,26 @@ function mapGame(game: PrismaGame): Game {
     publisher: game.publisher,
     releaseDate: game.releaseDate.toISOString().slice(0, 10),
     reviewScore: game.reviewScore,
+    source: sourceFromPrisma(game.source),
     createdAt: game.createdAt,
     updatedAt: game.updatedAt
+  };
+}
+
+function mapSteamCatalogEntry(entry: PrismaSteamCatalogEntry): SteamCatalogEntry {
+  return {
+    id: entry.id,
+    steamAppId: entry.steamAppId,
+    title: entry.title,
+    appType: entry.appType,
+    lastModified: entry.lastModified,
+    priceChangeNumber: entry.priceChangeNumber,
+    isGame: entry.isGame,
+    isActive: entry.isActive,
+    source: sourceFromPrisma(entry.source),
+    syncedAt: entry.syncedAt,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt
   };
 }
 
@@ -158,6 +180,15 @@ class PrismaGameRepository implements GameRepository {
     return games.map(mapGame);
   }
 
+  async listImported(limit = 50): Promise<Game[]> {
+    const games = await prisma.game.findMany({
+      where: { source: { not: "mock" } },
+      orderBy: { updatedAt: "desc" },
+      take: limit
+    });
+    return games.map(mapGame);
+  }
+
   async findById(id: string): Promise<Game | null> {
     const game = await prisma.game.findFirst({
       where: { OR: [{ id }, { slug: id }] }
@@ -207,7 +238,8 @@ class PrismaGameRepository implements GameRepository {
         developer: input.developer,
         publisher: input.publisher,
         releaseDate: new Date(input.releaseDate),
-        reviewScore: input.reviewScore
+        reviewScore: input.reviewScore,
+        source: sourceToPrisma(input.source)
       },
       create: {
         id: input.id,
@@ -222,6 +254,7 @@ class PrismaGameRepository implements GameRepository {
         publisher: input.publisher,
         releaseDate: new Date(input.releaseDate),
         reviewScore: input.reviewScore,
+        source: sourceToPrisma(input.source),
         createdAt: now,
         updatedAt: now
       }
@@ -381,6 +414,86 @@ class PrismaGameRepository implements GameRepository {
   }
 }
 
+class PrismaSteamCatalogRepository implements SteamCatalogRepository {
+  async search(query: string, limit = 12): Promise<SteamCatalogEntry[]> {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    const entries = await prisma.steamCatalogEntry.findMany({
+      where: {
+        isGame: true,
+        isActive: true,
+        title: { contains: trimmed, mode: "insensitive" }
+      },
+      orderBy: [{ title: "asc" }],
+      take: limit
+    });
+    return entries.map(mapSteamCatalogEntry);
+  }
+
+  async findBySteamAppId(steamAppId: number): Promise<SteamCatalogEntry | null> {
+    const entry = await prisma.steamCatalogEntry.findUnique({ where: { steamAppId } });
+    return entry ? mapSteamCatalogEntry(entry) : null;
+  }
+
+  async upsertMany(entries: SteamCatalogUpsertInput[]) {
+    let created = 0;
+    let updated = 0;
+
+    for (const entry of entries) {
+      const existing = await prisma.steamCatalogEntry.findUnique({ where: { steamAppId: entry.steamAppId } });
+      await prisma.steamCatalogEntry.upsert({
+        where: { steamAppId: entry.steamAppId },
+        update: {
+          title: entry.title,
+          appType: entry.appType,
+          lastModified: entry.lastModified,
+          priceChangeNumber: entry.priceChangeNumber,
+          isGame: entry.isGame,
+          isActive: entry.isActive,
+          source: sourceToPrisma(entry.source),
+          syncedAt: entry.syncedAt
+        },
+        create: {
+          id: entry.id,
+          steamAppId: entry.steamAppId,
+          title: entry.title,
+          appType: entry.appType,
+          lastModified: entry.lastModified,
+          priceChangeNumber: entry.priceChangeNumber,
+          isGame: entry.isGame,
+          isActive: entry.isActive,
+          source: sourceToPrisma(entry.source),
+          syncedAt: entry.syncedAt
+        }
+      });
+      if (existing) {
+        updated += 1;
+      } else {
+        created += 1;
+      }
+    }
+
+    return { created, updated };
+  }
+
+  async status() {
+    const [entryCount, activeGameCount, latest] = await Promise.all([
+      prisma.steamCatalogEntry.count(),
+      prisma.steamCatalogEntry.count({ where: { isGame: true, isActive: true } }),
+      prisma.steamCatalogEntry.findFirst({ orderBy: { syncedAt: "desc" } })
+    ]);
+
+    return {
+      entryCount,
+      activeGameCount,
+      lastSyncedAt: latest?.syncedAt ?? null
+    };
+  }
+}
+
 class PrismaWatchlistRepository implements WatchlistRepository {
   async list(userId = DEMO_USER_ID) {
     const items = await prisma.watchlist.findMany({ where: { userId }, orderBy: { createdAt: "desc" } });
@@ -481,6 +594,15 @@ class PrismaSnapshotRepository implements SnapshotRepository {
     return snapshot ? mapPlayers(snapshot) : null;
   }
 
+  async latestPlayerRefresh(): Promise<Date | null> {
+    const snapshot = await prisma.playerCountSnapshot.findFirst({ orderBy: { capturedAt: "desc" } });
+    return snapshot?.capturedAt ?? null;
+  }
+
+  async countPlayerSnapshotsBySource(source: "mock" | "steam-api"): Promise<number> {
+    return prisma.playerCountSnapshot.count({ where: { source: sourceToPrisma(source) } });
+  }
+
   async appendPrice(snapshot: GamePriceSnapshot): Promise<void> {
     await prisma.gamePriceSnapshot.create({
       data: {
@@ -522,12 +644,26 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
   }
 
   async getAdminStatus(): Promise<AdminStatus> {
-    const [gameCount, offerCount, priceSnapshotCount, playerSnapshotCount, watchlistCount, alertCount, integrationLogs] =
+    const [
+      gameCount,
+      importedGameCount,
+      steamCatalogStatus,
+      offerCount,
+      priceSnapshotCount,
+      playerSnapshotCount,
+      lastPlayerCountRefresh,
+      watchlistCount,
+      alertCount,
+      integrationLogs
+    ] =
       await Promise.all([
         prisma.game.count(),
+        prisma.game.count({ where: { source: { not: "mock" } } }),
+        new PrismaSteamCatalogRepository().status(),
         prisma.storeOffer.count(),
         prisma.gamePriceSnapshot.count(),
         prisma.playerCountSnapshot.count(),
+        new PrismaSnapshotRepository().latestPlayerRefresh(),
         prisma.watchlist.count(),
         prisma.priceAlert.count(),
         this.listIntegrationLogs()
@@ -536,6 +672,10 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
     return {
       mode: getDataMode(),
       gameCount,
+      steamCatalogEntryCount: steamCatalogStatus.entryCount,
+      importedGameCount,
+      lastSteamCatalogSync: steamCatalogStatus.lastSyncedAt,
+      lastPlayerCountRefresh,
       offerCount,
       priceSnapshotCount,
       playerSnapshotCount,
@@ -550,6 +690,7 @@ export function createPrismaRepositories(): AppRepositories {
   return {
     provider: "prisma",
     games: new PrismaGameRepository(),
+    steamCatalog: new PrismaSteamCatalogRepository(),
     watchlist: new PrismaWatchlistRepository(),
     alerts: new PrismaAlertRepository(),
     snapshots: new PrismaSnapshotRepository(),

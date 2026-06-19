@@ -17,7 +17,7 @@ function daysAgo(days: number): Date {
   return new Date(baseDate.getTime() - days * dayMs);
 }
 
-type GameFixture = Omit<Game, "createdAt" | "updatedAt"> & {
+type GameFixture = Omit<Game, "createdAt" | "updatedAt" | "source"> & {
   basePrice: number;
   currentPrice: number;
   historicalLow: number;
@@ -1107,7 +1107,10 @@ const fixtures: GameFixture[] = [
   }
 ];
 
-export const mockGameCatalog: GameImportInput[] = fixtures.map(({ stores: _stores, ...fixture }) => fixture);
+export const mockGameCatalog: GameImportInput[] = fixtures.map(({ stores: _stores, ...fixture }) => ({
+  ...fixture,
+  source: "mock"
+}));
 
 function priceForDay(fixture: GameFixture, dayOffset: number): number {
   if (fixture.currentPrice === 0) {
@@ -1129,6 +1132,7 @@ function playersForDay(fixture: GameFixture, dayOffset: number): number {
 
 export const mockGames: Game[] = fixtures.map((fixture) => ({
   ...fixture,
+  source: "mock",
   createdAt: daysAgo(30),
   updatedAt: baseDate
 }));

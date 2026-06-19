@@ -1,5 +1,7 @@
 export type DataMode = "mock" | "api";
 
+export type StatsDataMode = "real" | "mixed" | "mock";
+
 export type DataSource = "mock" | "steam-api" | "price-api" | "prisma";
 
 export type Recommendation = "buy_now" | "wait" | "weak_deal";
@@ -17,6 +19,22 @@ export type Game = {
   publisher: string;
   releaseDate: string;
   reviewScore: number;
+  source: DataSource;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type SteamCatalogEntry = {
+  id: string;
+  steamAppId: number;
+  title: string;
+  appType: string;
+  lastModified: number | null;
+  priceChangeNumber: number | null;
+  isGame: boolean;
+  isActive: boolean;
+  source: DataSource;
+  syncedAt: Date;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -132,6 +150,12 @@ export type GameImportInput = Omit<Game, "createdAt" | "updatedAt"> & {
   trendFactor: number;
 };
 
+export type SteamCatalogStatus = {
+  entryCount: number;
+  activeGameCount: number;
+  lastSyncedAt: Date | null;
+};
+
 export type GameProfile = GameSummary & {
   priceHistory: GamePriceSnapshot[];
   playerHistory: PlayerCountSnapshot[];
@@ -143,6 +167,10 @@ export type GameProfile = GameSummary & {
 export type AdminStatus = {
   mode: DataMode;
   gameCount: number;
+  steamCatalogEntryCount: number;
+  importedGameCount: number;
+  lastSteamCatalogSync: Date | null;
+  lastPlayerCountRefresh: Date | null;
   offerCount: number;
   priceSnapshotCount: number;
   playerSnapshotCount: number;

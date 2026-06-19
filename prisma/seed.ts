@@ -42,6 +42,7 @@ async function main(): Promise<void> {
       publisher: game.publisher,
       releaseDate: new Date(game.releaseDate),
       reviewScore: game.reviewScore,
+      source: "mock",
       createdAt: game.createdAt,
       updatedAt: game.updatedAt
     }))
