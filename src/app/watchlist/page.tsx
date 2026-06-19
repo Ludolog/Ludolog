@@ -2,6 +2,7 @@
 import { Bell, Star } from "lucide-react";
 
 import { WatchlistRemoveButton } from "@/components/forms/watchlist-remove-button";
+import { GGDealsAttribution } from "@/components/ggdeals-attribution";
 import { ScoreBadge } from "@/components/score-badge";
 import { formatNumber, formatPrice } from "@/lib/format";
 import { repositories } from "@/lib/repositories";
@@ -35,6 +36,8 @@ export default async function WatchlistPage(): Promise<React.ReactElement> {
             if (!summary) {
               return null;
             }
+            const hasGGDealsPrice = summary.latestPrice?.source === "ggdeals" || summary.bestOffer?.source === "ggdeals";
+            const ggDealsUrl = summary.bestOffer?.externalUrl ?? summary.bestOffer?.url ?? summary.latestPrice?.externalUrl;
 
             return (
               <article key={item.id} className="surface rounded-lg p-4">
@@ -61,6 +64,7 @@ export default async function WatchlistPage(): Promise<React.ReactElement> {
                       <span>{formatNumber(summary.latestPlayers?.playersOnline)} players</span>
                       <span>{summary.latestPrice?.discountPercent ?? 0}% discount</span>
                     </div>
+                    {hasGGDealsPrice ? <GGDealsAttribution href={ggDealsUrl} /> : null}
                     <ScoreBadge score={summary.score} />
                   </div>
                   <WatchlistRemoveButton itemId={item.id} />

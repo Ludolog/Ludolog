@@ -2,6 +2,7 @@ import { Activity, Download, Search } from "lucide-react";
 import { FormEvent, useState } from "react";
 
 import { apiClient, describeApiClientError } from "@/api/client";
+import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { formatNumber, formatPrice } from "@/format";
 import type { ApiGameSearchResult } from "@shared/api-types";
@@ -146,43 +147,49 @@ function SearchResultCard({
   onOpen: () => void;
   result: ApiGameSearchResult;
 }): React.ReactElement {
+  const hasGGDealsPrice = result.summary?.latestPrice?.source === "ggdeals" || result.summary?.bestOffer?.source === "ggdeals";
+  const ggDealsUrl = result.summary?.bestOffer?.externalUrl ?? result.summary?.bestOffer?.url ?? result.summary?.latestPrice?.externalUrl;
+
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      disabled={importing}
-      className="surface flex w-full gap-3 rounded-lg p-3 text-left disabled:opacity-70"
-    >
-      <img src={result.game.coverUrl} alt="" className="h-20 w-24 shrink-0 rounded-md object-cover" loading="lazy" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h2 className="line-clamp-2 font-semibold text-white">{result.game.title}</h2>
-            <span className={`mt-2 inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${sourceClass(result)}`}>
-              {sourceLabel(result)}
+    <article className="surface rounded-lg">
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={importing}
+        className="flex w-full gap-3 p-3 text-left disabled:opacity-70"
+      >
+        <img src={result.game.coverUrl} alt="" className="h-20 w-24 shrink-0 rounded-md object-cover" loading="lazy" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="line-clamp-2 font-semibold text-white">{result.game.title}</h2>
+              <span className={`mt-2 inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${sourceClass(result)}`}>
+                {sourceLabel(result)}
+              </span>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2 py-1 text-xs font-semibold text-radar-cyan">
+              {result.importable ? <Download size={13} /> : <Search size={13} />}
+              {importing ? "Importing" : result.importable ? "Import" : "Open"}
             </span>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2 py-1 text-xs font-semibold text-radar-cyan">
-            {result.importable ? <Download size={13} /> : <Search size={13} />}
-            {importing ? "Importing" : result.importable ? "Import" : "Open"}
-          </span>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-2 text-xs">
-          <span className="inline-flex items-center gap-1 rounded-md border border-radar-green/30 bg-radar-green/10 px-2 py-1 text-radar-green">
-            <Activity size={13} />
-            {formatNumber(result.currentPlayers)}
-          </span>
-          <span className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-slate-300">
-            {formatPrice(result.currentPrice)}
-          </span>
-          {result.tags.slice(0, 2).map((tag) => (
-            <span key={tag} className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-slate-300">
-              {tag}
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="inline-flex items-center gap-1 rounded-md border border-radar-green/30 bg-radar-green/10 px-2 py-1 text-radar-green">
+              <Activity size={13} />
+              {formatNumber(result.currentPlayers)}
             </span>
-          ))}
+            <span className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-slate-300">
+              {formatPrice(result.currentPrice)}
+            </span>
+            {result.tags.slice(0, 2).map((tag) => (
+              <span key={tag} className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-slate-300">
+                {tag}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+      {hasGGDealsPrice ? <GGDealsAttribution className="px-3 pb-3" href={ggDealsUrl} /> : null}
+    </article>
   );
 }
 

@@ -3,6 +3,7 @@ import { Activity, BadgePercent, Radar, TrendingUp } from "lucide-react";
 
 import { GameCard } from "@/components/game-card";
 import { SearchBox } from "@/components/forms/search-box";
+import { GGDealsAttribution } from "@/components/ggdeals-attribution";
 import { formatNumber } from "@/lib/format";
 import { gameSearchService } from "@/lib/services/game-search-service";
 import { statsService } from "@/lib/services/stats-service";
@@ -122,6 +123,8 @@ export default async function HomePage(): Promise<React.ReactElement> {
 }
 
 function StatsPanel({ games, title }: { games: ApiStatsGame[]; title: string }): React.ReactElement {
+  const ggDealsGame = games.find((game) => game.priceSource === "ggdeals");
+
   return (
     <article className="surface rounded-lg p-4">
       <h3 className="font-semibold text-white">{title}</h3>
@@ -141,6 +144,7 @@ function StatsPanel({ games, title }: { games: ApiStatsGame[]; title: string }):
           </div>
         ))}
       </div>
+      {ggDealsGame ? <GGDealsAttribution className="mt-4" href={ggDealsGame.priceExternalUrl} /> : null}
     </article>
   );
 }

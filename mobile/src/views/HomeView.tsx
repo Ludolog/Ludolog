@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { apiClient, describeApiClientError } from "@/api/client";
 import { GameCard } from "@/components/GameCard";
+import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { EmptyState, ErrorState, SkeletonList } from "@/components/StateViews";
 import { formatNumber, formatPrice } from "@/format";
 import type { ApiAdminStatus, ApiGameSearchResult, ApiGameSummary, ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
@@ -177,22 +178,24 @@ function StatsStrip({
       <h2 className="text-lg font-semibold text-white">{title}</h2>
       <div className="space-y-2">
         {games.map((game) => (
-          <button
-            key={game.id}
-            type="button"
-            onClick={() => onOpenGame(game.id)}
-            className="surface flex min-h-16 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left"
-          >
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-white">{game.title}</p>
-              <p className="text-xs text-slate-400">
-                {formatNumber(game.currentPlayers)} online - {formatPrice(game.currentPrice)}
-              </p>
-            </div>
-            <span className="shrink-0 rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 text-xs font-semibold text-radar-violet">
-              {game.gameValueScore}/100
-            </span>
-          </button>
+          <article key={game.id} className="surface rounded-lg">
+            <button
+              type="button"
+              onClick={() => onOpenGame(game.id)}
+              className="flex min-h-16 w-full items-center justify-between gap-3 px-3 py-2 text-left"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-white">{game.title}</p>
+                <p className="text-xs text-slate-400">
+                  {formatNumber(game.currentPlayers)} online - {formatPrice(game.currentPrice)}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 text-xs font-semibold text-radar-violet">
+                {game.gameValueScore}/100
+              </span>
+            </button>
+            {game.priceSource === "ggdeals" ? <GGDealsAttribution className="px-3 pb-3" href={game.priceExternalUrl} /> : null}
+          </article>
         ))}
       </div>
     </section>

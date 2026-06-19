@@ -105,7 +105,7 @@ export class GGDealsPriceProvider implements PriceProvider {
   async getPricesBySteamAppId(steamAppId: number): Promise<NormalizedPriceOffer[]> {
     const url = new URL(this.baseUrl);
     url.searchParams.set("key", this.apiKey);
-    url.searchParams.set("steam_app_id", String(steamAppId));
+    url.searchParams.set("ids", String(steamAppId));
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -116,7 +116,8 @@ export class GGDealsPriceProvider implements PriceProvider {
         signal: controller.signal
       });
       if (!response.ok) {
-        throw new Error(`GG.deals API responded with ${response.status}.`);
+        const details = await response.text().catch(() => "");
+        throw new Error(`GG.deals API responded with ${response.status}${summarizeProviderError(details)}.`);
       }
       const payload = await response.json();
       return normalizeGGDealsOffers(payload, steamAppId, new Date());
@@ -298,18 +299,55 @@ function normalizeGGDealsRecord(
   steamAppId: number,
   fetchedAt: Date
 ): NormalizedPriceOffer | null {
-  const price = firstNumber(record, ["price", "currentPrice", "current_price", "amount", "finalPrice", "final_price"]);
+  const price = firstNumber(record, [
+    "price",
+    "price.amount",
+    "price.value",
+    "currentPrice",
+    "currentPrice.amount",
+    "current_price",
+    "current_price.amount",
+    "amount",
+    "finalPrice",
+    "finalPrice.amount",
+    "final_price",
+    "final_price.amount"
+  ]);
   if (price === null) {
     return null;
   }
 
   const discountPercent = firstNumber(record, ["discountPercent", "discount", "discount_percent", "cut"]) ?? 0;
   const regularPrice =
-    firstNumber(record, ["regularPrice", "regular_price", "basePrice", "base_price", "retailPrice", "oldPrice"]) ??
+    firstNumber(record, [
+      "regularPrice",
+      "regularPrice.amount",
+      "regular_price",
+      "regular_price.amount",
+      "basePrice",
+      "basePrice.amount",
+      "base_price",
+      "base_price.amount",
+      "retailPrice",
+      "retailPrice.amount",
+      "oldPrice",
+      "oldPrice.amount"
+    ]) ??
     (discountPercent > 0 ? roundMoney(price / Math.max(0.01, 1 - discountPercent / 100)) : price);
   const storeName = firstString(record, ["storeName", "store", "shopName", "shop", "merchant"]) ?? "GG.deals";
-  const url = firstString(record, ["url", "dealUrl", "deal_url", "redirectUrl", "redirect_url"]) ?? "https://gg.deals/";
-  const historicalLow = firstNumber(record, ["historicalLow", "historical_low", "lowestPrice", "lowest_price"]);
+  const url =
+    firstString(record, ["url", "urlRedirect", "dealUrl", "deal_url", "redirectUrl", "redirect_url"]) ??
+    "https://gg.deals/";
+  const historicalLow = firstNumber(record, [
+    "historicalLow",
+    "historicalLow.amount",
+    "historical_low",
+    "historical_low.amount",
+    "lowestPrice",
+    "lowestPrice.amount",
+    "lowest_price",
+    "lowest_price.amount"
+  ]);
 
   return {
     provider: "ggdeals",
@@ -319,7 +357,7 @@ function normalizeGGDealsRecord(
     price: roundMoney(price),
     regularPrice: regularPrice === null ? null : roundMoney(regularPrice),
     discountPercent: Math.max(0, Math.round(discountPercent)),
-    currency: firstString(record, ["currency", "currencyCode", "currency_code"]) ?? "PLN",
+    currency: firstString(record, ["currency", "price.currency", "currencyCode", "currency_code"]) ?? "PLN",
     url,
     isHistoricalLow: firstBoolean(record, ["isHistoricalLow", "is_historical_low", "historicalLowMatched"]) ?? false,
     historicalLow: historicalLow === null ? null : roundMoney(historicalLow),
@@ -358,7 +396,22 @@ function collectRecords(value: unknown): Array<Record<string, unknown>> {
 }
 
 function looksLikeOffer(record: Record<string, unknown>): boolean {
-  return firstNumber(record, ["price", "currentPrice", "current_price", "amount", "finalPrice", "final_price"]) !== null;
+  return (
+    firstNumber(record, [
+      "price",
+      "price.amount",
+      "price.value",
+      "currentPrice",
+      "currentPrice.amount",
+      "current_price",
+      "current_price.amount",
+      "amount",
+      "finalPrice",
+      "finalPrice.amount",
+      "final_price",
+      "final_price.amount"
+    ]) !== null
+  );
 }
 
 function normalizedOfferToStoreOffer(gameId: string, offer: NormalizedPriceOffer): StoreOffer {
@@ -517,6 +570,14 @@ function roundMoney(value: number): number {
 
 function unique(values: number[]): number[] {
   return [...new Set(values)];
+}
+
+function summarizeProviderError(details: string): string {
+  const trimmed = details.replace(/\s+/g, " ").trim();
+  if (!trimmed) {
+    return "";
+  }
+  return `: ${trimmed.slice(0, 160)}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

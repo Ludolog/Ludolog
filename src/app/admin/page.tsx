@@ -3,6 +3,7 @@ import { AlertTriangle, Database, RefreshCw, Server, ShoppingCart } from "lucide
 
 import { RefreshButton } from "@/components/forms/refresh-button";
 import { AdminActionButton } from "@/components/forms/admin-action-button";
+import { GGDealsAttribution } from "@/components/ggdeals-attribution";
 import { formatDate, formatNumber, formatPrice } from "@/lib/format";
 import { repositories } from "@/lib/repositories";
 import { gameSearchService } from "@/lib/services/game-search-service";
@@ -201,6 +202,9 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             </thead>
             <tbody className="divide-y divide-white/10">
               {gameRows.map(({ game, summary }) => {
+                const hasGGDealsPrice = summary?.latestPrice?.source === "ggdeals" || summary?.bestOffer?.source === "ggdeals";
+                const ggDealsUrl = summary?.bestOffer?.externalUrl ?? summary?.bestOffer?.url ?? summary?.latestPrice?.externalUrl;
+
                 return (
                   <tr key={game.id} className="text-slate-300">
                     <td className="py-3">
@@ -208,7 +212,10 @@ export default async function AdminPage(): Promise<React.ReactElement> {
                         {game.title}
                       </Link>
                     </td>
-                    <td className="py-3">{formatPrice(summary?.bestOffer?.price ?? summary?.latestPrice?.price)}</td>
+                    <td className="py-3">
+                      <span>{formatPrice(summary?.bestOffer?.price ?? summary?.latestPrice?.price)}</span>
+                      {hasGGDealsPrice ? <GGDealsAttribution className="mt-1" href={ggDealsUrl} /> : null}
+                    </td>
                     <td className="py-3">{formatNumber(summary?.latestPlayers?.playersOnline)}</td>
                     <td className="py-3">{summary?.score.score ?? "n/a"}</td>
                     <td className="py-3">

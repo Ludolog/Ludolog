@@ -159,7 +159,11 @@ Price data flows through `PriceProviderService`. The active provider is selected
 - `PRICE_MODE=api`
 - `GGDEALS_API_KEY=...`
 
+The default GG.deals endpoint is `https://gg.deals/api/prices/by-steam-app-id/` and the adapter sends `key` plus `ids=<steamAppId>`. Use `GGDEALS_API_BASE_URL` only if GG.deals provides a project-specific endpoint.
+
 If `PRICE_MODE=mock`, `PRICE_PROVIDER=mock` or the GG.deals key is missing, the backend falls back to `MockPriceProvider` and records an integration log. The key is backend-only: do not commit it and do not expose it through `VITE_` mobile variables. Android and Web call only our API.
+
+GG.deals API terms require personal/hobby use only for free access, visible attribution with an active GG.deals hyperlink wherever GG.deals data is displayed, and preserving GG.deals referral/affiliate links. The UI attribution components link to the stored provider URL when available, falling back to `https://gg.deals/`.
 
 Normalized offers store `provider`, `storeType` (`official`, `keyshop`, `marketplace`, `unknown`), `price`, `regularPrice`, `historicalLow`, `isHistoricalLow`, currency, URL, raw provider id and fetched time. `StoreOffer` stores the current best offers and `GamePriceSnapshot` stores durable price history used by GameValue Score, Best deals and Stats.
 

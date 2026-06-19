@@ -6,6 +6,7 @@ import { PlayerChart } from "@/components/charts/player-chart";
 import { AlertForm } from "@/components/forms/alert-form";
 import { RefreshButton } from "@/components/forms/refresh-button";
 import { WatchlistButton } from "@/components/forms/watchlist-button";
+import { GGDealsAttribution } from "@/components/ggdeals-attribution";
 import { ScoreBadge } from "@/components/score-badge";
 import { formatNumber, formatPrice } from "@/lib/format";
 import { recommendationLabel } from "@/lib/services/deal-score-service";
@@ -27,6 +28,12 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
 
   const { game, latestPrice, latestPlayers, bestOffer, score } = profile;
   const factors = Object.entries(score.factors);
+  const hasGGDealsPrice =
+    latestPrice?.source === "ggdeals" ||
+    bestOffer?.source === "ggdeals" ||
+    profile.offers.some((offer) => offer.source === "ggdeals");
+  const ggDealsOffer = profile.offers.find((offer) => offer.source === "ggdeals");
+  const ggDealsUrl = bestOffer?.externalUrl ?? bestOffer?.url ?? latestPrice?.externalUrl ?? ggDealsOffer?.externalUrl ?? ggDealsOffer?.url;
 
   return (
     <div className="space-y-6">
@@ -74,6 +81,7 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
               <p className="mt-2 text-sm text-slate-400">
                 Current discount: {latestPrice?.discountPercent ?? 0}% from base price.
               </p>
+              {hasGGDealsPrice ? <GGDealsAttribution className="mt-3" href={ggDealsUrl} /> : null}
             </div>
           </div>
 
@@ -98,6 +106,7 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
       <section className="grid gap-6 lg:grid-cols-[1fr_0.72fr]">
         <div className="surface rounded-lg p-5">
           <h2 className="text-lg font-semibold text-white">Store offers</h2>
+          {hasGGDealsPrice ? <GGDealsAttribution className="mt-2" href={ggDealsUrl} /> : null}
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[560px] text-left text-sm">
               <thead className="text-xs uppercase text-slate-500">
@@ -112,7 +121,20 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
               <tbody className="divide-y divide-white/10">
                 {profile.offers.map((offer) => (
                   <tr key={offer.id} className="text-slate-300">
-                    <td className="py-3 font-medium text-white">{offer.storeName}</td>
+                    <td className="py-3 font-medium text-white">
+                      {offer.source === "ggdeals" && (offer.externalUrl ?? offer.url) ? (
+                        <a
+                          href={offer.externalUrl ?? offer.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline underline-offset-2 hover:text-radar-cyan"
+                        >
+                          {offer.storeName}
+                        </a>
+                      ) : (
+                        offer.storeName
+                      )}
+                    </td>
                     <td className="py-3">{formatPrice(offer.price, offer.currency)}</td>
                     <td className="py-3">{offer.discountPercent}%</td>
                     <td className="py-3">{offer.drm}</td>

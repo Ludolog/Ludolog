@@ -3,10 +3,13 @@ import { Activity, BadgePercent, ShoppingCart } from "lucide-react";
 
 import { formatNumber, formatPrice } from "@/lib/format";
 import type { GameSummary } from "@/lib/types";
+import { GGDealsAttribution } from "@/components/ggdeals-attribution";
 import { ScoreBadge } from "@/components/score-badge";
 
 export function GameCard({ summary }: { summary: GameSummary }): React.ReactElement {
   const { game, latestPrice, latestPlayers, bestOffer } = summary;
+  const hasGGDealsPrice = latestPrice?.source === "ggdeals" || bestOffer?.source === "ggdeals";
+  const ggDealsUrl = bestOffer?.externalUrl ?? bestOffer?.url ?? latestPrice?.externalUrl;
 
   return (
     <article className="surface overflow-hidden rounded-lg transition hover:border-radar-cyan/35 hover:shadow-glow">
@@ -54,6 +57,7 @@ export function GameCard({ summary }: { summary: GameSummary }): React.ReactElem
             <span>low</span>
           </div>
         </div>
+        {hasGGDealsPrice ? <GGDealsAttribution href={ggDealsUrl} /> : null}
       </div>
     </article>
   );

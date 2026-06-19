@@ -2,6 +2,7 @@ import { Activity, BadgePercent, TrendingDown, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiClient, describeApiClientError } from "@/api/client";
+import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { EmptyState, ErrorState, SkeletonList } from "@/components/StateViews";
 import { formatNumber, formatPrice, recommendationClass, recommendationLabel } from "@/format";
 import type { ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
@@ -147,42 +148,45 @@ function StatsGameCard({
   const isUp = game.playerTrendPercent >= 0;
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpenGame(game.id)}
-      className="surface flex w-full gap-3 rounded-lg p-3 text-left active:scale-[0.99]"
-    >
-      <img src={game.coverUrl} alt="" className="h-20 w-24 shrink-0 rounded-md object-cover" loading="lazy" />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 font-semibold leading-snug text-white">{game.title}</h3>
-          <span className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold ${recommendationClass(game.recommendation)}`}>
-            {recommendationLabel(game.recommendation)}
-          </span>
+    <article className="surface rounded-lg">
+      <button
+        type="button"
+        onClick={() => onOpenGame(game.id)}
+        className="flex w-full gap-3 p-3 text-left active:scale-[0.99]"
+      >
+        <img src={game.coverUrl} alt="" className="h-20 w-24 shrink-0 rounded-md object-cover" loading="lazy" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="line-clamp-2 font-semibold leading-snug text-white">{game.title}</h3>
+            <span className={`shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold ${recommendationClass(game.recommendation)}`}>
+              {recommendationLabel(game.recommendation)}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-md border border-radar-cyan/25 bg-radar-cyan/10 px-2 py-1 font-semibold text-radar-cyan">
+              {formatNumber(game.currentPlayers)} online
+            </span>
+            <span className={`rounded-md border px-2 py-1 font-semibold ${playerSourceClass(game.playerSource)}`}>
+              {playerSourceLabel(game.playerSource)}
+            </span>
+            <span className={`rounded-md border px-2 py-1 font-semibold ${priceSourceClass(game.priceSource)}`}>
+              {priceSourceLabel(game.priceSource)}
+            </span>
+            <span className={`rounded-md border px-2 py-1 font-semibold ${isUp ? "border-radar-green/30 bg-radar-green/10 text-radar-green" : "border-radar-red/30 bg-radar-red/10 text-radar-red"}`}>
+              {isUp ? "+" : ""}
+              {game.playerTrendPercent}%
+            </span>
+            <span className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-slate-300">
+              {formatPrice(game.currentPrice)}
+            </span>
+            <span className="rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 font-semibold text-radar-violet">
+              {game.gameValueScore}/100
+            </span>
+          </div>
         </div>
-        <div className="mt-2 flex flex-wrap gap-2 text-xs">
-          <span className="rounded-md border border-radar-cyan/25 bg-radar-cyan/10 px-2 py-1 font-semibold text-radar-cyan">
-            {formatNumber(game.currentPlayers)} online
-          </span>
-          <span className={`rounded-md border px-2 py-1 font-semibold ${playerSourceClass(game.playerSource)}`}>
-            {playerSourceLabel(game.playerSource)}
-          </span>
-          <span className={`rounded-md border px-2 py-1 font-semibold ${priceSourceClass(game.priceSource)}`}>
-            {priceSourceLabel(game.priceSource)}
-          </span>
-          <span className={`rounded-md border px-2 py-1 font-semibold ${isUp ? "border-radar-green/30 bg-radar-green/10 text-radar-green" : "border-radar-red/30 bg-radar-red/10 text-radar-red"}`}>
-            {isUp ? "+" : ""}
-            {game.playerTrendPercent}%
-          </span>
-          <span className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-slate-300">
-            {formatPrice(game.currentPrice)}
-          </span>
-          <span className="rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 font-semibold text-radar-violet">
-            {game.gameValueScore}/100
-          </span>
-        </div>
-      </div>
-    </button>
+      </button>
+      {game.priceSource === "ggdeals" ? <GGDealsAttribution className="px-3 pb-3" href={game.priceExternalUrl} /> : null}
+    </article>
   );
 }
 

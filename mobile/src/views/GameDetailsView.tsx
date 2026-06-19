@@ -2,6 +2,7 @@ import { ArrowLeft, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiClient } from "@/api/client";
+import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { PlayerChart, PriceChart } from "@/components/MobileCharts";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { ErrorState, LoadingState } from "@/components/StateViews";
@@ -58,6 +59,12 @@ export function GameDetailsView({
   const latestPrice = profile.latestPrice ?? null;
   const priceSource = latestPrice?.source ?? bestPrice?.source ?? "mock";
   const storeType = bestPrice?.storeType ?? latestPrice?.storeType ?? "unknown";
+  const hasGGDealsPrice =
+    latestPrice?.source === "ggdeals" ||
+    bestPrice?.source === "ggdeals" ||
+    profile.offers.some((offer) => offer.source === "ggdeals");
+  const ggDealsOffer = profile.offers.find((offer) => offer.source === "ggdeals");
+  const ggDealsUrl = bestPrice?.externalUrl ?? bestPrice?.url ?? latestPrice?.externalUrl ?? ggDealsOffer?.externalUrl ?? ggDealsOffer?.url;
 
   return (
     <div className="space-y-5">
@@ -122,6 +129,7 @@ export function GameDetailsView({
             ? new Date(latestPrice?.fetchedAt ?? latestPrice?.capturedAt ?? bestPrice?.fetchedAt ?? bestPrice?.updatedAt ?? "").toLocaleString("pl-PL")
             : "n/a"}
         </p>
+        {hasGGDealsPrice ? <GGDealsAttribution className="mt-3" href={ggDealsUrl} /> : null}
       </section>
 
       <section className="surface rounded-lg p-4">
@@ -159,11 +167,23 @@ export function GameDetailsView({
 
       <section className="surface rounded-lg p-4">
         <h2 className="text-lg font-semibold text-white">Oferty sklepów</h2>
+        {hasGGDealsPrice ? <GGDealsAttribution className="mt-2" href={ggDealsUrl} /> : null}
         <div className="mt-3 space-y-3">
           {profile.offers.map((offer) => (
             <div key={offer.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold text-white">{offer.storeName}</span>
+                {offer.source === "ggdeals" && (offer.externalUrl ?? offer.url) ? (
+                  <a
+                    href={offer.externalUrl ?? offer.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-white underline underline-offset-2"
+                  >
+                    {offer.storeName}
+                  </a>
+                ) : (
+                  <span className="font-semibold text-white">{offer.storeName}</span>
+                )}
                 <span className="text-radar-green">{formatPrice(offer.price, offer.currency)}</span>
               </div>
               <p className="mt-1 text-sm text-slate-400">

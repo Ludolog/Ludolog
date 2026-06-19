@@ -38,7 +38,7 @@ export function getGGDealsApiKey(): string | undefined {
 }
 
 export function getGGDealsApiBaseUrl(): string {
-  return getOptionalEnv("GGDEALS_API_BASE_URL") ?? "https://api.gg.deals/v1/prices";
+  return getOptionalEnv("GGDEALS_API_BASE_URL") ?? "https://gg.deals/api/prices/by-steam-app-id/";
 }
 
 export function getAdminApiSecret(): string | undefined {

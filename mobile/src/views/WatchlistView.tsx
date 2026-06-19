@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { apiClient } from "@/api/client";
+import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { formatNumber, formatPrice } from "@/format";
@@ -46,12 +47,14 @@ export function WatchlistView({ onOpenGame }: { onOpenGame: (gameId: string) => 
           }
 
           const summary = item.summary;
+          const hasGGDealsPrice = summary.latestPrice?.source === "ggdeals" || summary.bestOffer?.source === "ggdeals";
+          const ggDealsUrl = summary.bestOffer?.externalUrl ?? summary.bestOffer?.url ?? summary.latestPrice?.externalUrl;
           return (
+            <article key={item.id} className="surface w-full rounded-lg">
             <button
-              key={item.id}
               type="button"
               onClick={() => onOpenGame(summary.game.id)}
-              className="surface w-full rounded-lg p-4 text-left active:scale-[0.99]"
+              className="w-full p-4 text-left active:scale-[0.99]"
             >
               <img src={summary.game.coverUrl} alt="" className="mb-4 h-24 w-full rounded-lg object-cover" />
               <h2 className="font-semibold text-white">{summary.game.title}</h2>
@@ -63,6 +66,8 @@ export function WatchlistView({ onOpenGame }: { onOpenGame: (gameId: string) => 
                 <ScoreBadge score={summary.score} />
               </div>
             </button>
+            {hasGGDealsPrice ? <GGDealsAttribution className="px-4 pb-4" href={ggDealsUrl} /> : null}
+            </article>
           );
         })}
     </div>

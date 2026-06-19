@@ -84,10 +84,12 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 1. Admin calls `POST /api/admin/prices/refresh` or `POST /api/admin/prices/refresh-best` with `x-admin-secret`.
 2. The body accepts `mode: "imported"`, explicit `steamAppIds`, `limit` and optional `dryRun`.
 3. `PriceProviderService` selects `GGDealsPriceProvider` when `DATA_MODE=api`, `PRICE_MODE=api`, `PRICE_PROVIDER=ggdeals` and `GGDEALS_API_KEY` exists.
-4. If the key or API mode is missing, `MockPriceProvider` is used and the fallback is logged.
-5. Provider responses are normalized into `provider`, `storeType`, `price`, `regularPrice`, `discountPercent`, `currency`, URL, historical-low metadata and raw provider id.
-6. Successful refreshes upsert `StoreOffer` rows and append `GamePriceSnapshot` rows. One failed Steam App ID does not roll back the rest.
-7. ITAD and CheapShark can be added later as additional `PriceProvider` implementations without changing Android contracts.
+4. GG.deals requests use `https://gg.deals/api/prices/by-steam-app-id/` with backend-only `key` and `ids=<steamAppId>` query parameters.
+5. If the key or API mode is missing, `MockPriceProvider` is used and the fallback is logged.
+6. Provider responses are normalized into `provider`, `storeType`, `price`, `regularPrice`, `discountPercent`, `currency`, URL, historical-low metadata and raw provider id.
+7. Successful refreshes upsert `StoreOffer` rows and append `GamePriceSnapshot` rows. One failed Steam App ID does not roll back the rest.
+8. Web and mobile show a GG.deals attribution hyperlink whenever GG.deals prices are displayed, using the provider URL when available.
+9. ITAD and CheapShark can be added later as additional `PriceProvider` implementations without changing Android contracts.
 
 ## Stats overview flow
 

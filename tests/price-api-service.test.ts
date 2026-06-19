@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST as refreshPrices } from "@/app/api/admin/prices/refresh/route";
 import { repositories } from "@/lib/repositories";
 import { priceApiService } from "@/lib/services/price-api-service";
-import { normalizeGGDealsOffers, priceProviderService } from "@/lib/services/price-provider-service";
+import {
+  GGDealsPriceProvider,
+  normalizeGGDealsOffers,
+  priceProviderService
+} from "@/lib/services/price-provider-service";
 
 describe("PriceApiService", () => {
   afterEach(() => {
@@ -53,6 +57,50 @@ describe("PriceApiService", () => {
       currency: "PLN",
       historicalLow: 35,
       sourceRawId: "deal-1"
+    });
+  });
+
+  it("requests GG.deals prices through the documented Steam App ID endpoint", async () => {
+    const fetcher = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          data: {
+            deals: [
+              {
+                deal_id: "deal-1",
+                shop: { name: "Steam" },
+                price: { amount: "39.99", currency: "PLN" },
+                regularPrice: { amount: "199.99" },
+                discount: 80,
+                url: "https://gg.deals/deal-1",
+                official: true
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    });
+    const provider = new GGDealsPriceProvider({
+      apiKey: "test-key",
+      baseUrl: "https://gg.deals/api/prices/by-steam-app-id/",
+      fetcher
+    });
+
+    const offers = await provider.getPricesBySteamAppId(570);
+    const requestUrl = new URL(String(fetcher.mock.calls[0]?.[0]));
+
+    expect(`${requestUrl.origin}${requestUrl.pathname}`).toBe("https://gg.deals/api/prices/by-steam-app-id/");
+    expect(requestUrl.searchParams.get("key")).toBe("test-key");
+    expect(requestUrl.searchParams.get("ids")).toBe("570");
+    expect(offers[0]).toMatchObject({
+      provider: "ggdeals",
+      steamAppId: 570,
+      storeName: "Steam",
+      storeType: "official",
+      price: 39.99,
+      regularPrice: 199.99,
+      currency: "PLN"
     });
   });
 

@@ -191,6 +191,15 @@ function hasAnyTag(source: StatsSource, tags: string[]): boolean {
 function statsGame(source: StatsSource): ApiStatsGame {
   const { profile, trendPercent } = source;
   const price = profile.latestPrice?.price ?? profile.bestOffer?.price ?? 0;
+  const priceSource = profile.latestPrice?.source ?? profile.bestOffer?.source ?? "mock";
+  const sourceOffer =
+    profile.bestOffer?.source === priceSource
+      ? profile.bestOffer
+      : profile.offers.find((offer) => offer.source === priceSource);
+  const priceExternalUrl =
+    sourceOffer?.externalUrl ??
+    sourceOffer?.url ??
+    (profile.latestPrice?.source === priceSource ? profile.latestPrice.externalUrl : null);
 
   return {
     id: profile.game.id,
@@ -205,7 +214,8 @@ function statsGame(source: StatsSource): ApiStatsGame {
     gameValueScore: profile.score.score,
     recommendation: profile.score.recommendation,
     playerSource: profile.latestPlayers?.source ?? "mock",
-    priceSource: profile.latestPrice?.source ?? profile.bestOffer?.source ?? "mock",
+    priceSource,
+    priceExternalUrl,
     tags: profile.game.genres
   };
 }

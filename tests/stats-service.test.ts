@@ -78,6 +78,9 @@ describe("StatsService", () => {
     expect(overview.topPlayers.some((game) => game.steamAppId === 7654322)).toBe(true);
     expect(overview.topPlayers.find((game) => game.steamAppId === 7654322)?.playerSource).toBe("steam-api");
     expect(overview.topPlayers.find((game) => game.steamAppId === 7654322)?.priceSource).toBe("ggdeals");
+    expect(overview.topPlayers.find((game) => game.steamAppId === 7654322)?.priceExternalUrl).toBe(
+      "https://gg.deals/game/stats-fixture-arena"
+    );
     expect(["real", "mixed"]).toContain(overview.mode);
   });
 });

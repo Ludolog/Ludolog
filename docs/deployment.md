@@ -104,6 +104,8 @@ Notes:
 - `MOBILE_ALLOWED_ORIGINS` should be explicit in production. Do not use `*`.
 - `STEAM_WEB_API_KEY` is backend-only. It enables real Steam catalog sync and real current-player refreshes.
 - `GGDEALS_API_KEY` is backend-only. It enables real price refreshes through `PRICE_PROVIDER=ggdeals` and `PRICE_MODE=api`.
+- GG.deals price refreshes use `https://gg.deals/api/prices/by-steam-app-id/` by default with `key` and `ids=<steamAppId>`. Only set `GGDEALS_API_BASE_URL` if GG.deals gives you a custom endpoint.
+- Free GG.deals API access is for personal/hobby use. Any UI that displays GG.deals data must credit GG.deals with an active hyperlink, and stored GG.deals referral/affiliate URLs must be preserved.
 - `ADMIN_API_SECRET` protects manual admin POST endpoints through the `x-admin-secret` header.
 - `CRON_SECRET` protects `/api/cron/refresh-player-counts` in production. Do not expose it to mobile.
 - Mobile public config uses `VITE_API_BASE_URL`; secrets must never use the `VITE_` prefix.

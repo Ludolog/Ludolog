@@ -148,6 +148,7 @@ export type ApiStatsGame = {
   recommendation: Recommendation;
   playerSource: DataSource;
   priceSource: DataSource;
+  priceExternalUrl: string | null;
   tags: string[];
 };
 
