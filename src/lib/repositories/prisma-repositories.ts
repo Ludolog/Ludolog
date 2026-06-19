@@ -820,14 +820,25 @@ class PrismaSnapshotRepository implements SnapshotRepository {
   async appendPrice(snapshot: GamePriceSnapshot): Promise<void> {
     await prisma.gamePriceSnapshot.create({
       data: {
-        ...snapshot,
+        id: snapshot.id,
+        gameId: snapshot.gameId,
         steamAppId: snapshot.steamAppId,
         sourceId: snapshot.sourceId,
+        provider: snapshot.provider,
+        storeType: snapshot.storeType,
         price: snapshot.price,
-        offerCount: snapshot.offerCount,
         historicalLow: snapshot.historicalLow,
         basePrice: snapshot.basePrice,
+        discountPercent: snapshot.discountPercent,
+        storeName: snapshot.storeName,
+        currency: snapshot.currency,
+        externalUrl: snapshot.externalUrl,
+        offerCount: snapshot.offerCount,
+        isHistoricalLow: snapshot.isHistoricalLow,
+        sourceRawId: snapshot.sourceRawId,
         rawProviderData: snapshot.rawProviderData as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput,
+        fetchedAt: snapshot.fetchedAt,
+        capturedAt: snapshot.capturedAt,
         createdAt: snapshot.createdAt,
         source: sourceToPrisma(snapshot.source)
       }
