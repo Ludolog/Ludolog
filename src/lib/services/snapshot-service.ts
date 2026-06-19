@@ -37,21 +37,27 @@ export class SnapshotService {
     const priceSnapshot: GamePriceSnapshot = {
       id: `price-${game.id}-${now.getTime()}`,
       gameId: game.id,
+      steamAppId: game.steamAppId,
+      sourceId: "price-source-mock-seed",
       provider: "mock",
       storeType: profile.bestOffer?.storeType ?? "unknown",
       price,
+      bestPrice: price,
       historicalLow,
       basePrice,
       discountPercent,
       storeName: profile.bestOffer?.storeName ?? "Mock Store",
       currency: "PLN",
       externalUrl: profile.bestOffer?.externalUrl ?? profile.bestOffer?.url ?? null,
+      offerCount: profile.offers.length,
       isHistoricalLow: price <= historicalLow,
       sourceRawId: null,
       rawProviderData: null,
       fetchedAt: now,
       capturedAt: now,
-      source: "mock"
+      createdAt: now,
+      source: "mock",
+      sourceConfidence: "internal-mock"
     };
 
     const playerSnapshot: PlayerCountSnapshot = {

@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { POST as importJsonPrices } from "@/app/api/admin/prices/import-json/route";
+import { POST as addManualOffer } from "@/app/api/admin/prices/manual-offer/route";
 import { POST as diagnosePriceProvider } from "@/app/api/admin/prices/provider-diagnostics/route";
+import { POST as recalculatePrices } from "@/app/api/admin/prices/recalculate/route";
 import { POST as refreshPrices } from "@/app/api/admin/prices/refresh/route";
+import { POST as snapshotPrice } from "@/app/api/admin/prices/snapshot/route";
 import { repositories } from "@/lib/repositories";
 import { priceApiService } from "@/lib/services/price-api-service";
 import { classifyGGDealsResponse } from "@/lib/services/ggdeals-diagnostics";
@@ -169,9 +173,8 @@ describe("PriceApiService", () => {
     expect(response.status).toBe(401);
   });
 
-  it("refreshes prices through the fallback provider and stores offers and snapshots", async () => {
+  it("disables the legacy external price refresh endpoint", async () => {
     vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
-    const beforeSnapshots = await repositories.snapshots.listPrices("cyberpunk-2077");
 
     const response = await refreshPrices(
       new Request("http://localhost/api/admin/prices/refresh", {
@@ -184,73 +187,106 @@ describe("PriceApiService", () => {
       })
     );
     const body = await response.json();
-    const afterSnapshots = await repositories.snapshots.listPrices("cyberpunk-2077");
-    const offers = await repositories.games.listOffers("cyberpunk-2077");
 
-    expect(response.status).toBe(200);
-    expect(body.refreshed).toBe(1);
-    expect(offers.length).toBeGreaterThan(0);
-    expect(afterSnapshots.length).toBeGreaterThan(beforeSnapshots.length);
+    expect(response.status).toBe(410);
+    expect(body).toMatchObject({
+      error: "Legacy external price refresh is disabled.",
+      provider: "gamevalue",
+      mode: "internal"
+    });
   });
 
-  it("does not store price data when GG.deals is blocked by Cloudflare", async () => {
+  it("stores a manual GameValue offer and price snapshot", async () => {
     vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
-    vi.stubEnv("DATA_MODE", "api");
-    vi.stubEnv("PRICE_MODE", "api");
-    vi.stubEnv("PRICE_PROVIDER", "ggdeals");
-    vi.stubEnv("GGDEALS_API_KEY", "test-ggdeals-key");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        return new Response("<!DOCTYPE html><html><title>Just a moment...</title></html>", {
-          status: 403,
-          headers: { "content-type": "text/html; charset=UTF-8" }
-        });
-      })
-    );
-    const beforeSnapshots = await repositories.snapshots.listPrices("cyberpunk-2077");
+    const beforeSnapshots = await repositories.snapshots.listPrices("dota-2");
 
-    const response = await refreshPrices(
-      new Request("http://localhost/api/admin/prices/refresh", {
+    const response = await addManualOffer(
+      new Request("http://localhost/api/admin/prices/manual-offer", {
         method: "POST",
         headers: {
           "content-type": "application/json",
           "x-admin-secret": "test-admin-secret"
         },
-        body: JSON.stringify({ steamAppIds: [1091500], limit: 1, dryRun: false })
+        body: JSON.stringify({
+          steamAppId: 570,
+          storeName: "Steam",
+          storeType: "official",
+          price: 0,
+          regularPrice: 0,
+          currency: "PLN",
+          externalUrl: "https://store.steampowered.com/app/570",
+          region: "PL",
+          drm: "Steam",
+          isOfficialStore: true,
+          available: true
+        })
       })
     );
     const body = await response.json();
-    const afterSnapshots = await repositories.snapshots.listPrices("cyberpunk-2077");
+    const afterSnapshots = await repositories.snapshots.listPrices("dota-2");
+    const offers = await repositories.games.listOffers("dota-2");
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     expect(body).toMatchObject({
-      provider: "ggdeals",
-      providerStatus: "blocked_by_cloudflare",
-      fallbackUsed: true,
-      refreshed: 0,
-      failed: 1
+      provider: "gamevalue",
+      mode: "internal",
+      requested: 1,
+      stored: 1,
+      failed: 0
     });
-    expect(JSON.stringify(body)).not.toContain("<html");
-    expect(JSON.stringify(body)).not.toContain("Just a moment");
-    expect(afterSnapshots.length).toBe(beforeSnapshots.length);
+    expect(offers.some((offer) => offer.source === "manual" && offer.sourceConfidence === "internal-real")).toBe(true);
+    expect(afterSnapshots.length).toBeGreaterThan(beforeSnapshots.length);
   });
 
-  it("returns masked GG.deals provider diagnostics", async () => {
+  it("rejects negative prices in JSON imports", async () => {
     vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
-    vi.stubEnv("DATA_MODE", "api");
-    vi.stubEnv("PRICE_MODE", "api");
-    vi.stubEnv("PRICE_PROVIDER", "ggdeals");
-    vi.stubEnv("GGDEALS_API_KEY", "test-ggdeals-key");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        return new Response("<!DOCTYPE html><html><title>Just a moment...</title></html>", {
-          status: 403,
-          headers: { "content-type": "text/html; charset=UTF-8" }
-        });
+
+    const response = await importJsonPrices(
+      new Request("http://localhost/api/admin/prices/import-json", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({
+          sourceName: "bad-json-import",
+          offers: [{ steamAppId: 570, storeName: "Steam", price: -1 }]
+        })
       })
     );
+    const body = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(JSON.stringify(body)).toContain("Number must be greater than or equal to 0");
+  });
+
+  it("stores snapshots through the GameValue snapshot endpoint", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    const beforeSnapshots = await repositories.snapshots.listPrices("dota-2");
+
+    const response = await snapshotPrice(
+      new Request("http://localhost/api/admin/prices/snapshot", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ steamAppId: 570, sourceName: "manual-admin" })
+      })
+    );
+    const body = await response.json();
+    const afterSnapshots = await repositories.snapshots.listPrices("dota-2");
+
+    expect(response.status).toBe(201);
+    expect(body.provider).toBe("gamevalue");
+    expect(afterSnapshots.length).toBeGreaterThan(beforeSnapshots.length);
+    expect(afterSnapshots.at(-1)?.bestPrice).toBeGreaterThanOrEqual(0);
+  });
+
+  it("returns disabled legacy diagnostics without calling GG.deals", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
 
     const response = await diagnosePriceProvider(
       new Request("http://localhost/api/admin/prices/provider-diagnostics", {
@@ -264,68 +300,103 @@ describe("PriceApiService", () => {
     );
     const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body.status).toBe("blocked_by_cloudflare");
-    expect(body.attempts[0]).toMatchObject({
-      requestUrl: expect.stringContaining("key=redacted"),
-      providerStatus: "blocked_by_cloudflare",
-      safePreview: null
+    expect(response.status).toBe(410);
+    expect(body).toMatchObject({
+      provider: "gamevalue",
+      mode: "internal",
+      status: "external_providers_disabled"
     });
-    expect(JSON.stringify(body)).not.toContain("test-ggdeals-key");
-    expect(JSON.stringify(body)).not.toContain("<html");
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(JSON.stringify(body)).not.toContain("test-admin-secret");
   });
 
-  it("/api/deals/best summaries use real offers when they exist", async () => {
+  it("recalculates GameValue price snapshots without external providers", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+
+    const response = await recalculatePrices(
+      new Request("http://localhost/api/admin/prices/recalculate", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        }
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.provider).toBe("gamevalue");
+    expect(body.mode).toBe("internal");
+  });
+
+  it("/api/deals/best summaries use internal GameValue offers when they exist", async () => {
     const now = new Date(Date.now() + 2000);
     await repositories.games.upsertOffers("cyberpunk-2077", [
       {
-        id: "offer-cyberpunk-2077-ggdeals-test",
+        id: "offer-cyberpunk-2077-gamevalue-test",
         gameId: "cyberpunk-2077",
-        provider: "ggdeals",
+        steamAppId: 1091500,
+        storeId: "store-steam",
+        sourceId: "price-source-manual-admin",
+        provider: "gamevalue",
         storeName: "Steam",
         storeType: "official",
+        title: "Cyberpunk 2077",
         price: 1.99,
         regularPrice: 199.99,
         historicalLow: 1.99,
         currency: "PLN",
         discountPercent: 99,
-        url: "https://gg.deals/game/cyberpunk-2077",
-        externalUrl: "https://gg.deals/game/cyberpunk-2077",
+        url: "https://store.steampowered.com/app/1091500",
+        externalUrl: "https://store.steampowered.com/app/1091500",
+        region: "PL",
         isOfficial: true,
+        isOfficialStore: true,
         isHistoricalLow: true,
+        available: true,
         drm: "Steam",
-        sourceRawId: "deal-cyberpunk-test",
+        platform: "PC",
+        sourceRawId: "manual-cyberpunk-test",
         rawProviderData: null,
         fetchedAt: now,
+        createdAt: now,
         updatedAt: now,
-        source: "ggdeals"
+        source: "manual",
+        sourceConfidence: "internal-real"
       }
     ]);
     await repositories.snapshots.appendPrice({
-      id: "price-cyberpunk-2077-ggdeals-test",
+      id: "price-cyberpunk-2077-gamevalue-test",
       gameId: "cyberpunk-2077",
-      provider: "ggdeals",
+      steamAppId: 1091500,
+      sourceId: "price-source-manual-admin",
+      provider: "gamevalue",
       storeType: "official",
       price: 1.99,
+      bestPrice: 1.99,
       historicalLow: 1.99,
       basePrice: 199.99,
       discountPercent: 99,
       storeName: "Steam",
       currency: "PLN",
-      externalUrl: "https://gg.deals/game/cyberpunk-2077",
+      externalUrl: "https://store.steampowered.com/app/1091500",
+      offerCount: 1,
       isHistoricalLow: true,
-      sourceRawId: "deal-cyberpunk-test",
+      sourceRawId: "manual-cyberpunk-test",
       rawProviderData: null,
       fetchedAt: now,
       capturedAt: now,
-      source: "ggdeals"
+      createdAt: now,
+      source: "manual",
+      sourceConfidence: "internal-real"
     });
 
     const deals = await repositories.games.bestDeals(20);
     const cyberpunk = deals.find((summary) => summary.game.id === "cyberpunk-2077");
 
-    expect(cyberpunk?.bestOffer?.source).toBe("ggdeals");
-    expect(cyberpunk?.latestPrice?.source).toBe("ggdeals");
+    expect(cyberpunk?.bestOffer?.source).toBe("manual");
+    expect(cyberpunk?.latestPrice?.source).toBe("manual");
+    expect(cyberpunk?.bestOffer?.sourceConfidence).toBe("internal-real");
     expect(cyberpunk?.bestOffer?.price).toBe(1.99);
   });
 });

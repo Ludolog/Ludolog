@@ -1,5 +1,5 @@
 import { repositories } from "@/lib/repositories";
-import { getGGDealsApiKey } from "@/lib/config";
+import { getGGDealsApiKey, getPriceMode, getPriceProvider } from "@/lib/config";
 import { resolveGGDealsStatusFromLogs } from "@/lib/services/ggdeals-diagnostics";
 import type { GameProfile } from "@/lib/types";
 import type { ApiStatsCategory, ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
@@ -20,6 +20,7 @@ export class StatsService {
       catalogStatus,
       realPlayerSnapshots,
       mockPlayerSnapshots,
+      realInternalPriceSnapshots,
       realPriceSnapshots,
       mockPriceSnapshots,
       realOffers,
@@ -32,15 +33,18 @@ export class StatsService {
       repositories.steamCatalog.status(),
       repositories.snapshots.countPlayerSnapshotsBySource("steam-api"),
       repositories.snapshots.countPlayerSnapshotsBySource("mock"),
+      repositories.snapshots.countPriceSnapshotsBySource("manual"),
       Promise.all([
+        repositories.snapshots.countPriceSnapshotsBySource("manual"),
         repositories.snapshots.countPriceSnapshotsBySource("ggdeals"),
         repositories.snapshots.countPriceSnapshotsBySource("price-api")
-      ]).then(([ggdeals, priceApi]) => ggdeals + priceApi),
+      ]).then(([manual, ggdeals, priceApi]) => manual + ggdeals + priceApi),
       repositories.snapshots.countPriceSnapshotsBySource("mock"),
       Promise.all([
+        repositories.games.countOffersBySource("manual"),
         repositories.games.countOffersBySource("ggdeals"),
         repositories.games.countOffersBySource("price-api")
-      ]).then(([ggdeals, priceApi]) => ggdeals + priceApi),
+      ]).then(([manual, ggdeals, priceApi]) => manual + ggdeals + priceApi),
       repositories.games.countOffersBySource("mock"),
       repositories.games.listImported(500),
       repositories.snapshots.latestPlayerRefresh(),
@@ -91,6 +95,7 @@ export class StatsService {
       sourceCounts: {
         importedGames: importedGames.length,
         steamCatalogEntries: catalogStatus.entryCount,
+        realInternalPriceSnapshots,
         realPriceSnapshots,
         mockPriceSnapshots,
         realOffers,
@@ -100,7 +105,9 @@ export class StatsService {
       },
       updatedAt: new Date().toISOString(),
       mode: resolveStatsMode({ mockPlayerSnapshots, mockPriceSnapshots, realPlayerSnapshots, realPriceSnapshots }),
-      ggdealsStatus: ggdealsRuntime.status
+      ggdealsStatus: ggdealsRuntime.status,
+      priceProvider: getPriceProvider(),
+      priceMode: getPriceMode()
     };
   }
 }
@@ -203,6 +210,10 @@ function statsGame(source: StatsSource): ApiStatsGame {
   const { profile, trendPercent } = source;
   const price = profile.latestPrice?.price ?? profile.bestOffer?.price ?? 0;
   const priceSource = profile.latestPrice?.source ?? profile.bestOffer?.source ?? "mock";
+  const priceSourceConfidence =
+    profile.latestPrice?.sourceConfidence ??
+    profile.bestOffer?.sourceConfidence ??
+    (profile.latestPrice || profile.bestOffer ? "internal-mock" : "no-price-data");
   const sourceOffer =
     profile.bestOffer?.source === priceSource
       ? profile.bestOffer
@@ -226,6 +237,7 @@ function statsGame(source: StatsSource): ApiStatsGame {
     recommendation: profile.score.recommendation,
     playerSource: profile.latestPlayers?.source ?? "mock",
     priceSource,
+    priceSourceConfidence,
     priceExternalUrl,
     tags: profile.game.genres
   };

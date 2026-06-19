@@ -1141,9 +1141,13 @@ export const mockStoreOffers: StoreOffer[] = fixtures.flatMap((fixture) =>
   fixture.stores.map((offer, index) => ({
     id: `offer-${fixture.id}-${index + 1}`,
     gameId: fixture.id,
+    steamAppId: fixture.steamAppId,
+    storeId: `store-${slugify(offer.storeName)}`,
+    sourceId: "price-source-mock-seed",
     provider: "mock",
     storeName: offer.storeName,
     storeType: offer.isOfficial ? "official" : "unknown",
+    title: fixture.title,
     price: offer.price,
     regularPrice: fixture.basePrice,
     historicalLow: fixture.historicalLow,
@@ -1157,14 +1161,20 @@ export const mockStoreOffers: StoreOffer[] = fixtures.flatMap((fixture) =>
       offer.storeName === "Steam"
         ? `https://store.steampowered.com/app/${fixture.steamAppId}`
         : "https://example.com/gamevalue-demo-offer",
+    region: "PL",
     isOfficial: offer.isOfficial ?? false,
+    isOfficialStore: offer.isOfficial ?? false,
     isHistoricalLow: offer.price <= fixture.historicalLow,
+    available: true,
     drm: offer.drm,
+    platform: fixture.platform,
     sourceRawId: null,
     rawProviderData: null,
     fetchedAt: baseDate,
+    createdAt: baseDate,
     updatedAt: baseDate,
-    source: "mock"
+    source: "mock",
+    sourceConfidence: "internal-mock"
   }))
 );
 
@@ -1175,7 +1185,10 @@ export const mockPriceSnapshots: GamePriceSnapshot[] = fixtures.flatMap((fixture
     return {
       id: `price-${fixture.id}-${index + 1}`,
       gameId: fixture.id,
+      steamAppId: fixture.steamAppId,
+      sourceId: "price-source-mock-seed",
       price,
+      bestPrice: price,
       historicalLow: fixture.historicalLow,
       basePrice: fixture.basePrice,
       provider: "mock",
@@ -1188,15 +1201,28 @@ export const mockPriceSnapshots: GamePriceSnapshot[] = fixtures.flatMap((fixture
         fixture.stores[0]?.storeName === "Steam"
           ? `https://store.steampowered.com/app/${fixture.steamAppId}`
           : "https://example.com/gamevalue-demo-offer",
+      offerCount: fixture.stores.length,
       isHistoricalLow: price <= fixture.historicalLow,
       sourceRawId: null,
       rawProviderData: null,
       fetchedAt: daysAgo(dayOffset),
       capturedAt: daysAgo(dayOffset),
-      source: "mock"
+      createdAt: daysAgo(dayOffset),
+      source: "mock",
+      sourceConfidence: "internal-mock"
     };
   })
 );
+
+function slugify(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "item"
+  );
+}
 
 export const mockPlayerSnapshots: PlayerCountSnapshot[] = fixtures.flatMap((fixture) =>
   Array.from({ length: 14 }, (_, index) => {

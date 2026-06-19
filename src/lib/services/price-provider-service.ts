@@ -642,12 +642,17 @@ function looksLikeOffer(record: Record<string, unknown>): boolean {
 }
 
 function normalizedOfferToStoreOffer(gameId: string, offer: NormalizedPriceOffer): StoreOffer {
+  const source = offer.provider === "ggdeals" ? "ggdeals" : offer.provider === "mock" ? "mock" : "price-api";
   return {
     id: `offer-${gameId}-${slugify(String(offer.provider))}-${slugify(offer.sourceRawId ?? offer.storeName)}`,
     gameId,
+    steamAppId: offer.steamAppId,
+    storeId: null,
+    sourceId: null,
     provider: offer.provider,
     storeName: offer.storeName,
     storeType: offer.storeType,
+    title: null,
     price: offer.price,
     regularPrice: offer.regularPrice,
     historicalLow: offer.historicalLow,
@@ -655,14 +660,20 @@ function normalizedOfferToStoreOffer(gameId: string, offer: NormalizedPriceOffer
     discountPercent: offer.discountPercent,
     url: offer.url,
     externalUrl: offer.url,
+    region: "PL",
     isOfficial: offer.storeType === "official",
+    isOfficialStore: offer.storeType === "official",
     isHistoricalLow: offer.isHistoricalLow,
+    available: true,
     drm: offer.storeType === "official" ? "Steam" : "Key",
+    platform: "PC",
     sourceRawId: offer.sourceRawId ?? null,
     rawProviderData: offer.rawProviderData ?? null,
     fetchedAt: offer.fetchedAt,
+    createdAt: offer.fetchedAt,
     updatedAt: offer.fetchedAt,
-    source: offer.provider === "ggdeals" ? "ggdeals" : offer.provider === "mock" ? "mock" : "price-api"
+    source,
+    sourceConfidence: source === "mock" ? "internal-mock" : "external-legacy"
   };
 }
 
@@ -671,21 +682,27 @@ function storeOfferToPriceSnapshot(gameId: string, steamAppId: number, offer: St
   return {
     id: `price-${gameId}-${offer.provider}-${capturedAt.getTime()}-${steamAppId}`,
     gameId,
+    steamAppId,
+    sourceId: offer.sourceId,
     provider: offer.provider,
     storeType: offer.storeType,
     price: offer.price,
+    bestPrice: offer.price,
     historicalLow: offer.historicalLow ?? offer.price,
     basePrice: offer.regularPrice ?? offer.price,
     discountPercent: offer.discountPercent,
     storeName: offer.storeName,
     currency: offer.currency,
     externalUrl: offer.externalUrl,
+    offerCount: 1,
     isHistoricalLow: offer.isHistoricalLow,
     sourceRawId: offer.sourceRawId,
     rawProviderData: offer.rawProviderData,
     fetchedAt: offer.fetchedAt,
     capturedAt,
-    source: offer.source
+    createdAt: capturedAt,
+    source: offer.source,
+    sourceConfidence: offer.sourceConfidence
   };
 }
 

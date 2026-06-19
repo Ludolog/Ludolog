@@ -83,13 +83,11 @@ STEAM_WEB_API_KEY=""
 # Legacy name accepted for backward compatibility; prefer STEAM_WEB_API_KEY.
 STEAM_API_KEY=""
 ADMIN_API_SECRET=""
-PRICE_PROVIDER="mock"
-PRICE_MODE="mock"
-GGDEALS_API_KEY=""
-GGDEALS_REGION="pl"
-GGDEALS_CURRENCY="PLN"
+PRICE_PROVIDER="gamevalue"
+PRICE_MODE="internal"
+ENABLE_LEGACY_PRICE_PROVIDERS="false"
 # Legacy fallbacks:
-PRICE_API_PROVIDER="mock"
+PRICE_API_PROVIDER="gamevalue"
 PRICE_API_KEY=""
 ISTHEREANYDEAL_API_KEY=""
 GG_DEALS_API_KEY=""
@@ -121,6 +119,7 @@ CRON_SECRET=""
 - `GET /api/games/:id/players`
 - `POST /api/games/:id/refresh`
 - `GET /api/deals/best`
+- `GET /api/prices/status`
 - `GET /api/stats/overview`
 - `GET /api/stats/steam`
 - `GET /api/stats/categories`
@@ -130,9 +129,15 @@ CRON_SECRET=""
 - `GET /api/admin/steam-catalog/status`
 - `POST /api/admin/steam-catalog/sync`
 - `POST /api/admin/games/bulk-import`
-- `POST /api/admin/prices/refresh`
-- `POST /api/admin/prices/refresh-best`
-- `POST /api/admin/prices/provider-diagnostics`
+- `GET /api/admin/prices/status`
+- `POST /api/admin/prices/manual-offer`
+- `POST /api/admin/prices/import-json`
+- `POST /api/admin/prices/import-csv`
+- `POST /api/admin/prices/snapshot`
+- `POST /api/admin/prices/recalculate`
+- `POST /api/admin/prices/refresh` (legacy disabled)
+- `POST /api/admin/prices/refresh-best` (legacy disabled)
+- `POST /api/admin/prices/provider-diagnostics` (legacy disabled)
 - `POST /api/admin/player-counts/refresh`
 - `POST /api/games/:id/refresh-players`
 - `POST /api/cron/refresh-player-counts`
@@ -154,44 +159,50 @@ Steam Stats are exposed through `GET /api/stats/overview`. The overview includes
 
 Android never calls Steam directly and never receives API keys. The mobile app calls the Vercel/Next.js API, and backend services own Steam catalog sync and player-count refreshes.
 
-## Real price provider
+## GameValue Price API
 
-Price data flows through `PriceProviderService`. The active provider is selected with `PRICE_PROVIDER` and `PRICE_MODE`:
+The active price module is internal:
 
-- `PRICE_PROVIDER=ggdeals`
-- `PRICE_MODE=api`
-- `GGDEALS_API_KEY=...`
+- `PRICE_PROVIDER=gamevalue`
+- `PRICE_MODE=internal`
+- `ENABLE_LEGACY_PRICE_PROVIDERS=false`
 
-The default GG.deals endpoint is `https://gg.deals/api/prices/by-steam-app-id/` and the adapter sends backend-only `key`, `ids=<steamAppId>`, `region` and `currency` query parameters. Use `GGDEALS_API_BASE_URL` only if GG.deals provides a project-specific endpoint.
+GG.deals, ITAD and CheapShark are legacy/disabled providers in the active application flow. GG.deals was disabled because Vercel received Cloudflare challenge HTML instead of API JSON. The project does not bypass Cloudflare, scrape protected pages, use Playwright/Puppeteer, cookies, proxies or browser sessions.
 
-If `PRICE_MODE=mock`, `PRICE_PROVIDER=mock`, the GG.deals key is missing, or the provider returns a blocked/non-JSON/API error response, the backend keeps the UI on mock/fallback prices and records a sanitized integration log. The key is backend-only: do not commit it and do not expose it through `VITE_` mobile variables. Android and Web call only our API.
+Price data now enters through GameValue-controlled sources: `manual-admin`, `csv-import`, `json-import`, `partner-feed-placeholder`, `mock-seed` and future legal store APIs. `StoreOffer` stores current tracked offers, `Store` stores normalized store metadata, `PriceSource` stores the ingest source, and `GamePriceSnapshot` stores durable price history for charts, deals and GameValue Score.
 
-If Vercel receives a GG.deals Cloudflare challenge (`blocked_by_cloudflare`), the app does not bypass it with browser sessions, cookies, Playwright/Puppeteer or HTML scraping. Use `POST /api/admin/prices/provider-diagnostics` with `x-admin-secret`, then contact GG.deals support with the sanitized output and ask for API access that works from the backend host.
+Public price endpoints:
 
-GG.deals API terms require personal/hobby use only for free access, visible attribution with an active GG.deals hyperlink wherever GG.deals data is displayed, and preserving GG.deals referral/affiliate links. The UI attribution components link to the stored provider URL when available, falling back to `https://gg.deals/`.
+- `GET /api/prices/status`
+- `GET /api/games/:id/prices`
+- `GET /api/deals/best`
+- `GET /api/stats/best-value`
+- `GET /api/stats/overview`
 
-Normalized offers store `provider`, `storeType` (`official`, `keyshop`, `marketplace`, `unknown`), `price`, `regularPrice`, `historicalLow`, `isHistoricalLow`, currency, URL, raw provider id and fetched time. `StoreOffer` stores the current best offers and `GamePriceSnapshot` stores durable price history used by GameValue Score, Best deals and Stats.
-
-Admin price operations:
+Admin price operations require `x-admin-secret`:
 
 ```bash
-curl -X POST https://apka-seven.vercel.app/api/admin/prices/refresh \
+curl -X POST https://apka-seven.vercel.app/api/admin/prices/manual-offer \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
-  -d "{\"mode\":\"imported\",\"limit\":10}"
+  -d "{\"steamAppId\":570,\"storeName\":\"Steam\",\"storeType\":\"official\",\"price\":0,\"regularPrice\":0,\"currency\":\"PLN\",\"externalUrl\":\"https://store.steampowered.com/app/570\",\"region\":\"PL\",\"drm\":\"Steam\",\"isOfficialStore\":true,\"available\":true}"
 
-curl -X POST https://apka-seven.vercel.app/api/admin/prices/refresh \
+curl -X POST https://apka-seven.vercel.app/api/admin/prices/import-json \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
-  -d "{\"steamAppIds\":[570,730],\"limit\":2}"
+  -d "{\"sourceName\":\"manual-json-import\",\"offers\":[{\"steamAppId\":570,\"storeName\":\"Steam\",\"price\":0,\"regularPrice\":0,\"currency\":\"PLN\",\"externalUrl\":\"https://store.steampowered.com/app/570\"}]}"
 
-curl -X POST https://apka-seven.vercel.app/api/admin/prices/provider-diagnostics \
+curl -X POST https://apka-seven.vercel.app/api/admin/prices/snapshot \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
-  -d "{\"provider\":\"ggdeals\",\"steamAppIds\":[570,730],\"dryRun\":true}"
+  -d "{\"steamAppId\":570,\"sourceName\":\"manual-admin\"}"
+
+curl -X POST https://apka-seven.vercel.app/api/admin/prices/recalculate \
+  -H "Content-Type: application/json" \
+  -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE"
 ```
 
-ITAD and CheapShark are intentionally not active providers yet, but the provider interface is ready for additional adapters.
+Legacy `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` return disabled responses and do not call external aggregators.
 
 Admin/dev Steam operations:
 

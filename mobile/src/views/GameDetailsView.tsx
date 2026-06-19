@@ -2,12 +2,11 @@ import { ArrowLeft, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiClient } from "@/api/client";
-import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { PlayerChart, PriceChart } from "@/components/MobileCharts";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { formatNumber, formatPrice, recommendationLabel } from "@/format";
-import type { ApiGameProfile } from "@shared/api-types";
+import type { ApiGameProfile, PriceSourceConfidence } from "@shared/api-types";
 
 export function GameDetailsView({
   gameId,
@@ -57,14 +56,8 @@ export function GameDetailsView({
   }
   const bestPrice = profile.bestOffer ?? null;
   const latestPrice = profile.latestPrice ?? null;
-  const priceSource = latestPrice?.source ?? bestPrice?.source ?? "mock";
+  const priceSource = latestPrice?.sourceConfidence ?? bestPrice?.sourceConfidence ?? "no-price-data";
   const storeType = bestPrice?.storeType ?? latestPrice?.storeType ?? "unknown";
-  const hasGGDealsPrice =
-    latestPrice?.source === "ggdeals" ||
-    bestPrice?.source === "ggdeals" ||
-    profile.offers.some((offer) => offer.source === "ggdeals");
-  const ggDealsOffer = profile.offers.find((offer) => offer.source === "ggdeals");
-  const ggDealsUrl = bestPrice?.externalUrl ?? bestPrice?.url ?? latestPrice?.externalUrl ?? ggDealsOffer?.externalUrl ?? ggDealsOffer?.url;
 
   return (
     <div className="space-y-5">
@@ -129,12 +122,11 @@ export function GameDetailsView({
             ? new Date(latestPrice?.fetchedAt ?? latestPrice?.capturedAt ?? bestPrice?.fetchedAt ?? bestPrice?.updatedAt ?? "").toLocaleString("pl-PL")
             : "n/a"}
         </p>
-        {priceSource === "mock" ? (
+        {priceSource === "internal-mock" ? (
           <p className="mt-3 rounded-md border border-radar-amber/30 bg-radar-amber/10 px-3 py-2 text-xs leading-5 text-radar-amber">
-            Price data is using mock fallback while the real price provider is unavailable.
+            Price data is demo/mock seed until GameValue Price API receives tracked offers.
           </p>
         ) : null}
-        {hasGGDealsPrice ? <GGDealsAttribution className="mt-3" href={ggDealsUrl} /> : null}
       </section>
 
       <section className="surface rounded-lg p-4">
@@ -172,12 +164,11 @@ export function GameDetailsView({
 
       <section className="surface rounded-lg p-4">
         <h2 className="text-lg font-semibold text-white">Oferty sklepów</h2>
-        {hasGGDealsPrice ? <GGDealsAttribution className="mt-2" href={ggDealsUrl} /> : null}
         <div className="mt-3 space-y-3">
           {profile.offers.map((offer) => (
             <div key={offer.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
               <div className="flex items-center justify-between gap-3">
-                {offer.source === "ggdeals" && (offer.externalUrl ?? offer.url) ? (
+                {offer.externalUrl ?? offer.url ? (
                   <a
                     href={offer.externalUrl ?? offer.url}
                     target="_blank"
@@ -212,24 +203,30 @@ function playerSourceLabel(source: string | undefined): string {
   return "Cached Steam";
 }
 
-function priceSourceLabel(source: string | undefined): string {
-  if (source === "ggdeals") {
-    return "GG.deals";
+function priceSourceLabel(source: PriceSourceConfidence | undefined): string {
+  if (source === "internal-real") {
+    return "GameValue internal";
   }
-  if (source === "mock") {
+  if (source === "internal-mock") {
     return "Mock fallback";
   }
-  return "Real price";
+  if (source === "external-legacy") {
+    return "External legacy";
+  }
+  return "No price data";
 }
 
-function priceSourceClass(source: string | undefined): string {
-  if (source === "ggdeals") {
+function priceSourceClass(source: PriceSourceConfidence | undefined): string {
+  if (source === "internal-real") {
     return "border-radar-green/30 bg-radar-green/10 text-radar-green";
   }
-  if (source === "mock") {
+  if (source === "internal-mock") {
     return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";
   }
-  return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
+  if (source === "external-legacy") {
+    return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
+  }
+  return "border-white/10 bg-black/20 text-slate-300";
 }
 
 function storeTypeLabel(type: string | undefined): string {

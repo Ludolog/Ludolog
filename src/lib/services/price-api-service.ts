@@ -1,6 +1,12 @@
 import { repositories } from "@/lib/repositories";
-import { priceProviderService } from "@/lib/services/price-provider-service";
+import { gameValuePriceService } from "@/lib/services/gamevalue-price-service";
 import type { GamePriceSnapshot, StoreOffer } from "@/lib/types";
+import type {
+  ApiManualOfferRequest,
+  ApiPriceImportCsvRequest,
+  ApiPriceImportJsonRequest,
+  ApiPriceSnapshotRequest
+} from "@shared/api-types";
 
 export class PriceApiService {
   async listOffers(gameId: string): Promise<StoreOffer[]> {
@@ -11,12 +17,28 @@ export class PriceApiService {
     return repositories.snapshots.listPrices(gameId);
   }
 
-  refreshGamePrices(input: { gameId?: string; steamAppId?: number; dryRun?: boolean }) {
-    return priceProviderService.refreshGamePrices(input);
+  status() {
+    return gameValuePriceService.status();
   }
 
-  refreshManyGamePrices(input: Parameters<typeof priceProviderService.refreshManyGamePrices>[0]) {
-    return priceProviderService.refreshManyGamePrices(input);
+  addManualOffer(input: ApiManualOfferRequest) {
+    return gameValuePriceService.addManualOffer(input);
+  }
+
+  importJson(input: ApiPriceImportJsonRequest) {
+    return gameValuePriceService.importJson(input);
+  }
+
+  importCsv(input: ApiPriceImportCsvRequest) {
+    return gameValuePriceService.importCsv(input);
+  }
+
+  snapshot(input: ApiPriceSnapshotRequest) {
+    return gameValuePriceService.snapshot(input);
+  }
+
+  recalculate() {
+    return gameValuePriceService.recalculate();
   }
 }
 

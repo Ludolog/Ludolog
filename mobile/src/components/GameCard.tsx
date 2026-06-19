@@ -1,9 +1,8 @@
 import { Activity, BadgePercent, ShoppingCart } from "lucide-react";
 
 import { formatNumber, formatPrice } from "@/format";
-import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { ScoreBadge } from "@/components/ScoreBadge";
-import type { ApiGameSummary } from "@shared/api-types";
+import type { ApiGameSummary, PriceSourceConfidence } from "@shared/api-types";
 
 export function GameCard({
   summary,
@@ -13,10 +12,9 @@ export function GameCard({
   onOpen: (gameId: string) => void;
 }): React.ReactElement {
   const price = summary.bestOffer?.price ?? summary.latestPrice?.price;
-  const priceSource = summary.latestPrice?.source ?? summary.bestOffer?.source ?? "mock";
+  const priceSource =
+    summary.latestPrice?.sourceConfidence ?? summary.bestOffer?.sourceConfidence ?? "no-price-data";
   const storeType = summary.bestOffer?.storeType ?? summary.latestPrice?.storeType ?? "unknown";
-  const hasGGDealsPrice = summary.latestPrice?.source === "ggdeals" || summary.bestOffer?.source === "ggdeals";
-  const ggDealsUrl = summary.bestOffer?.externalUrl ?? summary.bestOffer?.url ?? summary.latestPrice?.externalUrl;
 
   return (
     <article className="surface w-full overflow-hidden rounded-lg">
@@ -55,29 +53,34 @@ export function GameCard({
           </div>
         </div>
       </button>
-      {hasGGDealsPrice ? <GGDealsAttribution className="px-4 pb-4" href={ggDealsUrl} /> : null}
     </article>
   );
 }
 
-function priceSourceLabel(source: string): string {
-  if (source === "ggdeals") {
-    return "GG.deals";
+function priceSourceLabel(source: PriceSourceConfidence): string {
+  if (source === "internal-real") {
+    return "GameValue internal";
   }
-  if (source === "mock") {
+  if (source === "internal-mock") {
     return "Mock price";
   }
-  return "Price API";
+  if (source === "external-legacy") {
+    return "External legacy";
+  }
+  return "No price data";
 }
 
-function priceSourceClass(source: string): string {
-  if (source === "ggdeals") {
+function priceSourceClass(source: PriceSourceConfidence): string {
+  if (source === "internal-real") {
     return "border-radar-green/30 bg-radar-green/10 text-radar-green";
   }
-  if (source === "mock") {
+  if (source === "internal-mock") {
     return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";
   }
-  return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
+  if (source === "external-legacy") {
+    return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
+  }
+  return "border-white/10 bg-black/20 text-slate-300";
 }
 
 function storeTypeLabel(type: string): string {

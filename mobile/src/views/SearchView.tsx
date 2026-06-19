@@ -2,7 +2,6 @@ import { Activity, Download, Search } from "lucide-react";
 import { FormEvent, useState } from "react";
 
 import { apiClient, describeApiClientError } from "@/api/client";
-import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { formatNumber, formatPrice } from "@/format";
 import type { ApiGameSearchResult } from "@shared/api-types";
@@ -147,9 +146,6 @@ function SearchResultCard({
   onOpen: () => void;
   result: ApiGameSearchResult;
 }): React.ReactElement {
-  const hasGGDealsPrice = result.summary?.latestPrice?.source === "ggdeals" || result.summary?.bestOffer?.source === "ggdeals";
-  const ggDealsUrl = result.summary?.bestOffer?.externalUrl ?? result.summary?.bestOffer?.url ?? result.summary?.latestPrice?.externalUrl;
-
   return (
     <article className="surface rounded-lg">
       <button
@@ -188,7 +184,6 @@ function SearchResultCard({
           </div>
         </div>
       </button>
-      {hasGGDealsPrice ? <GGDealsAttribution className="px-3 pb-3" href={ggDealsUrl} /> : null}
     </article>
   );
 }

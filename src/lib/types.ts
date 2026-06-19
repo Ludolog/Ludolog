@@ -4,13 +4,37 @@ export type StatsDataMode = "real" | "mixed" | "mock";
 
 export type DataSource = "mock" | "steam-api" | "price-api" | "prisma" | "ggdeals" | "manual";
 
-export type PriceProviderName = "mock" | "ggdeals" | "itad" | "cheapshark";
+export type PriceProviderName = "gamevalue" | "mock" | "ggdeals" | "itad" | "cheapshark";
 
-export type PriceMode = "mock" | "api";
+export type PriceMode = "internal" | "mock" | "api";
 
 export type StoreType = "official" | "keyshop" | "marketplace" | "unknown";
 
 export type Recommendation = "buy_now" | "wait" | "weak_deal";
+
+export type PriceSourceType = "manual" | "csv" | "json" | "partner" | "mock" | "store-api";
+
+export type PriceSourceConfidence = "internal-real" | "internal-mock" | "external-legacy" | "no-price-data";
+
+export type PriceSource = {
+  id: string;
+  name: string;
+  type: PriceSourceType;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Store = {
+  id: string;
+  name: string;
+  slug: string;
+  storeType: StoreType;
+  websiteUrl: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 export type GGDealsProviderStatus =
   | "ok"
@@ -60,9 +84,13 @@ export type SteamCatalogEntry = {
 export type StoreOffer = {
   id: string;
   gameId: string;
+  steamAppId: number | null;
+  storeId: string | null;
+  sourceId: string | null;
   provider: PriceProviderName | string;
   storeName: string;
   storeType: StoreType;
+  title: string | null;
   price: number;
   regularPrice: number | null;
   historicalLow: number | null;
@@ -70,34 +98,46 @@ export type StoreOffer = {
   discountPercent: number;
   url: string;
   externalUrl: string | null;
+  region: string;
   isOfficial: boolean;
+  isOfficialStore: boolean;
   isHistoricalLow: boolean;
+  available: boolean;
   drm: string;
+  platform: string;
   sourceRawId: string | null;
   rawProviderData: unknown | null;
   fetchedAt: Date | null;
+  createdAt: Date;
   updatedAt: Date;
   source: DataSource;
+  sourceConfidence: PriceSourceConfidence;
 };
 
 export type GamePriceSnapshot = {
   id: string;
   gameId: string;
+  steamAppId: number | null;
+  sourceId: string | null;
   provider: PriceProviderName | string;
   storeType: StoreType;
   price: number;
+  bestPrice: number;
   historicalLow: number;
   basePrice: number;
   discountPercent: number;
   storeName: string;
   currency: string;
   externalUrl: string | null;
+  offerCount: number;
   isHistoricalLow: boolean;
   sourceRawId: string | null;
   rawProviderData: unknown | null;
   fetchedAt: Date | null;
   capturedAt: Date;
+  createdAt: Date;
   source: DataSource;
+  sourceConfidence: PriceSourceConfidence;
 };
 
 export type PlayerCountSnapshot = {
@@ -220,6 +260,8 @@ export type AdminStatus = {
   lastPlayerCountRefresh: Date | null;
   offerCount: number;
   priceSnapshotCount: number;
+  storeCount: number;
+  priceSourceCount: number;
   playerSnapshotCount: number;
   watchlistCount: number;
   alertCount: number;
@@ -229,6 +271,7 @@ export type AdminStatus = {
   ggdealsStatus: GGDealsProviderStatus;
   lastGGDealsCheck: Date | null;
   lastPriceRefresh: Date | null;
+  realInternalPriceSnapshots: number;
   realPriceSnapshots: number;
   mockPriceSnapshots: number;
   realOffers: number;

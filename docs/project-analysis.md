@@ -151,23 +151,20 @@ Search now goes beyond the records already stored in the active repository. `Gam
 
 `SteamCatalogEntry` stores the synced Steam application catalog separately from imported games. This prevents the app from creating thousands of full `Game` records before a title is actually observed by the user. Catalog sync is manual/admin-only and uses capped pagination through `IStoreService/GetAppList`; it must not run during Next.js build or on every page visit.
 
-## Price provider layer
+## GameValue Price API layer
 
-Before the GG.deals integration, prices came from mock fixtures and import defaults. `StoreOffer` stored current offers per game, while `GamePriceSnapshot` stored price history, historical lows and discounts. `DealScoreService` used `latestPrice`, `priceHistory` and `offers` to calculate `pricePosition`, `discountQuality` and `offerAvailability`.
+Prices now come from the internal GameValue Price API rather than active external aggregators. `PRICE_PROVIDER=gamevalue` and `PRICE_MODE=internal` are the defaults. GG.deals, ITAD and CheapShark are legacy/disabled in active flow because GG.deals returned Cloudflare challenge HTML from Vercel instead of API JSON. The application does not bypass Cloudflare, scrape protected HTML, use browser automation, cookies, proxies or fake sessions.
 
-The new `PriceProviderService` adds a provider boundary:
+The internal price layer adds:
 
-- `MockPriceProvider` preserves deterministic fallback behavior.
-- `GGDealsPriceProvider` is selected only when `DATA_MODE=api`, `PRICE_MODE=api`, `PRICE_PROVIDER=ggdeals` and `GGDEALS_API_KEY` exists.
-- Future `ITADPriceProvider` and `CheapSharkPriceProvider` can implement the same methods.
+- `PriceSource` for `manual-admin`, `json-import`, `csv-import`, `partner-feed-placeholder`, `mock-seed` and future legal store feeds.
+- `Store` for normalized store metadata such as Steam, GOG, Epic Games Store, Fanatical, Green Man Gaming, Humble Store, Eneba and Kinguin.
+- extended `StoreOffer` rows for current tracked offers.
+- extended `GamePriceSnapshot` rows for durable price history.
 
-Provider responses are normalized into offers with `provider`, `storeType`, current price, regular price, discount, currency, historical-low metadata, URL, raw provider id and fetch time. Refreshing prices upserts `StoreOffer` rows and appends `GamePriceSnapshot` rows. Missing keys or provider errors are logged and fall back to mock-safe behavior, so the thesis demo still works without secrets.
+`GameValuePriceService` validates admin inputs, creates stores and sources when needed, upserts offers and appends snapshots. `sourceConfidence` distinguishes `internal-real`, `internal-mock`, `external-legacy` and `no-price-data`, which lets web and Android show clear badges without exposing technical provider failures.
 
-Official stores, keyshops and marketplaces are preserved as `storeType` when the provider exposes that distinction. This is important because future scoring can weigh store trust differently without changing Android DTOs.
-
-The GG.deals adapter now has explicit diagnostics. `POST /api/admin/prices/provider-diagnostics` is admin-protected, masks API keys in URLs and classifies failures as `blocked_by_cloudflare`, `invalid_key`, `invalid_response`, `no_price_data`, `network_error`, `timeout` or `api_error`. If Vercel receives a Cloudflare challenge, the application reports `blocked_by_cloudflare`, keeps price writes fallback-safe, and does not store raw HTML or bypass the challenge with browser sessions, cookies, Playwright/Puppeteer or scraping.
-
-GG.deals free API access is treated as personal/hobby use. Whenever GG.deals data is displayed, the UI keeps visible attribution with an active hyperlink and preserves stored GG.deals referral or affiliate URLs.
+Legacy `PriceProviderService` and GG.deals diagnostics remain as disabled safety code, but `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` no longer call external aggregators.
 
 `StatsService` builds analytical sections from `PlayerCountSnapshot`, price snapshots and GameValue Score:
 

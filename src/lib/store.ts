@@ -20,9 +20,13 @@ import type {
   IntegrationLog,
   PlayerCountSnapshot,
   PriceAlert,
+  PriceSource,
+  PriceSourceType,
   SteamCatalogEntry,
   SteamCatalogStatus,
+  Store,
   StoreOffer,
+  StoreType,
   User,
   WatchlistItem
 } from "@/lib/types";
@@ -30,6 +34,17 @@ import type {
 const games: Game[] = [...mockGames];
 const storeOffers: StoreOffer[] = [...mockStoreOffers];
 const priceSnapshots: GamePriceSnapshot[] = [...mockPriceSnapshots];
+const stores: Store[] = buildInitialStores(storeOffers);
+const priceSources: PriceSource[] = [
+  {
+    id: "price-source-mock-seed",
+    name: "mock-seed",
+    type: "mock",
+    isActive: true,
+    createdAt: new Date("2026-06-18T12:00:00.000Z"),
+    updatedAt: new Date("2026-06-18T12:00:00.000Z")
+  }
+];
 const playerSnapshots: PlayerCountSnapshot[] = [...mockPlayerSnapshots];
 const steamCatalogEntries: SteamCatalogEntry[] = [];
 const users: User[] = [...mockUsers];
@@ -136,29 +151,39 @@ export function importGameFromCatalog(input: GameImportInput): GameSummary {
   priceSnapshots.push({
     id: `price-${input.id}-import-current`,
     gameId: input.id,
+    steamAppId: input.steamAppId,
+    sourceId: "price-source-mock-seed",
     provider: "mock",
     storeType: "official",
     price: input.currentPrice,
+    bestPrice: input.currentPrice,
     historicalLow: input.historicalLow,
     basePrice: input.basePrice,
     discountPercent: input.basePrice === 0 ? 0 : Math.max(0, Math.round((1 - input.currentPrice / input.basePrice) * 100)),
     storeName: "Steam",
     currency: "PLN",
     externalUrl: `https://store.steampowered.com/app/${input.steamAppId}`,
+    offerCount: 1,
     isHistoricalLow: input.currentPrice <= input.historicalLow,
     sourceRawId: null,
     rawProviderData: null,
     fetchedAt: now,
     capturedAt: now,
-    source: "mock"
+    createdAt: now,
+    source: "mock",
+    sourceConfidence: "internal-mock"
   });
 
   storeOffers.push({
     id: `offer-${input.id}-import-steam`,
     gameId: input.id,
+    steamAppId: input.steamAppId,
+    storeId: "store-steam",
+    sourceId: "price-source-mock-seed",
     provider: "mock",
     storeName: "Steam",
     storeType: "official",
+    title: input.title,
     price: input.currentPrice,
     regularPrice: input.basePrice,
     historicalLow: input.historicalLow,
@@ -166,14 +191,20 @@ export function importGameFromCatalog(input: GameImportInput): GameSummary {
     discountPercent: input.basePrice === 0 ? 0 : Math.max(0, Math.round((1 - input.currentPrice / input.basePrice) * 100)),
     url: `https://store.steampowered.com/app/${input.steamAppId}`,
     externalUrl: `https://store.steampowered.com/app/${input.steamAppId}`,
+    region: "PL",
     isOfficial: true,
+    isOfficialStore: true,
     isHistoricalLow: input.currentPrice <= input.historicalLow,
+    available: true,
     drm: "Steam",
+    platform: input.platform,
     sourceRawId: null,
     rawProviderData: null,
     fetchedAt: now,
+    createdAt: now,
     updatedAt: now,
-    source: "mock"
+    source: "mock",
+    sourceConfidence: "internal-mock"
   });
 
   return getGameSummary(game);
@@ -286,6 +317,69 @@ export function upsertStoreOffers(gameId: string, offers: StoreOffer[]): void {
   }
 }
 
+export function upsertStore(input: {
+  name: string;
+  slug?: string;
+  storeType: StoreType;
+  websiteUrl?: string | null;
+}): { store: Store; created: boolean } {
+  const slug = input.slug ?? slugify(input.name);
+  const existing = stores.find((store) => store.slug === slug);
+  const now = new Date();
+  if (existing) {
+    existing.name = input.name;
+    existing.storeType = input.storeType;
+    existing.websiteUrl = input.websiteUrl ?? existing.websiteUrl;
+    existing.updatedAt = now;
+    return { store: existing, created: false };
+  }
+
+  const store: Store = {
+    id: `store-${slug}`,
+    name: input.name,
+    slug,
+    storeType: input.storeType,
+    websiteUrl: input.websiteUrl ?? null,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now
+  };
+  stores.push(store);
+  return { store, created: true };
+}
+
+export function upsertPriceSource(input: {
+  name: string;
+  type: PriceSourceType;
+}): { source: PriceSource; created: boolean } {
+  const existing = priceSources.find((source) => source.name === input.name);
+  const now = new Date();
+  if (existing) {
+    existing.type = input.type;
+    existing.updatedAt = now;
+    return { source: existing, created: false };
+  }
+
+  const source: PriceSource = {
+    id: `price-source-${slugify(input.name)}`,
+    name: input.name,
+    type: input.type,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now
+  };
+  priceSources.push(source);
+  return { source, created: true };
+}
+
+export function listStores(): Store[] {
+  return [...stores].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function listPriceSources(): PriceSource[] {
+  return [...priceSources].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function getPriceHistory(gameId: string): GamePriceSnapshot[] {
   return priceHistory(gameId);
 }
@@ -310,11 +404,11 @@ export function getLatestPriceRefresh(): Date | null {
   return latestByDate(priceSnapshots)?.capturedAt ?? null;
 }
 
-export function countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api"): number {
+export function countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual"): number {
   return priceSnapshots.filter((snapshot) => snapshot.source === source).length;
 }
 
-export function countOffersBySource(source: "mock" | "ggdeals" | "price-api"): number {
+export function countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual"): number {
   return storeOffers.filter((offer) => offer.source === source).length;
 }
 
@@ -473,8 +567,10 @@ export function listUsers(): User[] {
 }
 
 export function getAdminStatus(): AdminStatus {
-  const realPriceSnapshots = countPriceSnapshotsBySource("ggdeals") + countPriceSnapshotsBySource("price-api");
-  const realOffers = countOffersBySource("ggdeals") + countOffersBySource("price-api");
+  const realInternalPriceSnapshots = countPriceSnapshotsBySource("manual");
+  const realPriceSnapshots =
+    realInternalPriceSnapshots + countPriceSnapshotsBySource("ggdeals") + countPriceSnapshotsBySource("price-api");
+  const realOffers = countOffersBySource("manual") + countOffersBySource("ggdeals") + countOffersBySource("price-api");
   const integrationLogs = listIntegrationLogs();
   const ggdealsRuntime = resolveGGDealsStatusFromLogs({
     hasApiKey: Boolean(getGGDealsApiKey()),
@@ -492,6 +588,8 @@ export function getAdminStatus(): AdminStatus {
     lastPlayerCountRefresh: getLatestPlayerRefresh(),
     offerCount: storeOffers.length,
     priceSnapshotCount: priceSnapshots.length,
+    storeCount: stores.length,
+    priceSourceCount: priceSources.length,
     playerSnapshotCount: playerSnapshots.length,
     watchlistCount: watchlistItems.length,
     alertCount: priceAlerts.length,
@@ -501,6 +599,7 @@ export function getAdminStatus(): AdminStatus {
     ggdealsStatus: ggdealsRuntime.status,
     lastGGDealsCheck: ggdealsRuntime.lastCheckedAt,
     lastPriceRefresh: getLatestPriceRefresh(),
+    realInternalPriceSnapshots,
     realPriceSnapshots,
     mockPriceSnapshots: countPriceSnapshotsBySource("mock"),
     realOffers,
@@ -509,4 +608,35 @@ export function getAdminStatus(): AdminStatus {
     mockPlayerSnapshots: countPlayerSnapshotsBySource("mock"),
     integrationLogs
   };
+}
+
+function buildInitialStores(offers: StoreOffer[]): Store[] {
+  const now = new Date("2026-06-18T12:00:00.000Z");
+  const bySlug = new Map<string, Store>();
+  for (const offer of offers) {
+    const slug = slugify(offer.storeName);
+    if (!bySlug.has(slug)) {
+      bySlug.set(slug, {
+        id: `store-${slug}`,
+        name: offer.storeName,
+        slug,
+        storeType: offer.storeType,
+        websiteUrl: offer.externalUrl ?? offer.url ?? null,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+  }
+  return [...bySlug.values()];
+}
+
+function slugify(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "item"
+  );
 }

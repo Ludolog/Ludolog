@@ -8,9 +8,13 @@ import type {
   IntegrationLog,
   PlayerCountSnapshot,
   PriceAlert,
+  PriceSource,
+  PriceSourceType,
   SteamCatalogEntry,
   SteamCatalogStatus,
+  Store,
   StoreOffer,
+  StoreType,
   WatchlistItem
 } from "@/lib/types";
 
@@ -33,7 +37,39 @@ export interface GameRepository {
   mostActive(limit?: number): Promise<GameSummary[]>;
   listOffers(gameId: string): Promise<StoreOffer[]>;
   upsertOffers(gameId: string, offers: StoreOffer[]): Promise<void>;
-  countOffersBySource(source: "mock" | "ggdeals" | "price-api"): Promise<number>;
+  countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual"): Promise<number>;
+}
+
+export type PriceStoreInput = {
+  name: string;
+  slug?: string;
+  storeType: StoreType;
+  websiteUrl?: string | null;
+};
+
+export type PriceSourceInput = {
+  name: string;
+  type: PriceSourceType;
+};
+
+export type PricesStatus = {
+  offerCount: number;
+  priceSnapshotCount: number;
+  storeCount: number;
+  priceSourceCount: number;
+  lastPriceSnapshot: Date | null;
+  realInternalPriceSnapshots: number;
+  mockPriceSnapshots: number;
+  realOffers: number;
+  mockOffers: number;
+};
+
+export interface PriceRepository {
+  upsertStore(input: PriceStoreInput): Promise<{ store: Store; created: boolean }>;
+  upsertPriceSource(input: PriceSourceInput): Promise<{ source: PriceSource; created: boolean }>;
+  listStores(): Promise<Store[]>;
+  listPriceSources(): Promise<PriceSource[]>;
+  status(): Promise<PricesStatus>;
 }
 
 export type SteamCatalogUpsertInput = Omit<SteamCatalogEntry, "createdAt" | "updatedAt">;
@@ -69,7 +105,7 @@ export interface SnapshotRepository {
   latestPlayerRefresh(): Promise<Date | null>;
   countPlayerSnapshotsBySource(source: "mock" | "steam-api"): Promise<number>;
   latestPriceRefresh(): Promise<Date | null>;
-  countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api"): Promise<number>;
+  countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual"): Promise<number>;
   appendPrice(snapshot: GamePriceSnapshot): Promise<void>;
   appendPlayers(snapshot: PlayerCountSnapshot): Promise<void>;
 }
@@ -84,6 +120,7 @@ export interface AppRepositories {
   provider: RepositoryProvider;
   games: GameRepository;
   steamCatalog: SteamCatalogRepository;
+  prices: PriceRepository;
   watchlist: WatchlistRepository;
   alerts: AlertRepository;
   snapshots: SnapshotRepository;

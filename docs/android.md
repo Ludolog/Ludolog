@@ -93,7 +93,7 @@ Production Android builds use the public API URL from `mobile/.env.production`:
 VITE_API_BASE_URL=https://apka-seven.vercel.app
 ```
 
-`mobile/.env.production` is local-only and must not be committed. It may contain public `VITE_` values only. Do not put `DATABASE_URL`, `DIRECT_URL`, Neon credentials, `GGDEALS_API_KEY`, `STEAM_WEB_API_KEY`, admin/cron secrets, signing secrets or Firebase secrets into any mobile env file.
+`mobile/.env.production` is local-only and must not be committed. It may contain public `VITE_` values only. Do not put `DATABASE_URL`, `DIRECT_URL`, Neon credentials, external provider keys, `STEAM_WEB_API_KEY`, admin/cron secrets, signing secrets or Firebase secrets into any mobile env file.
 
 Open Android Studio:
 
@@ -187,20 +187,20 @@ The Stats screen shows a data mode badge:
 - `Mixed data` when real and fallback data are combined,
 - `Mock fallback` when the app is running on demonstration data.
 
-Game details shows the current player-count source, best price, historical low, store, price provider, store type and last price refresh. When prices are in mock fallback because the real provider is unavailable, the details view says so explicitly. Deals and Stats show price source badges such as `GG.deals`, `Mock price` or `Real price`, plus official/keyshop/marketplace badges when available.
+Game details shows the current player-count source, best price, historical low, store, GameValue price source, store type and last price snapshot. Deals and Stats show price source badges such as `GameValue internal`, `Mock price`, `External legacy` or `No price data`, plus official/keyshop/marketplace badges when available.
 
-It does not run admin refresh actions from Android. `POST /api/games/{id}/refresh-players`, `POST /api/admin/games/bulk-import`, `POST /api/admin/prices/refresh`, `POST /api/admin/prices/refresh-best`, `POST /api/admin/prices/provider-diagnostics` and `POST /api/admin/player-counts/refresh` are backend/admin endpoints protected by `ADMIN_API_SECRET`, so the APK must not call them or contain that secret.
+It does not run admin write actions from Android. `POST /api/games/{id}/refresh-players`, `POST /api/admin/games/bulk-import`, `POST /api/admin/prices/manual-offer`, `POST /api/admin/prices/import-json`, `POST /api/admin/prices/import-csv`, `POST /api/admin/prices/snapshot`, `POST /api/admin/prices/recalculate` and `POST /api/admin/player-counts/refresh` are backend/admin endpoints protected by `ADMIN_API_SECRET`, so the APK must not call them or contain that secret.
 
 Diagnostics should show:
 
 - `API base URL`,
 - HTTP transport and Capacitor platform,
 - backend status,
-- price provider, price mode and `hasGGDealsApiKey` boolean,
-- `ggdealsStatus` and last GG.deals check time,
+- price provider and price mode,
+- StoreOffer count, GamePriceSnapshot count, Store count and PriceSource count,
 - Steam catalog entry count,
 - imported game count,
-- real/mock price snapshot counts,
+- real internal/mock price snapshot counts,
 - real/mock offer counts,
 - real/mock player snapshot counts,
 - last Steam catalog sync,

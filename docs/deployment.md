@@ -26,17 +26,15 @@ MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
 STEAM_WEB_API_KEY=
 ADMIN_API_SECRET=
 CRON_SECRET=
-PRICE_PROVIDER=ggdeals
-PRICE_MODE=api
-GGDEALS_API_KEY=
-GGDEALS_REGION=pl
-GGDEALS_CURRENCY=PLN
+PRICE_PROVIDER=gamevalue
+PRICE_MODE=internal
+ENABLE_LEGACY_PRICE_PROVIDERS=false
 ```
 
 Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT_URL`. Replace `TWOJE_HASLO` only inside Vercel settings or local ignored env files.
 
 6. Start the deployment.
-   After changing `STEAM_WEB_API_KEY`, `GGDEALS_API_KEY`, `PRICE_PROVIDER`, `PRICE_MODE`, `ADMIN_API_SECRET`, `CRON_SECRET` or `DATA_MODE`, trigger a new deployment from
+   After changing `STEAM_WEB_API_KEY`, `PRICE_PROVIDER`, `PRICE_MODE`, `ADMIN_API_SECRET`, `CRON_SECRET` or `DATA_MODE`, trigger a new deployment from
    `Project -> Deployments -> Redeploy`. Vercel does not apply changed environment variables to an already-running
    deployment.
 7. After deployment, check:
@@ -89,13 +87,11 @@ STEAM_WEB_API_KEY=
 STEAM_API_KEY=
 ADMIN_API_SECRET=
 CRON_SECRET=
-PRICE_PROVIDER=ggdeals
-PRICE_MODE=api
-GGDEALS_API_KEY=
-GGDEALS_REGION=pl
-GGDEALS_CURRENCY=PLN
+PRICE_PROVIDER=gamevalue
+PRICE_MODE=internal
+ENABLE_LEGACY_PRICE_PROVIDERS=false
 # Legacy fallbacks:
-PRICE_API_PROVIDER=mock
+PRICE_API_PROVIDER=gamevalue
 PRICE_API_KEY=
 ISTHEREANYDEAL_API_KEY=
 GG_DEALS_API_KEY=
@@ -107,10 +103,10 @@ Notes:
 - `DATA_MODE=api` enables API-oriented adapters. If Steam is missing or fails, backend services still fall back to cached/mock data.
 - `MOBILE_ALLOWED_ORIGINS` should be explicit in production. Do not use `*`.
 - `STEAM_WEB_API_KEY` is backend-only. It enables real Steam catalog sync and real current-player refreshes.
-- `GGDEALS_API_KEY` is backend-only. It enables real price refreshes through `PRICE_PROVIDER=ggdeals` and `PRICE_MODE=api`.
-- GG.deals price refreshes use `https://gg.deals/api/prices/by-steam-app-id/` by default with backend-only `key`, `ids=<steamAppId>`, `region` and `currency`. Only set `GGDEALS_API_BASE_URL` if GG.deals gives you a custom endpoint.
-- Free GG.deals API access is for personal/hobby use. Any UI that displays GG.deals data must credit GG.deals with an active hyperlink, and stored GG.deals referral/affiliate URLs must be preserved.
-- If GG.deals returns a Cloudflare challenge from Vercel, the backend reports `blocked_by_cloudflare`, keeps price writes off/fallback-safe and does not store raw HTML. Do not bypass it with browser sessions, cookies, Playwright/Puppeteer or HTML scraping; use provider diagnostics and contact GG.deals for API-safe access.
+- `PRICE_PROVIDER=gamevalue` and `PRICE_MODE=internal` enable the internal GameValue Price API.
+- GG.deals, ITAD and CheapShark are legacy/disabled providers in active production flow. Do not set them as active providers unless a future legal/API-safe integration is added intentionally.
+- GG.deals was disabled after Vercel received Cloudflare challenge HTML instead of API JSON. Do not bypass Cloudflare with browser sessions, cookies, Playwright/Puppeteer, proxies or scraping, and do not store raw HTML as price data.
+- Admin price writes use internal sources such as `manual-admin`, `json-import`, `csv-import`, `mock-seed` and future legal partner/store feeds.
 - `ADMIN_API_SECRET` protects manual admin POST endpoints through the `x-admin-secret` header.
 - `CRON_SECRET` protects `/api/cron/refresh-player-counts` in production. Do not expose it to mobile.
 - Mobile public config uses `VITE_API_BASE_URL`; secrets must never use the `VITE_` prefix.
@@ -154,6 +150,12 @@ The price provider metadata migration is stored in:
 
 ```text
 prisma/migrations/000003_price_provider_metadata/migration.sql
+```
+
+The GameValue Price API schema migration is stored in:
+
+```text
+prisma/migrations/000004_gamevalue_price_api/migration.sql
 ```
 
 ## 5. Seed demo data
@@ -276,53 +278,58 @@ $body = '{"mode":"top","limit":25}'
 Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
 ```
 
-Manual price refresh for games already stored in the `Game` table:
+GameValue Price API status:
+
+```powershell
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/prices/status" | ConvertFrom-Json
+```
+
+Manual offer for Dota 2:
 
 ```powershell
 $body = @{
-  mode = "imported"
-  limit = 10
+  steamAppId = 570
+  storeName = "Steam"
+  storeType = "official"
+  price = 0
+  regularPrice = 0
+  currency = "PLN"
+  externalUrl = "https://store.steampowered.com/app/570"
+  region = "PL"
+  drm = "Steam"
+  isOfficialStore = $true
+  available = $true
 } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/manual-offer" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
-Manual price refresh for explicit Steam App IDs:
+JSON price import:
 
 ```powershell
 $body = @{
-  steamAppIds = @(570, 730)
-  limit = 2
+  sourceName = "manual-json-import"
+  offers = @(
+    @{
+      steamAppId = 570
+      storeName = "Steam"
+      storeType = "official"
+      price = 0
+      regularPrice = 0
+      currency = "PLN"
+      externalUrl = "https://store.steampowered.com/app/570"
+      region = "PL"
+      drm = "Steam"
+      isOfficialStore = $true
+      available = $true
+    }
+  )
 } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/import-json" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
-Dry run:
-
-```powershell
-$body = @{
-  steamAppIds = @(570, 730)
-  limit = 2
-  dryRun = $true
-} | ConvertTo-Json -Compress
-```
-
-Provider diagnostics:
-
-```powershell
-$body = @{
-  provider = "ggdeals"
-  steamAppIds = @(570, 730)
-  dryRun = $true
-} | ConvertTo-Json -Compress
-
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/provider-diagnostics" -Method POST -Headers $headers -ContentType "application/json" -Body $body
-```
-
-The diagnostics response masks the API key in request URLs and classifies failures as `blocked_by_cloudflare`, `invalid_key`, `invalid_response`, `network_error`, `timeout`, `no_price_data` or `api_error`. It must not include raw Cloudflare HTML.
-
-GG.deals responses are normalized into official/keyshop/marketplace/unknown store types when the provider exposes enough metadata. Missing keys, `PRICE_MODE=mock` or provider errors keep the application on mock/fallback prices and write a sanitized integration log instead of breaking the UI.
+Use `POST /api/admin/prices/snapshot` to append a snapshot from current tracked offers and `POST /api/admin/prices/recalculate` to rebuild snapshots for imported games. Legacy `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` return disabled responses and do not call external aggregators.
 
 Starter import from the already synced Steam catalog. Keep this as a small, intentional batch; it does not run a full catalog import:
 

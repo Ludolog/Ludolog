@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 import { apiClient } from "@/api/client";
-import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { formatNumber, formatPrice } from "@/format";
@@ -47,8 +46,6 @@ export function WatchlistView({ onOpenGame }: { onOpenGame: (gameId: string) => 
           }
 
           const summary = item.summary;
-          const hasGGDealsPrice = summary.latestPrice?.source === "ggdeals" || summary.bestOffer?.source === "ggdeals";
-          const ggDealsUrl = summary.bestOffer?.externalUrl ?? summary.bestOffer?.url ?? summary.latestPrice?.externalUrl;
           return (
             <article key={item.id} className="surface w-full rounded-lg">
             <button
@@ -66,7 +63,6 @@ export function WatchlistView({ onOpenGame }: { onOpenGame: (gameId: string) => 
                 <ScoreBadge score={summary.score} />
               </div>
             </button>
-            {hasGGDealsPrice ? <GGDealsAttribution className="px-4 pb-4" href={ggDealsUrl} /> : null}
             </article>
           );
         })}

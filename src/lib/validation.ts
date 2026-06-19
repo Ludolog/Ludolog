@@ -64,6 +64,38 @@ export const priceProviderDiagnosticsSchema = z.object({
   dryRun: z.boolean().default(true)
 });
 
+export const manualOfferSchema = z.object({
+  steamAppId: z.number().int().positive(),
+  storeName: z.string().trim().min(1).max(120),
+  storeType: z.enum(["official", "keyshop", "marketplace", "unknown"]).default("unknown"),
+  price: z.number().min(0).max(99999),
+  regularPrice: z.number().min(0).max(99999).nullable().optional(),
+  currency: z.string().trim().min(3).max(3).default("PLN"),
+  externalUrl: z.string().trim().url().nullable().optional(),
+  region: z.string().trim().min(2).max(8).default("PL"),
+  drm: z.string().trim().min(1).max(60).default("Steam"),
+  platform: z.string().trim().min(1).max(60).optional(),
+  isOfficialStore: z.boolean().default(false),
+  available: z.boolean().default(true),
+  sourceName: z.string().trim().min(1).max(120).optional(),
+  title: z.string().trim().min(1).max(180).optional()
+});
+
+export const priceImportJsonSchema = z.object({
+  sourceName: z.string().trim().min(1).max(120),
+  offers: z.array(manualOfferSchema).min(1).max(200)
+});
+
+export const priceImportCsvSchema = z.object({
+  sourceName: z.string().trim().min(1).max(120),
+  csv: z.string().trim().min(1).max(200_000)
+});
+
+export const priceSnapshotSchema = z.object({
+  steamAppId: z.number().int().positive(),
+  sourceName: z.string().trim().min(1).max(120).optional()
+});
+
 export const priceAlertCreateSchema = z.object({
   gameId: z.string().trim().min(1),
   thresholdPrice: z.number().positive().max(9999)

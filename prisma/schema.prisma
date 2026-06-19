@@ -62,6 +62,35 @@ model Game {
   scoreSnapshots       DealScoreSnapshot[]
 }
 
+model PriceSource {
+  id        String              @id
+  name      String              @unique
+  type      String
+  isActive  Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  offers    StoreOffer[]
+  snapshots GamePriceSnapshot[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model Store {
+  id         String       @id
+  name       String
+  slug       String       @unique
+  storeType  String       @default("unknown")
+  websiteUrl String?
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  offers     StoreOffer[]
+
+  @@index([storeType])
+  @@index([isActive])
+}
+
 model SteamCatalogEntry {
   id                String     @id
   steamAppId        Int        @unique
@@ -85,9 +114,15 @@ model StoreOffer {
   id              String      @id
   gameId          String
   game            Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  steamAppId      Int?
+  storeId         String?
+  store           Store?      @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  sourceId        String?
+  priceSource     PriceSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   provider        String      @default("mock")
   storeName       String
   storeType       String      @default("unknown")
+  title           String?
   price           Decimal     @db.Decimal(10, 2)
   regularPrice    Decimal?    @db.Decimal(10, 2)
   historicalLow   Decimal?    @db.Decimal(10, 2)
@@ -95,16 +130,24 @@ model StoreOffer {
   discountPercent Int
   url             String
   externalUrl     String?
+  region          String      @default("PL")
   isOfficial      Boolean
+  isOfficialStore Boolean     @default(false)
   isHistoricalLow Boolean     @default(false)
+  available       Boolean     @default(true)
   drm             String
+  platform        String      @default("PC")
   sourceRawId     String?
   rawProviderData Json?
   source          DataSource  @default(mock)
   fetchedAt       DateTime?
+  createdAt       DateTime    @default(now())
   updatedAt       DateTime
 
   @@index([gameId])
+  @@index([steamAppId])
+  @@index([storeId])
+  @@index([sourceId])
   @@index([provider])
   @@index([source])
 }
@@ -113,6 +156,9 @@ model GamePriceSnapshot {
   id              String      @id
   gameId          String
   game            Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  steamAppId      Int?
+  sourceId        String?
+  priceSource     PriceSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   provider        String      @default("mock")
   storeType       String      @default("unknown")
   price           Decimal     @db.Decimal(10, 2)
@@ -122,14 +168,18 @@ model GamePriceSnapshot {
   storeName       String
   currency        String
   externalUrl     String?
+  offerCount      Int         @default(1)
   isHistoricalLow Boolean     @default(false)
   sourceRawId     String?
   rawProviderData Json?
   fetchedAt       DateTime?
   capturedAt      DateTime
+  createdAt       DateTime    @default(now())
   source          DataSource  @default(mock)
 
   @@index([gameId, capturedAt])
+  @@index([steamAppId])
+  @@index([sourceId])
   @@index([provider])
   @@index([source])
 }

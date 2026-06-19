@@ -6,11 +6,13 @@ import { RefreshCw } from "lucide-react";
 
 export function AdminActionButton({
   body,
+  editableBody = false,
   endpoint,
   label,
   requireSecret = false
 }: {
   body?: unknown;
+  editableBody?: boolean;
   endpoint: string;
   label: string;
   requireSecret?: boolean;
@@ -19,6 +21,7 @@ export function AdminActionButton({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [secret, setSecret] = useState("");
+  const [bodyText, setBodyText] = useState(body === undefined ? "" : JSON.stringify(body, null, 2));
 
   async function run(): Promise<void> {
     setLoading(true);
@@ -28,11 +31,12 @@ export function AdminActionButton({
       if (requireSecret && secret.trim().length > 0) {
         headers["x-admin-secret"] = secret.trim();
       }
+      const requestBody = editableBody ? parseBodyText(bodyText) : body;
 
       const response = await fetch(endpoint, {
         method: "POST",
         headers,
-        body: body === undefined ? undefined : JSON.stringify(body)
+        body: requestBody === undefined ? undefined : JSON.stringify(requestBody)
       });
       const payload = (await response.json()) as unknown;
       setResult(response.ok ? compactJson(payload) : `Error ${response.status}: ${compactJson(payload)}`);
@@ -55,6 +59,14 @@ export function AdminActionButton({
           className="min-h-10 w-full rounded-md border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-radar-cyan"
         />
       ) : null}
+      {editableBody ? (
+        <textarea
+          value={bodyText}
+          onChange={(event) => setBodyText(event.target.value)}
+          rows={8}
+          className="min-h-32 w-full rounded-md border border-white/10 bg-black/20 px-3 py-2 font-mono text-xs text-white outline-none transition placeholder:text-slate-500 focus:border-radar-cyan"
+        />
+      ) : null}
       <button
         type="button"
         onClick={run}
@@ -71,4 +83,11 @@ export function AdminActionButton({
 
 function compactJson(value: unknown): string {
   return JSON.stringify(value).slice(0, 280);
+}
+
+function parseBodyText(value: string): unknown {
+  if (!value.trim()) {
+    return undefined;
+  }
+  return JSON.parse(value);
 }

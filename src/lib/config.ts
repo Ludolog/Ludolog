@@ -20,17 +20,36 @@ export function getSteamWebApiKey(): string | undefined {
 }
 
 export function getPriceMode(): PriceMode {
-  return process.env.PRICE_MODE === "api" ? "api" : "mock";
+  const mode = getOptionalEnv("PRICE_MODE")?.toLowerCase();
+  if (mode === "mock") {
+    return "mock";
+  }
+  if (mode === "api" && areLegacyPriceProvidersEnabled()) {
+    return "api";
+  }
+  return "internal";
 }
 
 export function getPriceProvider(): PriceProviderName {
-  const provider = (getOptionalEnv("PRICE_PROVIDER") ?? getOptionalEnv("PRICE_API_PROVIDER") ?? "mock").toLowerCase();
+  const provider = (getOptionalEnv("PRICE_PROVIDER") ?? getOptionalEnv("PRICE_API_PROVIDER") ?? "gamevalue").toLowerCase();
 
-  if (provider === "ggdeals" || provider === "itad" || provider === "cheapshark") {
+  if (provider === "gamevalue") {
+    return "gamevalue";
+  }
+
+  if (provider === "mock") {
+    return "mock";
+  }
+
+  if (areLegacyPriceProvidersEnabled() && (provider === "ggdeals" || provider === "itad" || provider === "cheapshark")) {
     return provider;
   }
 
-  return "mock";
+  return "gamevalue";
+}
+
+export function areLegacyPriceProvidersEnabled(): boolean {
+  return getOptionalEnv("ENABLE_LEGACY_PRICE_PROVIDERS") === "true";
 }
 
 export function getGGDealsApiKey(): string | undefined {

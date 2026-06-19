@@ -3,13 +3,11 @@ import { Activity, BadgePercent, ShoppingCart } from "lucide-react";
 
 import { formatNumber, formatPrice } from "@/lib/format";
 import type { GameSummary } from "@/lib/types";
-import { GGDealsAttribution } from "@/components/ggdeals-attribution";
 import { ScoreBadge } from "@/components/score-badge";
 
 export function GameCard({ summary }: { summary: GameSummary }): React.ReactElement {
   const { game, latestPrice, latestPlayers, bestOffer } = summary;
-  const hasGGDealsPrice = latestPrice?.source === "ggdeals" || bestOffer?.source === "ggdeals";
-  const ggDealsUrl = bestOffer?.externalUrl ?? bestOffer?.url ?? latestPrice?.externalUrl;
+  const priceSource = latestPrice?.sourceConfidence ?? bestOffer?.sourceConfidence ?? "no-price-data";
 
   return (
     <article className="surface overflow-hidden rounded-lg transition hover:border-radar-cyan/35 hover:shadow-glow">
@@ -57,9 +55,21 @@ export function GameCard({ summary }: { summary: GameSummary }): React.ReactElem
             <span>low</span>
           </div>
         </div>
-        {hasGGDealsPrice ? <GGDealsAttribution href={ggDealsUrl} /> : null}
+        <p className="text-xs text-slate-500">{sourceConfidenceLabel(priceSource)}</p>
       </div>
     </article>
   );
 }
 
+function sourceConfidenceLabel(source: string): string {
+  if (source === "internal-real") {
+    return "GameValue internal";
+  }
+  if (source === "internal-mock") {
+    return "Demo/mock seed";
+  }
+  if (source === "external-legacy") {
+    return "External legacy";
+  }
+  return "No price data";
+}

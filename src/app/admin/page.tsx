@@ -3,7 +3,6 @@ import { AlertTriangle, Database, RefreshCw, Server, ShoppingCart } from "lucide
 
 import { RefreshButton } from "@/components/forms/refresh-button";
 import { AdminActionButton } from "@/components/forms/admin-action-button";
-import { GGDealsAttribution } from "@/components/ggdeals-attribution";
 import { formatDate, formatNumber, formatPrice } from "@/lib/format";
 import { repositories } from "@/lib/repositories";
 import { gameSearchService } from "@/lib/services/game-search-service";
@@ -54,8 +53,9 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <StatusCard icon={<RefreshCw size={18} />} label="Price snapshots" value={String(status.priceSnapshotCount)} />
         <StatusCard icon={<ShoppingCart size={18} />} label="Price provider" value={status.priceProvider.toUpperCase()} />
         <StatusCard icon={<ShoppingCart size={18} />} label="PRICE_MODE" value={status.priceMode.toUpperCase()} />
-        <StatusCard icon={<ShoppingCart size={18} />} label="GG.deals key" value={status.hasGGDealsApiKey ? "SET" : "MISSING"} />
-        <StatusCard icon={<ShoppingCart size={18} />} label="GG.deals status" value={formatGGDealsStatus(status.ggdealsStatus)} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="Stores" value={String(status.storeCount)} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="Price sources" value={String(status.priceSourceCount)} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="Internal snaps" value={String(status.realInternalPriceSnapshots)} />
         <StatusCard icon={<ShoppingCart size={18} />} label="Real price snaps" value={String(status.realPriceSnapshots)} />
         <StatusCard icon={<ShoppingCart size={18} />} label="Real offers" value={String(status.realOffers)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Player snapshots" value={String(status.playerSnapshotCount)} />
@@ -64,25 +64,22 @@ export default async function AdminPage(): Promise<React.ReactElement> {
       </section>
 
       <section className="surface rounded-lg p-5">
-        <h2 className="text-lg font-semibold text-white">Price Provider Status</h2>
+        <h2 className="text-lg font-semibold text-white">GameValue Price API</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
-          Backend-only price refresh. GG.deals key stays in Vercel env; Android and web clients call only our API.
+          Internal price module for manual admin offers, JSON/CSV imports and price snapshots. External aggregators are
+          disabled in active flow; Android and web clients read only our API.
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           <InlineStatus icon={<ShoppingCart size={18} />} label="Provider" value={status.priceProvider} />
           <InlineStatus icon={<ShoppingCart size={18} />} label="Mode" value={status.priceMode} />
-          <InlineStatus icon={<ShoppingCart size={18} />} label="GG.deals key" value={status.hasGGDealsApiKey ? "configured" : "missing"} />
-          <InlineStatus icon={<AlertTriangle size={18} />} label="GG.deals status" value={formatGGDealsStatus(status.ggdealsStatus)} />
           <InlineStatus
             icon={<RefreshCw size={18} />}
-            label="Last price refresh"
+            label="Last price snapshot"
             value={status.lastPriceRefresh ? formatDate(status.lastPriceRefresh) : "n/a"}
           />
-          <InlineStatus
-            icon={<RefreshCw size={18} />}
-            label="Last GG.deals check"
-            value={status.lastGGDealsCheck ? formatDate(status.lastGGDealsCheck) : "n/a"}
-          />
+          <InlineStatus icon={<Database size={18} />} label="Stores" value={String(status.storeCount)} />
+          <InlineStatus icon={<Database size={18} />} label="Price sources" value={String(status.priceSourceCount)} />
+          <InlineStatus icon={<Database size={18} />} label="Internal price snaps" value={String(status.realInternalPriceSnapshots)} />
           <InlineStatus icon={<Database size={18} />} label="Real price snaps" value={String(status.realPriceSnapshots)} />
           <InlineStatus icon={<Database size={18} />} label="Mock price snaps" value={String(status.mockPriceSnapshots)} />
           <InlineStatus icon={<Database size={18} />} label="Real offers" value={String(status.realOffers)} />
@@ -90,40 +87,78 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <AdminActionButton
-            endpoint="/api/admin/prices/refresh"
-            label="Refresh imported prices"
-            body={{ mode: "imported", limit: 10 }}
+            endpoint="/api/admin/prices/manual-offer"
+            label="Add manual offer"
+            body={{
+              steamAppId: 570,
+              storeName: "Steam",
+              storeType: "official",
+              price: 0,
+              regularPrice: 0,
+              currency: "PLN",
+              externalUrl: "https://store.steampowered.com/app/570",
+              region: "PL",
+              drm: "Steam",
+              isOfficialStore: true,
+              available: true
+            }}
+            editableBody
             requireSecret
           />
           <AdminActionButton
-            endpoint="/api/admin/prices/refresh"
-            label="Dry run selected prices"
-            body={{ steamAppIds: [570, 730], limit: 2, dryRun: true }}
+            endpoint="/api/admin/prices/import-json"
+            label="Import JSON offers"
+            body={{
+              sourceName: "manual-json-import",
+              offers: [
+                {
+                  steamAppId: 570,
+                  storeName: "Steam",
+                  storeType: "official",
+                  price: 0,
+                  regularPrice: 0,
+                  currency: "PLN",
+                  externalUrl: "https://store.steampowered.com/app/570",
+                  region: "PL",
+                  drm: "Steam",
+                  isOfficialStore: true,
+                  available: true
+                }
+              ]
+            }}
+            editableBody
             requireSecret
           />
           <AdminActionButton
-            endpoint="/api/admin/prices/refresh-best"
-            label="Refresh best value prices"
-            body={{ mode: "best", limit: 10 }}
+            endpoint="/api/admin/prices/import-csv"
+            label="Import CSV offers"
+            body={{
+              sourceName: "manual-csv-import",
+              csv: "steamAppId,storeName,storeType,price,regularPrice,currency,externalUrl,region,drm,isOfficialStore,available\n570,Steam,official,0,0,PLN,https://store.steampowered.com/app/570,PL,Steam,true,true"
+            }}
+            editableBody
             requireSecret
           />
           <AdminActionButton
-            endpoint="/api/admin/prices/provider-diagnostics"
-            label="Diagnose GG.deals API"
-            body={{ provider: "ggdeals", steamAppIds: [570, 730], dryRun: true }}
+            endpoint="/api/admin/prices/snapshot"
+            label="Snapshot Dota 2 price"
+            body={{ steamAppId: 570, sourceName: "manual-admin" }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/prices/recalculate"
+            label="Recalculate price snapshots"
             requireSecret
           />
         </div>
-        {status.ggdealsStatus === "blocked_by_cloudflare" ? (
-          <div className="mt-4 rounded-md border border-radar-amber/30 bg-radar-amber/10 p-4 text-sm leading-6 text-radar-amber">
-            <p className="font-semibold text-white">GG.deals API access is blocked by Cloudflare from the backend host.</p>
-            <p className="mt-2">
-              Contact GG.deals support with the sanitized diagnostics output. Mention that GameValue Radar uses only the
-              official JSON API from a Vercel backend, keeps the API key server-side, displays GG.deals attribution links,
-              and does not scrape HTML or use browser sessions.
-            </p>
-          </div>
-        ) : null}
+        <div className="mt-4 rounded-md border border-radar-amber/30 bg-radar-amber/10 p-4 text-sm leading-6 text-radar-amber">
+          <p className="font-semibold text-white">Legacy external providers are disabled.</p>
+          <p className="mt-2">
+            GG.deals, ITAD and CheapShark are not used by active price refreshes. The app does not bypass Cloudflare,
+            scrape protected HTML, use browser cookies, Playwright, Puppeteer or proxy workarounds.
+          </p>
+        </div>
       </section>
 
       <section className="surface rounded-lg p-5">
@@ -225,8 +260,8 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             </thead>
             <tbody className="divide-y divide-white/10">
               {gameRows.map(({ game, summary }) => {
-                const hasGGDealsPrice = summary?.latestPrice?.source === "ggdeals" || summary?.bestOffer?.source === "ggdeals";
-                const ggDealsUrl = summary?.bestOffer?.externalUrl ?? summary?.bestOffer?.url ?? summary?.latestPrice?.externalUrl;
+                const priceSource =
+                  summary?.latestPrice?.sourceConfidence ?? summary?.bestOffer?.sourceConfidence ?? "no-price-data";
 
                 return (
                   <tr key={game.id} className="text-slate-300">
@@ -237,7 +272,7 @@ export default async function AdminPage(): Promise<React.ReactElement> {
                     </td>
                     <td className="py-3">
                       <span>{formatPrice(summary?.bestOffer?.price ?? summary?.latestPrice?.price)}</span>
-                      {hasGGDealsPrice ? <GGDealsAttribution className="mt-1" href={ggDealsUrl} /> : null}
+                      <p className="mt-1 text-xs text-slate-500">{formatSourceConfidence(priceSource)}</p>
                     </td>
                     <td className="py-3">{formatNumber(summary?.latestPlayers?.playersOnline)}</td>
                     <td className="py-3">{summary?.score.score ?? "n/a"}</td>
@@ -312,7 +347,15 @@ function InlineStatus({
   );
 }
 
-function formatGGDealsStatus(status: string): string {
-  return status.replace(/_/g, " ").toUpperCase();
+function formatSourceConfidence(status: string): string {
+  if (status === "internal-real") {
+    return "GameValue internal";
+  }
+  if (status === "internal-mock") {
+    return "Demo/mock seed";
+  }
+  if (status === "external-legacy") {
+    return "External legacy";
+  }
+  return "No price data";
 }
-

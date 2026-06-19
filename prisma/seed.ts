@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 import {
   mockGames,
@@ -25,6 +25,8 @@ async function main(): Promise<void> {
   await prisma.playerCountSnapshot.deleteMany();
   await prisma.gamePriceSnapshot.deleteMany();
   await prisma.storeOffer.deleteMany();
+  await prisma.priceSource.deleteMany();
+  await prisma.store.deleteMany();
   await prisma.user.deleteMany();
   await prisma.game.deleteMany();
 
@@ -57,17 +59,60 @@ async function main(): Promise<void> {
     }))
   });
 
+  await prisma.priceSource.create({
+    data: {
+      id: "price-source-mock-seed",
+      name: "mock-seed",
+      type: "mock",
+      isActive: true,
+      createdAt: new Date("2026-06-18T12:00:00.000Z"),
+      updatedAt: new Date("2026-06-18T12:00:00.000Z")
+    }
+  });
+
+  const stores = [...new Map(mockStoreOffers.map((offer) => [offer.storeId, offer])).values()];
+  await prisma.store.createMany({
+    data: stores.map((offer) => ({
+      id: offer.storeId as string,
+      name: offer.storeName,
+      slug: (offer.storeId as string).replace(/^store-/, ""),
+      storeType: offer.storeType,
+      websiteUrl: offer.storeName === "Steam" ? "https://store.steampowered.com/" : null,
+      isActive: true,
+      createdAt: offer.createdAt,
+      updatedAt: offer.updatedAt
+    }))
+  });
+
   await prisma.storeOffer.createMany({
     data: mockStoreOffers.map((offer) => ({
       id: offer.id,
       gameId: offer.gameId,
+      steamAppId: offer.steamAppId,
+      storeId: offer.storeId,
+      sourceId: offer.sourceId,
+      provider: offer.provider,
       storeName: offer.storeName,
+      storeType: offer.storeType,
+      title: offer.title,
       price: decimal(offer.price),
+      regularPrice: offer.regularPrice === null ? null : decimal(offer.regularPrice),
+      historicalLow: offer.historicalLow === null ? null : decimal(offer.historicalLow),
       currency: offer.currency,
       discountPercent: offer.discountPercent,
       url: offer.url,
+      externalUrl: offer.externalUrl,
+      region: offer.region,
       isOfficial: offer.isOfficial,
+      isOfficialStore: offer.isOfficialStore,
+      isHistoricalLow: offer.isHistoricalLow,
+      available: offer.available,
       drm: offer.drm,
+      platform: offer.platform,
+      sourceRawId: offer.sourceRawId,
+      rawProviderData: offer.rawProviderData as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput,
+      fetchedAt: offer.fetchedAt,
+      createdAt: offer.createdAt,
       source: "mock",
       updatedAt: offer.updatedAt
     }))
@@ -77,13 +122,24 @@ async function main(): Promise<void> {
     data: mockPriceSnapshots.map((snapshot) => ({
       id: snapshot.id,
       gameId: snapshot.gameId,
+      steamAppId: snapshot.steamAppId,
+      sourceId: snapshot.sourceId,
+      provider: snapshot.provider,
+      storeType: snapshot.storeType,
       price: decimal(snapshot.price),
       historicalLow: decimal(snapshot.historicalLow),
       basePrice: decimal(snapshot.basePrice),
       discountPercent: snapshot.discountPercent,
       storeName: snapshot.storeName,
       currency: snapshot.currency,
+      externalUrl: snapshot.externalUrl,
+      offerCount: snapshot.offerCount,
+      isHistoricalLow: snapshot.isHistoricalLow,
+      sourceRawId: snapshot.sourceRawId,
+      rawProviderData: snapshot.rawProviderData as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput,
+      fetchedAt: snapshot.fetchedAt,
       capturedAt: snapshot.capturedAt,
+      createdAt: snapshot.createdAt,
       source: "mock"
     }))
   });

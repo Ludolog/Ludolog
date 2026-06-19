@@ -3,7 +3,6 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { apiClient, describeApiClientError } from "@/api/client";
 import { GameCard } from "@/components/GameCard";
-import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { EmptyState, ErrorState, SkeletonList } from "@/components/StateViews";
 import { formatNumber, formatPrice } from "@/format";
 import type { ApiAdminStatus, ApiGameSearchResult, ApiGameSummary, ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
@@ -194,7 +193,6 @@ function StatsStrip({
                 {game.gameValueScore}/100
               </span>
             </button>
-            {game.priceSource === "ggdeals" ? <GGDealsAttribution className="px-3 pb-3" href={game.priceExternalUrl} /> : null}
           </article>
         ))}
       </div>

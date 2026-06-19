@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireAdminSecret } from "@/lib/api";
+import { priceApiService } from "@/lib/services/price-api-service";
 
 export async function POST(request: Request): Promise<NextResponse> {
   const unauthorized = requireAdminSecret(request);
@@ -8,13 +9,5 @@ export async function POST(request: Request): Promise<NextResponse> {
     return unauthorized;
   }
 
-  return NextResponse.json(
-    {
-      error: "Legacy external best-price refresh is disabled.",
-      provider: "gamevalue",
-      mode: "internal",
-      replacementEndpoint: "/api/admin/prices/recalculate"
-    },
-    { status: 410 }
-  );
+  return NextResponse.json(await priceApiService.recalculate());
 }

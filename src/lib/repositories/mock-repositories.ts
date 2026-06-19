@@ -20,6 +20,8 @@ import {
   getLatestPriceRefresh,
   getMostActiveGames,
   getOffersForGame,
+  listPriceSources,
+  listStores,
   getPlayerHistory,
   getPriceHistory,
   importGameFromCatalog,
@@ -32,7 +34,9 @@ import {
   removeWatchlistItem,
   searchGames,
   searchSteamCatalogEntries,
+  upsertPriceSource,
   upsertSteamCatalogEntries,
+  upsertStore,
   upsertStoreOffers,
   getSteamCatalogStatus
 } from "@/lib/store";
@@ -41,6 +45,7 @@ import type {
   AppRepositories,
   DiagnosticsRepository,
   GameRepository,
+  PriceRepository,
   SnapshotRepository,
   SteamCatalogRepository,
   SteamCatalogUpsertInput,
@@ -97,8 +102,44 @@ class MockGameRepository implements GameRepository {
     upsertStoreOffers(gameId, offers);
   }
 
-  async countOffersBySource(source: "mock" | "ggdeals" | "price-api") {
+  async countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual") {
     return countOffersBySource(source);
+  }
+}
+
+class MockPriceRepository implements PriceRepository {
+  async upsertStore(input: Parameters<typeof upsertStore>[0]) {
+    return upsertStore(input);
+  }
+
+  async upsertPriceSource(input: Parameters<typeof upsertPriceSource>[0]) {
+    return upsertPriceSource(input);
+  }
+
+  async listStores() {
+    return listStores();
+  }
+
+  async listPriceSources() {
+    return listPriceSources();
+  }
+
+  async status() {
+    return {
+      offerCount: countOffersBySource("mock") + countOffersBySource("manual") + countOffersBySource("ggdeals") + countOffersBySource("price-api"),
+      priceSnapshotCount:
+        countPriceSnapshotsBySource("mock") +
+        countPriceSnapshotsBySource("manual") +
+        countPriceSnapshotsBySource("ggdeals") +
+        countPriceSnapshotsBySource("price-api"),
+      storeCount: listStores().length,
+      priceSourceCount: listPriceSources().length,
+      lastPriceSnapshot: getLatestPriceRefresh(),
+      realInternalPriceSnapshots: countPriceSnapshotsBySource("manual"),
+      mockPriceSnapshots: countPriceSnapshotsBySource("mock"),
+      realOffers: countOffersBySource("manual"),
+      mockOffers: countOffersBySource("mock")
+    };
   }
 }
 
@@ -173,7 +214,7 @@ class MockSnapshotRepository implements SnapshotRepository {
     return getLatestPriceRefresh();
   }
 
-  async countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api") {
+  async countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual") {
     return countPriceSnapshotsBySource(source);
   }
 
@@ -205,6 +246,7 @@ export function createMockRepositories(): AppRepositories {
     provider: "mock",
     games: new MockGameRepository(),
     steamCatalog: new MockSteamCatalogRepository(),
+    prices: new MockPriceRepository(),
     watchlist: new MockWatchlistRepository(),
     alerts: new MockAlertRepository(),
     snapshots: new MockSnapshotRepository(),

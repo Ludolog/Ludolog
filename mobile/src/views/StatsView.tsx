@@ -2,7 +2,6 @@ import { Activity, BadgePercent, TrendingDown, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiClient, describeApiClientError } from "@/api/client";
-import { GGDealsAttribution } from "@/components/GGDealsAttribution";
 import { EmptyState, ErrorState, SkeletonList } from "@/components/StateViews";
 import { formatNumber, formatPrice, recommendationClass, recommendationLabel } from "@/format";
 import type { ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
@@ -57,11 +56,11 @@ export function StatsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
         <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
           <MiniMetric label="Catalog" value={formatNumber(overview.sourceCounts.steamCatalogEntries)} />
           <MiniMetric label="Imported" value={formatNumber(overview.sourceCounts.importedGames)} />
+          <MiniMetric label="Internal prices" value={formatNumber(overview.sourceCounts.realInternalPriceSnapshots)} />
           <MiniMetric label="Real prices" value={formatNumber(overview.sourceCounts.realPriceSnapshots)} />
           <MiniMetric label="Mock prices" value={formatNumber(overview.sourceCounts.mockPriceSnapshots)} />
           <MiniMetric label="Real snaps" value={formatNumber(overview.sourceCounts.realPlayerSnapshots)} />
           <MiniMetric label="Mock snaps" value={formatNumber(overview.sourceCounts.mockPlayerSnapshots)} />
-          <MiniMetric label="GG.deals" value={formatStatus(overview.ggdealsStatus)} />
         </div>
       </section>
 
@@ -98,10 +97,6 @@ function modeLabel(mode: ApiStatsOverview["mode"]): string {
     return "Mixed data";
   }
   return "Mock fallback";
-}
-
-function formatStatus(status: string): string {
-  return status.replace(/_/g, " ").toUpperCase();
 }
 
 function MiniMetric({ label, value }: { label: string; value: string }): React.ReactElement {
@@ -174,8 +169,8 @@ function StatsGameCard({
             <span className={`rounded-md border px-2 py-1 font-semibold ${playerSourceClass(game.playerSource)}`}>
               {playerSourceLabel(game.playerSource)}
             </span>
-            <span className={`rounded-md border px-2 py-1 font-semibold ${priceSourceClass(game.priceSource)}`}>
-              {priceSourceLabel(game.priceSource)}
+            <span className={`rounded-md border px-2 py-1 font-semibold ${priceSourceClass(game.priceSourceConfidence)}`}>
+              {priceSourceLabel(game.priceSourceConfidence)}
             </span>
             <span className={`rounded-md border px-2 py-1 font-semibold ${isUp ? "border-radar-green/30 bg-radar-green/10 text-radar-green" : "border-radar-red/30 bg-radar-red/10 text-radar-red"}`}>
               {isUp ? "+" : ""}
@@ -190,7 +185,6 @@ function StatsGameCard({
           </div>
         </div>
       </button>
-      {game.priceSource === "ggdeals" ? <GGDealsAttribution className="px-3 pb-3" href={game.priceExternalUrl} /> : null}
     </article>
   );
 }
@@ -215,24 +209,30 @@ function playerSourceClass(source: ApiStatsGame["playerSource"]): string {
   return "border-white/10 bg-black/20 text-slate-300";
 }
 
-function priceSourceLabel(source: ApiStatsGame["priceSource"]): string {
-  if (source === "ggdeals") {
-    return "GG.deals";
+function priceSourceLabel(source: ApiStatsGame["priceSourceConfidence"]): string {
+  if (source === "internal-real") {
+    return "GameValue internal";
   }
-  if (source === "mock") {
+  if (source === "internal-mock") {
     return "Mock price";
   }
-  return "Real price";
+  if (source === "external-legacy") {
+    return "External legacy";
+  }
+  return "No price data";
 }
 
-function priceSourceClass(source: ApiStatsGame["priceSource"]): string {
-  if (source === "ggdeals") {
+function priceSourceClass(source: ApiStatsGame["priceSourceConfidence"]): string {
+  if (source === "internal-real") {
     return "border-radar-green/30 bg-radar-green/10 text-radar-green";
   }
-  if (source === "mock") {
+  if (source === "internal-mock") {
     return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";
   }
-  return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
+  if (source === "external-legacy") {
+    return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
+  }
+  return "border-white/10 bg-black/20 text-slate-300";
 }
 
 function CompactStatsRow({
