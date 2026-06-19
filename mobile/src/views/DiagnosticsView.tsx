@@ -60,9 +60,16 @@ export function DiagnosticsView(): React.ReactElement {
         <Metric label="Games" value={formatNumber(status.gameCount)} />
         <Metric label="Offers" value={formatNumber(status.offerCount)} />
         <Metric label="Alerts" value={formatNumber(status.alertCount)} />
+        <Metric label="Price provider" value={status.priceProvider} />
+        <Metric label="Price mode" value={status.priceMode.toUpperCase()} />
+        <Metric label="GG.deals key" value={status.hasGGDealsApiKey ? "SET" : "MISSING"} />
         <Metric label="Price snapshots" value={formatNumber(status.priceSnapshotCount)} />
+        <Metric label="Real price snaps" value={formatNumber(status.realPriceSnapshots)} />
+        <Metric label="Mock price snaps" value={formatNumber(status.mockPriceSnapshots)} />
+        <Metric label="Real offers" value={formatNumber(status.realOffers)} />
         <Metric label="Steam catalog" value={formatNumber(status.steamCatalogEntryCount)} />
         <Metric label="Imported games" value={formatNumber(status.importedGameCount)} />
+        <Metric label="Last price refresh" value={status.lastPriceRefresh ? formatShortDate(status.lastPriceRefresh) : "n/a"} />
         <Metric label="Last catalog sync" value={status.lastSteamCatalogSync ? formatShortDate(status.lastSteamCatalogSync) : "n/a"} />
         <Metric label="Last player refresh" value={status.lastPlayerCountRefresh ? formatShortDate(status.lastPlayerCountRefresh) : "n/a"} />
         <Metric label="Real snaps" value={formatNumber(stats?.sourceCounts.realPlayerSnapshots)} />

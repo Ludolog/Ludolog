@@ -13,7 +13,7 @@ The Android app is a client only. It never talks to Steam, Neon or Prisma direct
 - Android mobile: `mobile/src/api/client.ts` reads public `VITE_API_BASE_URL`, uses `CapacitorHttp` on native Android and `fetch` in browser preview.
 - Web frontend: Next.js pages call the same API routes or server-side services.
 - API routes: `src/app/api/**` validate input, call services and return shared DTO shapes from `packages/shared/src/api-types.ts`.
-- Services: search, import, Steam sync, player refresh, stats and scoring live in `src/lib/services`.
+- Services: search, import, Steam sync, player refresh, price providers, stats and scoring live in `src/lib/services`.
 - Repository layer: `REPOSITORY_PROVIDER=mock` uses in-memory fixtures; `REPOSITORY_PROVIDER=prisma` uses Neon through Prisma.
 - Database: Prisma stores imported games, Steam catalog entries, snapshots, offers, watchlist, alerts and integration logs.
 
@@ -24,6 +24,9 @@ The Android app is a client only. It never talks to Steam, Neon or Prisma direct
 - `STEAM_WEB_API_KEY`: backend-only Steam key used by Steam catalog sync and live player count reads.
 - `ADMIN_API_SECRET`: backend-only secret required by manual admin POST endpoints via `x-admin-secret`.
 - `CRON_SECRET`: backend-only secret required by cron refresh endpoints in production.
+- `GGDEALS_API_KEY`: backend-only GG.deals key for price refreshes.
+- `PRICE_PROVIDER`: `mock` or `ggdeals`; future adapters can add `itad` or `cheapshark`.
+- `PRICE_MODE`: `mock` or `api`.
 - `DATA_MODE`: `mock` uses deterministic fixtures; `api` enables API-oriented adapters with fallback logging.
 - `REPOSITORY_PROVIDER`: `mock` or `prisma`.
 - `VITE_API_BASE_URL`: public mobile backend URL. It is bundled into Android and must never contain secrets.
@@ -76,19 +79,29 @@ The Android app is a client only. It never talks to Steam, Neon or Prisma direct
 
 Public `GET /api/games/:id/players` can read current/cached player data, but it does not store a durable snapshot. Durable refreshes stay admin/cron controlled.
 
+## Price provider flow
+
+1. Admin calls `POST /api/admin/prices/refresh` or `POST /api/admin/prices/refresh-best` with `x-admin-secret`.
+2. The body accepts `mode: "imported"`, explicit `steamAppIds`, `limit` and optional `dryRun`.
+3. `PriceProviderService` selects `GGDealsPriceProvider` when `DATA_MODE=api`, `PRICE_MODE=api`, `PRICE_PROVIDER=ggdeals` and `GGDEALS_API_KEY` exists.
+4. If the key or API mode is missing, `MockPriceProvider` is used and the fallback is logged.
+5. Provider responses are normalized into `provider`, `storeType`, `price`, `regularPrice`, `discountPercent`, `currency`, URL, historical-low metadata and raw provider id.
+6. Successful refreshes upsert `StoreOffer` rows and append `GamePriceSnapshot` rows. One failed Steam App ID does not roll back the rest.
+7. ITAD and CheapShark can be added later as additional `PriceProvider` implementations without changing Android contracts.
+
 ## Stats overview flow
 
 1. Mobile/web calls `GET /api/stats/overview`.
-2. `StatsService` loads game profiles, watchlists, catalog status and snapshot counts.
+2. `StatsService` loads game profiles, watchlists, catalog status and price/player snapshot counts.
 3. It calculates top players, trending, drops, best value, watchlist popularity, hidden gems and categories.
-4. It returns `mode: "real" | "mixed" | "mock"` based on real/mock player snapshot counts.
-5. Home and Stats screens display `updatedAt`, source counts, player source badges and category sections.
+4. It returns `mode: "real" | "mixed" | "mock"` based on real/mock player and price snapshot counts.
+5. Home and Stats screens display `updatedAt`, source counts, player source badges, price source badges and category sections.
 
 ## Android diagnostics flow
 
 1. Mobile reads runtime info from `apiClient.getRuntimeInfo()`.
 2. Diagnostics calls `GET /api/admin/status` and `GET /api/stats/overview`.
-3. It shows API base URL, HTTP transport, backend status, data mode, catalog count, imported count, real/mock snapshot counts, last sync, last player refresh and Capacitor platform.
+3. It shows API base URL, HTTP transport, backend status, data mode, price provider/mode/key boolean, catalog count, imported count, real/mock price and player snapshot counts, last sync, last price/player refresh and Capacitor platform.
 
 ## Fallback model
 
@@ -100,6 +113,7 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 ## Operational guardrails
 
 - Do not put `STEAM_WEB_API_KEY`, `ADMIN_API_SECRET`, `CRON_SECRET`, `DATABASE_URL` or `DIRECT_URL` into mobile env files.
+- Do not put `GGDEALS_API_KEY` into mobile env files; only Vercel/backend receives it.
 - Do not run a full Steam catalog sync automatically or from user traffic.
 - Start with `dryRun: true`, `maxPages: 1`, `maxResults: 100`.
 - Use `startAfterAppId` or the status cursor for controlled follow-up batches.

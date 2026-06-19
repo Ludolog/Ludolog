@@ -13,6 +13,8 @@ enum DataSource {
   steam_api
   price_api
   prisma
+  ggdeals
+  manual
 }
 
 enum Recommendation {
@@ -29,6 +31,7 @@ enum IntegrationLevel {
 
 enum IntegrationService {
   steam
+  ggdeals
   price
   search
   snapshot
@@ -79,36 +82,56 @@ model SteamCatalogEntry {
 }
 
 model StoreOffer {
-  id              String     @id
+  id              String      @id
   gameId          String
-  game            Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  game            Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  provider        String      @default("mock")
   storeName       String
-  price           Decimal    @db.Decimal(10, 2)
+  storeType       String      @default("unknown")
+  price           Decimal     @db.Decimal(10, 2)
+  regularPrice    Decimal?    @db.Decimal(10, 2)
+  historicalLow   Decimal?    @db.Decimal(10, 2)
   currency        String
   discountPercent Int
   url             String
+  externalUrl     String?
   isOfficial      Boolean
+  isHistoricalLow Boolean     @default(false)
   drm             String
-  source          DataSource @default(mock)
+  sourceRawId     String?
+  rawProviderData Json?
+  source          DataSource  @default(mock)
+  fetchedAt       DateTime?
   updatedAt       DateTime
 
   @@index([gameId])
+  @@index([provider])
+  @@index([source])
 }
 
 model GamePriceSnapshot {
-  id              String     @id
+  id              String      @id
   gameId          String
-  game            Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  price           Decimal    @db.Decimal(10, 2)
-  historicalLow   Decimal    @db.Decimal(10, 2)
-  basePrice       Decimal    @db.Decimal(10, 2)
+  game            Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  provider        String      @default("mock")
+  storeType       String      @default("unknown")
+  price           Decimal     @db.Decimal(10, 2)
+  historicalLow   Decimal     @db.Decimal(10, 2)
+  basePrice       Decimal     @db.Decimal(10, 2)
   discountPercent Int
   storeName       String
   currency        String
+  externalUrl     String?
+  isHistoricalLow Boolean     @default(false)
+  sourceRawId     String?
+  rawProviderData Json?
+  fetchedAt       DateTime?
   capturedAt      DateTime
-  source          DataSource @default(mock)
+  source          DataSource  @default(mock)
 
   @@index([gameId, capturedAt])
+  @@index([provider])
+  @@index([source])
 }
 
 model PlayerCountSnapshot {

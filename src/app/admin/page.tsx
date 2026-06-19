@@ -1,5 +1,5 @@
 ﻿import Link from "next/link";
-import { AlertTriangle, Database, RefreshCw, Server } from "lucide-react";
+import { AlertTriangle, Database, RefreshCw, Server, ShoppingCart } from "lucide-react";
 
 import { RefreshButton } from "@/components/forms/refresh-button";
 import { AdminActionButton } from "@/components/forms/admin-action-button";
@@ -51,9 +51,55 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <StatusCard icon={<Database size={18} />} label="Imported" value={String(status.importedGameCount)} />
         <StatusCard icon={<Database size={18} />} label="Offers" value={String(status.offerCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Price snapshots" value={String(status.priceSnapshotCount)} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="Price provider" value={status.priceProvider.toUpperCase()} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="PRICE_MODE" value={status.priceMode.toUpperCase()} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="GG.deals key" value={status.hasGGDealsApiKey ? "SET" : "MISSING"} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="Real price snaps" value={String(status.realPriceSnapshots)} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="Real offers" value={String(status.realOffers)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Player snapshots" value={String(status.playerSnapshotCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Real player snaps" value={String(status.realPlayerSnapshots)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Mock player snaps" value={String(status.mockPlayerSnapshots)} />
+      </section>
+
+      <section className="surface rounded-lg p-5">
+        <h2 className="text-lg font-semibold text-white">Price Provider Status</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Backend-only price refresh. GG.deals key stays in Vercel env; Android and web clients call only our API.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <InlineStatus icon={<ShoppingCart size={18} />} label="Provider" value={status.priceProvider} />
+          <InlineStatus icon={<ShoppingCart size={18} />} label="Mode" value={status.priceMode} />
+          <InlineStatus icon={<ShoppingCart size={18} />} label="GG.deals key" value={status.hasGGDealsApiKey ? "configured" : "missing"} />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Last price refresh"
+            value={status.lastPriceRefresh ? formatDate(status.lastPriceRefresh) : "n/a"}
+          />
+          <InlineStatus icon={<Database size={18} />} label="Real price snaps" value={String(status.realPriceSnapshots)} />
+          <InlineStatus icon={<Database size={18} />} label="Mock price snaps" value={String(status.mockPriceSnapshots)} />
+          <InlineStatus icon={<Database size={18} />} label="Real offers" value={String(status.realOffers)} />
+          <InlineStatus icon={<Database size={18} />} label="Mock offers" value={String(status.mockOffers)} />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <AdminActionButton
+            endpoint="/api/admin/prices/refresh"
+            label="Refresh imported prices"
+            body={{ mode: "imported", limit: 10 }}
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/prices/refresh"
+            label="Dry run selected prices"
+            body={{ steamAppIds: [570, 730], limit: 2, dryRun: true }}
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/prices/refresh-best"
+            label="Refresh best value prices"
+            body={{ mode: "best", limit: 10 }}
+            requireSecret
+          />
+        </div>
       </section>
 
       <section className="surface rounded-lg p-5">

@@ -26,12 +26,15 @@ MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
 STEAM_WEB_API_KEY=
 ADMIN_API_SECRET=
 CRON_SECRET=
+PRICE_PROVIDER=ggdeals
+PRICE_MODE=api
+GGDEALS_API_KEY=
 ```
 
 Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT_URL`. Replace `TWOJE_HASLO` only inside Vercel settings or local ignored env files.
 
 6. Start the deployment.
-   After changing `STEAM_WEB_API_KEY`, `ADMIN_API_SECRET`, `CRON_SECRET` or `DATA_MODE`, trigger a new deployment from
+   After changing `STEAM_WEB_API_KEY`, `GGDEALS_API_KEY`, `PRICE_PROVIDER`, `PRICE_MODE`, `ADMIN_API_SECRET`, `CRON_SECRET` or `DATA_MODE`, trigger a new deployment from
    `Project -> Deployments -> Redeploy`. Vercel does not apply changed environment variables to an already-running
    deployment.
 7. After deployment, check:
@@ -84,6 +87,10 @@ STEAM_WEB_API_KEY=
 STEAM_API_KEY=
 ADMIN_API_SECRET=
 CRON_SECRET=
+PRICE_PROVIDER=ggdeals
+PRICE_MODE=api
+GGDEALS_API_KEY=
+# Legacy fallbacks:
 PRICE_API_PROVIDER=mock
 PRICE_API_KEY=
 ISTHEREANYDEAL_API_KEY=
@@ -96,6 +103,7 @@ Notes:
 - `DATA_MODE=api` enables API-oriented adapters. If Steam is missing or fails, backend services still fall back to cached/mock data.
 - `MOBILE_ALLOWED_ORIGINS` should be explicit in production. Do not use `*`.
 - `STEAM_WEB_API_KEY` is backend-only. It enables real Steam catalog sync and real current-player refreshes.
+- `GGDEALS_API_KEY` is backend-only. It enables real price refreshes through `PRICE_PROVIDER=ggdeals` and `PRICE_MODE=api`.
 - `ADMIN_API_SECRET` protects manual admin POST endpoints through the `x-admin-secret` header.
 - `CRON_SECRET` protects `/api/cron/refresh-player-counts` in production. Do not expose it to mobile.
 - Mobile public config uses `VITE_API_BASE_URL`; secrets must never use the `VITE_` prefix.
@@ -135,6 +143,12 @@ The Steam catalog migration is stored in:
 prisma/migrations/000002_steam_catalog/migration.sql
 ```
 
+The price provider metadata migration is stored in:
+
+```text
+prisma/migrations/000003_price_provider_metadata/migration.sql
+```
+
 ## 5. Seed demo data
 
 For a demo production database:
@@ -153,6 +167,7 @@ After Vercel deployment and migration:
 https://apka-seven.vercel.app/api/admin/status
 https://apka-seven.vercel.app/api/deals/best
 https://apka-seven.vercel.app/api/games/search?q=cyberpunk
+https://apka-seven.vercel.app/api/games/dota-2/prices
 https://apka-seven.vercel.app/api/stats/overview
 https://apka-seven.vercel.app/api/admin/steam-catalog/status
 ```
@@ -253,6 +268,40 @@ $body = '{"mode":"top","limit":25}'
 
 Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
 ```
+
+Manual price refresh for games already stored in the `Game` table:
+
+```powershell
+$body = @{
+  mode = "imported"
+  limit = 10
+} | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
+Manual price refresh for explicit Steam App IDs:
+
+```powershell
+$body = @{
+  steamAppIds = @(570, 730)
+  limit = 2
+} | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
+Dry run:
+
+```powershell
+$body = @{
+  steamAppIds = @(570, 730)
+  limit = 2
+  dryRun = $true
+} | ConvertTo-Json -Compress
+```
+
+GG.deals responses are normalized into official/keyshop/marketplace/unknown store types when the provider exposes enough metadata. Missing keys or `PRICE_MODE=mock` keep the application on mock/fallback prices and write an integration log instead of breaking the UI.
 
 Starter import from the already synced Steam catalog. Keep this as a small, intentional batch; it does not run a full catalog import:
 

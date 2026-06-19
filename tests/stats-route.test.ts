@@ -17,6 +17,10 @@ describe("GET /api/stats/overview", () => {
     expect(body.sourceCounts).toMatchObject({
       importedGames: expect.any(Number),
       steamCatalogEntries: expect.any(Number),
+      realPriceSnapshots: expect.any(Number),
+      mockPriceSnapshots: expect.any(Number),
+      realOffers: expect.any(Number),
+      mockOffers: expect.any(Number),
       realPlayerSnapshots: expect.any(Number),
       mockPlayerSnapshots: expect.any(Number)
     });

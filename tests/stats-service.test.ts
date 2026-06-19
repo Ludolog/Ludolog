@@ -50,13 +50,34 @@ describe("StatsService", () => {
       capturedAt: new Date(Date.now() + 1000),
       source: "steam-api"
     });
+    await repositories.snapshots.appendPrice({
+      id: "price-stats-fixture-arena-ggdeals",
+      gameId: imported.summary.game.id,
+      provider: "ggdeals",
+      storeType: "official",
+      price: 9.99,
+      historicalLow: 9.99,
+      basePrice: 59.99,
+      discountPercent: 83,
+      storeName: "Steam",
+      currency: "PLN",
+      externalUrl: "https://gg.deals/game/stats-fixture-arena",
+      isHistoricalLow: true,
+      sourceRawId: "stats-fixture-offer",
+      rawProviderData: null,
+      fetchedAt: new Date(Date.now() + 1000),
+      capturedAt: new Date(Date.now() + 1000),
+      source: "ggdeals"
+    });
 
     const overview = await statsService.overview(20);
 
     expect(overview.sourceCounts.importedGames).toBeGreaterThan(0);
     expect(overview.sourceCounts.realPlayerSnapshots).toBeGreaterThan(0);
+    expect(overview.sourceCounts.realPriceSnapshots).toBeGreaterThan(0);
     expect(overview.topPlayers.some((game) => game.steamAppId === 7654322)).toBe(true);
     expect(overview.topPlayers.find((game) => game.steamAppId === 7654322)?.playerSource).toBe("steam-api");
+    expect(overview.topPlayers.find((game) => game.steamAppId === 7654322)?.priceSource).toBe("ggdeals");
     expect(["real", "mixed"]).toContain(overview.mode);
   });
 });

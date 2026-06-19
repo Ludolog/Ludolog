@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { priceAlertCreateSchema, searchQuerySchema, watchlistCreateSchema } from "@/lib/validation";
+import { priceAlertCreateSchema, priceRefreshSchema, searchQuerySchema, watchlistCreateSchema } from "@/lib/validation";
 
 describe("validation schemas", () => {
   it("rejects empty search queries", () => {
@@ -16,5 +16,13 @@ describe("validation schemas", () => {
 
   it("rejects invalid alert prices", () => {
     expect(() => priceAlertCreateSchema.parse({ gameId: "terraria", thresholdPrice: -2 })).toThrow();
+  });
+
+  it("accepts bounded admin price refresh input", () => {
+    const payload = priceRefreshSchema.parse({ steamAppIds: [570, 730], limit: 2, dryRun: true });
+
+    expect(payload.mode).toBe("imported");
+    expect(payload.steamAppIds).toEqual([570, 730]);
+    expect(payload.dryRun).toBe(true);
   });
 });

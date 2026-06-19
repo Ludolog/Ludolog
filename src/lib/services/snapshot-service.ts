@@ -37,12 +37,19 @@ export class SnapshotService {
     const priceSnapshot: GamePriceSnapshot = {
       id: `price-${game.id}-${now.getTime()}`,
       gameId: game.id,
+      provider: "mock",
+      storeType: profile.bestOffer?.storeType ?? "unknown",
       price,
       historicalLow,
       basePrice,
       discountPercent,
       storeName: profile.bestOffer?.storeName ?? "Mock Store",
       currency: "PLN",
+      externalUrl: profile.bestOffer?.externalUrl ?? profile.bestOffer?.url ?? null,
+      isHistoricalLow: price <= historicalLow,
+      sourceRawId: null,
+      rawProviderData: null,
+      fetchedAt: now,
       capturedAt: now,
       source: "mock"
     };

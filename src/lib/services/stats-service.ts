@@ -14,12 +14,34 @@ export class StatsService {
       await Promise.all(games.map((game) => repositories.games.getProfile(game.id)))
     ).filter((profile): profile is GameProfile => profile !== null);
     const watchlist = await repositories.watchlist.list();
-    const [catalogStatus, realPlayerSnapshots, mockPlayerSnapshots, importedGames, latestPlayerRefresh] = await Promise.all([
+    const [
+      catalogStatus,
+      realPlayerSnapshots,
+      mockPlayerSnapshots,
+      realPriceSnapshots,
+      mockPriceSnapshots,
+      realOffers,
+      mockOffers,
+      importedGames,
+      latestPlayerRefresh,
+      latestPriceRefresh
+    ] = await Promise.all([
       repositories.steamCatalog.status(),
       repositories.snapshots.countPlayerSnapshotsBySource("steam-api"),
       repositories.snapshots.countPlayerSnapshotsBySource("mock"),
+      Promise.all([
+        repositories.snapshots.countPriceSnapshotsBySource("ggdeals"),
+        repositories.snapshots.countPriceSnapshotsBySource("price-api")
+      ]).then(([ggdeals, priceApi]) => ggdeals + priceApi),
+      repositories.snapshots.countPriceSnapshotsBySource("mock"),
+      Promise.all([
+        repositories.games.countOffersBySource("ggdeals"),
+        repositories.games.countOffersBySource("price-api")
+      ]).then(([ggdeals, priceApi]) => ggdeals + priceApi),
+      repositories.games.countOffersBySource("mock"),
       repositories.games.listImported(500),
-      repositories.snapshots.latestPlayerRefresh()
+      repositories.snapshots.latestPlayerRefresh(),
+      repositories.snapshots.latestPriceRefresh()
     ]);
     const watchlistCounts = new Map<string, number>();
 
@@ -53,25 +75,40 @@ export class StatsService {
       categories: buildCategories(sources),
       dataFreshness: {
         latestSteamCatalogSync: catalogStatus.lastSyncedAt?.toISOString() ?? null,
-        latestPlayerCountRefresh: latestPlayerRefresh?.toISOString() ?? null
+        latestPlayerCountRefresh: latestPlayerRefresh?.toISOString() ?? null,
+        latestPriceRefresh: latestPriceRefresh?.toISOString() ?? null
       },
       sourceCounts: {
         importedGames: importedGames.length,
         steamCatalogEntries: catalogStatus.entryCount,
+        realPriceSnapshots,
+        mockPriceSnapshots,
+        realOffers,
+        mockOffers,
         realPlayerSnapshots,
         mockPlayerSnapshots
       },
       updatedAt: new Date().toISOString(),
-      mode: resolveStatsMode(realPlayerSnapshots, mockPlayerSnapshots)
+      mode: resolveStatsMode({ mockPlayerSnapshots, mockPriceSnapshots, realPlayerSnapshots, realPriceSnapshots })
     };
   }
 }
 
-function resolveStatsMode(realPlayerSnapshots: number, mockPlayerSnapshots: number): "real" | "mixed" | "mock" {
-  if (realPlayerSnapshots > 0 && mockPlayerSnapshots === 0) {
+function resolveStatsMode({
+  mockPlayerSnapshots,
+  mockPriceSnapshots,
+  realPlayerSnapshots,
+  realPriceSnapshots
+}: {
+  mockPlayerSnapshots: number;
+  mockPriceSnapshots: number;
+  realPlayerSnapshots: number;
+  realPriceSnapshots: number;
+}): "real" | "mixed" | "mock" {
+  if (realPlayerSnapshots > 0 && realPriceSnapshots > 0 && mockPlayerSnapshots === 0 && mockPriceSnapshots === 0) {
     return "real";
   }
-  if (realPlayerSnapshots > 0 && mockPlayerSnapshots > 0) {
+  if (realPlayerSnapshots > 0 || realPriceSnapshots > 0) {
     return "mixed";
   }
   return "mock";
@@ -168,6 +205,7 @@ function statsGame(source: StatsSource): ApiStatsGame {
     gameValueScore: profile.score.score,
     recommendation: profile.score.recommendation,
     playerSource: profile.latestPlayers?.source ?? "mock",
+    priceSource: profile.latestPrice?.source ?? profile.bestOffer?.source ?? "mock",
     tags: profile.game.genres
   };
 }

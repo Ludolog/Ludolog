@@ -83,6 +83,10 @@ STEAM_WEB_API_KEY=""
 # Legacy name accepted for backward compatibility; prefer STEAM_WEB_API_KEY.
 STEAM_API_KEY=""
 ADMIN_API_SECRET=""
+PRICE_PROVIDER="mock"
+PRICE_MODE="mock"
+GGDEALS_API_KEY=""
+# Legacy fallbacks:
 PRICE_API_PROVIDER="mock"
 PRICE_API_KEY=""
 ISTHEREANYDEAL_API_KEY=""
@@ -124,6 +128,8 @@ CRON_SECRET=""
 - `GET /api/admin/steam-catalog/status`
 - `POST /api/admin/steam-catalog/sync`
 - `POST /api/admin/games/bulk-import`
+- `POST /api/admin/prices/refresh`
+- `POST /api/admin/prices/refresh-best`
 - `POST /api/admin/player-counts/refresh`
 - `POST /api/games/:id/refresh-players`
 - `POST /api/cron/refresh-player-counts`
@@ -144,6 +150,34 @@ Search now combines local database results, synced Steam catalog entries stored 
 Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending games, biggest growth/drop, best value, watchlist popularity, hidden gems, genre categories, data freshness and source counts. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app uses mock snapshots and logs the fallback.
 
 Android never calls Steam directly and never receives API keys. The mobile app calls the Vercel/Next.js API, and backend services own Steam catalog sync and player-count refreshes.
+
+## Real price provider
+
+Price data flows through `PriceProviderService`. The active provider is selected with `PRICE_PROVIDER` and `PRICE_MODE`:
+
+- `PRICE_PROVIDER=ggdeals`
+- `PRICE_MODE=api`
+- `GGDEALS_API_KEY=...`
+
+If `PRICE_MODE=mock`, `PRICE_PROVIDER=mock` or the GG.deals key is missing, the backend falls back to `MockPriceProvider` and records an integration log. The key is backend-only: do not commit it and do not expose it through `VITE_` mobile variables. Android and Web call only our API.
+
+Normalized offers store `provider`, `storeType` (`official`, `keyshop`, `marketplace`, `unknown`), `price`, `regularPrice`, `historicalLow`, `isHistoricalLow`, currency, URL, raw provider id and fetched time. `StoreOffer` stores the current best offers and `GamePriceSnapshot` stores durable price history used by GameValue Score, Best deals and Stats.
+
+Admin price operations:
+
+```bash
+curl -X POST https://apka-seven.vercel.app/api/admin/prices/refresh \
+  -H "Content-Type: application/json" \
+  -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
+  -d "{\"mode\":\"imported\",\"limit\":10}"
+
+curl -X POST https://apka-seven.vercel.app/api/admin/prices/refresh \
+  -H "Content-Type: application/json" \
+  -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
+  -d "{\"steamAppIds\":[570,730],\"limit\":2}"
+```
+
+ITAD and CheapShark are intentionally not active providers yet, but the provider interface is ready for additional adapters.
 
 Admin/dev Steam operations:
 

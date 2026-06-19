@@ -1141,16 +1141,28 @@ export const mockStoreOffers: StoreOffer[] = fixtures.flatMap((fixture) =>
   fixture.stores.map((offer, index) => ({
     id: `offer-${fixture.id}-${index + 1}`,
     gameId: fixture.id,
+    provider: "mock",
     storeName: offer.storeName,
+    storeType: offer.isOfficial ? "official" : "unknown",
     price: offer.price,
+    regularPrice: fixture.basePrice,
+    historicalLow: fixture.historicalLow,
     currency: "PLN",
     discountPercent: offer.discountPercent,
     url:
       offer.storeName === "Steam"
         ? `https://store.steampowered.com/app/${fixture.steamAppId}`
         : "https://example.com/gamevalue-demo-offer",
+    externalUrl:
+      offer.storeName === "Steam"
+        ? `https://store.steampowered.com/app/${fixture.steamAppId}`
+        : "https://example.com/gamevalue-demo-offer",
     isOfficial: offer.isOfficial ?? false,
+    isHistoricalLow: offer.price <= fixture.historicalLow,
     drm: offer.drm,
+    sourceRawId: null,
+    rawProviderData: null,
+    fetchedAt: baseDate,
     updatedAt: baseDate,
     source: "mock"
   }))
@@ -1166,10 +1178,20 @@ export const mockPriceSnapshots: GamePriceSnapshot[] = fixtures.flatMap((fixture
       price,
       historicalLow: fixture.historicalLow,
       basePrice: fixture.basePrice,
+      provider: "mock",
+      storeType: fixture.stores[0]?.isOfficial ? "official" : "unknown",
       discountPercent:
         fixture.basePrice === 0 ? 0 : Math.max(0, Math.round((1 - price / fixture.basePrice) * 100)),
       storeName: fixture.stores[0]?.storeName ?? "Mock Store",
       currency: "PLN",
+      externalUrl:
+        fixture.stores[0]?.storeName === "Steam"
+          ? `https://store.steampowered.com/app/${fixture.steamAppId}`
+          : "https://example.com/gamevalue-demo-offer",
+      isHistoricalLow: price <= fixture.historicalLow,
+      sourceRawId: null,
+      rawProviderData: null,
+      fetchedAt: daysAgo(dayOffset),
       capturedAt: daysAgo(dayOffset),
       source: "mock"
     };

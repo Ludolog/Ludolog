@@ -51,6 +51,13 @@ export const playerCountsRefreshSchema = z.object({
   steamAppIds: z.array(z.number().int().positive()).max(50).optional()
 });
 
+export const priceRefreshSchema = z.object({
+  mode: z.enum(["imported", "best"]).default("imported"),
+  limit: z.number().int().positive().max(50).default(10),
+  steamAppIds: z.array(z.number().int().positive()).max(50).optional(),
+  dryRun: z.boolean().default(false)
+});
+
 export const priceAlertCreateSchema = z.object({
   gameId: z.string().trim().min(1),
   thresholdPrice: z.number().positive().max(9999)

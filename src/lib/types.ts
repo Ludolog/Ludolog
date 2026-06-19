@@ -2,7 +2,13 @@ export type DataMode = "mock" | "api";
 
 export type StatsDataMode = "real" | "mixed" | "mock";
 
-export type DataSource = "mock" | "steam-api" | "price-api" | "prisma";
+export type DataSource = "mock" | "steam-api" | "price-api" | "prisma" | "ggdeals" | "manual";
+
+export type PriceProviderName = "mock" | "ggdeals" | "itad" | "cheapshark";
+
+export type PriceMode = "mock" | "api";
+
+export type StoreType = "official" | "keyshop" | "marketplace" | "unknown";
 
 export type Recommendation = "buy_now" | "wait" | "weak_deal";
 
@@ -42,13 +48,22 @@ export type SteamCatalogEntry = {
 export type StoreOffer = {
   id: string;
   gameId: string;
+  provider: PriceProviderName | string;
   storeName: string;
+  storeType: StoreType;
   price: number;
+  regularPrice: number | null;
+  historicalLow: number | null;
   currency: string;
   discountPercent: number;
   url: string;
+  externalUrl: string | null;
   isOfficial: boolean;
+  isHistoricalLow: boolean;
   drm: string;
+  sourceRawId: string | null;
+  rawProviderData: unknown | null;
+  fetchedAt: Date | null;
   updatedAt: Date;
   source: DataSource;
 };
@@ -56,12 +71,19 @@ export type StoreOffer = {
 export type GamePriceSnapshot = {
   id: string;
   gameId: string;
+  provider: PriceProviderName | string;
+  storeType: StoreType;
   price: number;
   historicalLow: number;
   basePrice: number;
   discountPercent: number;
   storeName: string;
   currency: string;
+  externalUrl: string | null;
+  isHistoricalLow: boolean;
+  sourceRawId: string | null;
+  rawProviderData: unknown | null;
+  fetchedAt: Date | null;
   capturedAt: Date;
   source: DataSource;
 };
@@ -128,7 +150,7 @@ export type PriceAlert = {
 
 export type IntegrationLog = {
   id: string;
-  service: "steam" | "price" | "search" | "snapshot" | "alerts";
+  service: "steam" | "ggdeals" | "price" | "search" | "snapshot" | "alerts";
   level: "info" | "warning" | "error";
   message: string;
   createdAt: Date;
@@ -189,6 +211,14 @@ export type AdminStatus = {
   playerSnapshotCount: number;
   watchlistCount: number;
   alertCount: number;
+  priceProvider: PriceProviderName;
+  priceMode: PriceMode;
+  hasGGDealsApiKey: boolean;
+  lastPriceRefresh: Date | null;
+  realPriceSnapshots: number;
+  mockPriceSnapshots: number;
+  realOffers: number;
+  mockOffers: number;
   realPlayerSnapshots: number;
   mockPlayerSnapshots: number;
   integrationLogs: IntegrationLog[];

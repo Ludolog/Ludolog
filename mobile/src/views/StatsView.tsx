@@ -56,6 +56,8 @@ export function StatsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
         <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
           <MiniMetric label="Catalog" value={formatNumber(overview.sourceCounts.steamCatalogEntries)} />
           <MiniMetric label="Imported" value={formatNumber(overview.sourceCounts.importedGames)} />
+          <MiniMetric label="Real prices" value={formatNumber(overview.sourceCounts.realPriceSnapshots)} />
+          <MiniMetric label="Mock prices" value={formatNumber(overview.sourceCounts.mockPriceSnapshots)} />
           <MiniMetric label="Real snaps" value={formatNumber(overview.sourceCounts.realPlayerSnapshots)} />
           <MiniMetric label="Mock snaps" value={formatNumber(overview.sourceCounts.mockPlayerSnapshots)} />
         </div>
@@ -165,6 +167,9 @@ function StatsGameCard({
           <span className={`rounded-md border px-2 py-1 font-semibold ${playerSourceClass(game.playerSource)}`}>
             {playerSourceLabel(game.playerSource)}
           </span>
+          <span className={`rounded-md border px-2 py-1 font-semibold ${priceSourceClass(game.priceSource)}`}>
+            {priceSourceLabel(game.priceSource)}
+          </span>
           <span className={`rounded-md border px-2 py-1 font-semibold ${isUp ? "border-radar-green/30 bg-radar-green/10 text-radar-green" : "border-radar-red/30 bg-radar-red/10 text-radar-red"}`}>
             {isUp ? "+" : ""}
             {game.playerTrendPercent}%
@@ -199,6 +204,26 @@ function playerSourceClass(source: ApiStatsGame["playerSource"]): string {
     return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";
   }
   return "border-white/10 bg-black/20 text-slate-300";
+}
+
+function priceSourceLabel(source: ApiStatsGame["priceSource"]): string {
+  if (source === "ggdeals") {
+    return "GG.deals";
+  }
+  if (source === "mock") {
+    return "Mock price";
+  }
+  return "Real price";
+}
+
+function priceSourceClass(source: ApiStatsGame["priceSource"]): string {
+  if (source === "ggdeals") {
+    return "border-radar-green/30 bg-radar-green/10 text-radar-green";
+  }
+  if (source === "mock") {
+    return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";
+  }
+  return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
 }
 
 function CompactStatsRow({

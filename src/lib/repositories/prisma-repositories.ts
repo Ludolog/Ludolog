@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 
-import { DEMO_USER_ID, getDataMode } from "@/lib/config";
+import { DEMO_USER_ID, getDataMode, getGGDealsApiKey, getPriceMode, getPriceProvider } from "@/lib/config";
 import { prisma } from "@/lib/repositories/prisma-client";
 import type {
   AlertRepository,
@@ -48,7 +48,7 @@ function sourceFromPrisma(source: string): DataSource {
   return source as DataSource;
 }
 
-function sourceToPrisma(source: DataSource): "mock" | "steam_api" | "price_api" | "prisma" {
+function sourceToPrisma(source: DataSource): "mock" | "steam_api" | "price_api" | "prisma" | "ggdeals" | "manual" {
   if (source === "steam-api") {
     return "steam_api";
   }
@@ -99,13 +99,22 @@ function mapOffer(offer: PrismaOffer): StoreOffer {
   return {
     id: offer.id,
     gameId: offer.gameId,
+    provider: offer.provider,
     storeName: offer.storeName,
+    storeType: offer.storeType as StoreOffer["storeType"],
     price: Number(offer.price),
+    regularPrice: offer.regularPrice === null ? null : Number(offer.regularPrice),
+    historicalLow: offer.historicalLow === null ? null : Number(offer.historicalLow),
     currency: offer.currency,
     discountPercent: offer.discountPercent,
     url: offer.url,
+    externalUrl: offer.externalUrl,
     isOfficial: offer.isOfficial,
+    isHistoricalLow: offer.isHistoricalLow,
     drm: offer.drm,
+    sourceRawId: offer.sourceRawId,
+    rawProviderData: offer.rawProviderData,
+    fetchedAt: offer.fetchedAt,
     updatedAt: offer.updatedAt,
     source: sourceFromPrisma(offer.source)
   };
@@ -115,12 +124,19 @@ function mapPrice(snapshot: PrismaPrice): GamePriceSnapshot {
   return {
     id: snapshot.id,
     gameId: snapshot.gameId,
+    provider: snapshot.provider,
+    storeType: snapshot.storeType as GamePriceSnapshot["storeType"],
     price: Number(snapshot.price),
     historicalLow: Number(snapshot.historicalLow),
     basePrice: Number(snapshot.basePrice),
     discountPercent: snapshot.discountPercent,
     storeName: snapshot.storeName,
     currency: snapshot.currency,
+    externalUrl: snapshot.externalUrl,
+    isHistoricalLow: snapshot.isHistoricalLow,
+    sourceRawId: snapshot.sourceRawId,
+    rawProviderData: snapshot.rawProviderData,
+    fetchedAt: snapshot.fetchedAt,
     capturedAt: snapshot.capturedAt,
     source: sourceFromPrisma(snapshot.source)
   };
@@ -268,18 +284,29 @@ class PrismaGameRepository implements GameRepository {
       update: {
         price: input.currentPrice,
         discountPercent,
+        regularPrice: input.basePrice,
+        historicalLow: input.historicalLow,
+        isHistoricalLow: input.currentPrice <= input.historicalLow,
+        fetchedAt: now,
         updatedAt: now
       },
       create: {
         id: `offer-${input.id}-import-steam`,
         gameId,
+        provider: "mock",
         storeName: "Steam",
+        storeType: "official",
         price: input.currentPrice,
+        regularPrice: input.basePrice,
+        historicalLow: input.historicalLow,
         currency: "PLN",
         discountPercent,
         url: `https://store.steampowered.com/app/${input.steamAppId}`,
+        externalUrl: `https://store.steampowered.com/app/${input.steamAppId}`,
         isOfficial: true,
+        isHistoricalLow: input.currentPrice <= input.historicalLow,
         drm: "Steam",
+        fetchedAt: now,
         source: "mock",
         updatedAt: now
       }
@@ -293,8 +320,13 @@ class PrismaGameRepository implements GameRepository {
         historicalLow: input.historicalLow,
         basePrice: input.basePrice,
         discountPercent,
+        provider: "mock",
+        storeType: "official",
         storeName: "Steam",
         currency: "PLN",
+        externalUrl: `https://store.steampowered.com/app/${input.steamAppId}`,
+        isHistoricalLow: input.currentPrice <= input.historicalLow,
+        fetchedAt: now,
         capturedAt: now,
         source: "mock"
       }
@@ -384,6 +416,60 @@ class PrismaGameRepository implements GameRepository {
   async listOffers(gameId: string): Promise<StoreOffer[]> {
     const offers = await prisma.storeOffer.findMany({ where: { gameId }, orderBy: { price: "asc" } });
     return offers.map(mapOffer);
+  }
+
+  async upsertOffers(gameId: string, offers: StoreOffer[]): Promise<void> {
+    for (const offer of offers) {
+      await prisma.storeOffer.upsert({
+        where: { id: offer.id },
+        update: {
+          provider: offer.provider,
+          storeName: offer.storeName,
+          storeType: offer.storeType,
+          price: offer.price,
+          regularPrice: offer.regularPrice,
+          historicalLow: offer.historicalLow,
+          currency: offer.currency,
+          discountPercent: offer.discountPercent,
+          url: offer.url,
+          externalUrl: offer.externalUrl,
+          isOfficial: offer.isOfficial,
+          isHistoricalLow: offer.isHistoricalLow,
+          drm: offer.drm,
+          sourceRawId: offer.sourceRawId,
+          rawProviderData: offer.rawProviderData as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput,
+          fetchedAt: offer.fetchedAt,
+          source: sourceToPrisma(offer.source),
+          updatedAt: offer.updatedAt
+        },
+        create: {
+          id: offer.id,
+          gameId,
+          provider: offer.provider,
+          storeName: offer.storeName,
+          storeType: offer.storeType,
+          price: offer.price,
+          regularPrice: offer.regularPrice,
+          historicalLow: offer.historicalLow,
+          currency: offer.currency,
+          discountPercent: offer.discountPercent,
+          url: offer.url,
+          externalUrl: offer.externalUrl,
+          isOfficial: offer.isOfficial,
+          isHistoricalLow: offer.isHistoricalLow,
+          drm: offer.drm,
+          sourceRawId: offer.sourceRawId,
+          rawProviderData: offer.rawProviderData as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput,
+          fetchedAt: offer.fetchedAt,
+          source: sourceToPrisma(offer.source),
+          updatedAt: offer.updatedAt
+        }
+      });
+    }
+  }
+
+  async countOffersBySource(source: "mock" | "ggdeals" | "price-api"): Promise<number> {
+    return prisma.storeOffer.count({ where: { source: sourceToPrisma(source) } });
   }
 
   private async summaryForGame(game: Game): Promise<GameSummary | null> {
@@ -605,6 +691,15 @@ class PrismaSnapshotRepository implements SnapshotRepository {
     return prisma.playerCountSnapshot.count({ where: { source: sourceToPrisma(source) } });
   }
 
+  async latestPriceRefresh(): Promise<Date | null> {
+    const snapshot = await prisma.gamePriceSnapshot.findFirst({ orderBy: { capturedAt: "desc" } });
+    return snapshot?.capturedAt ?? null;
+  }
+
+  async countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api"): Promise<number> {
+    return prisma.gamePriceSnapshot.count({ where: { source: sourceToPrisma(source) } });
+  }
+
   async appendPrice(snapshot: GamePriceSnapshot): Promise<void> {
     await prisma.gamePriceSnapshot.create({
       data: {
@@ -612,6 +707,7 @@ class PrismaSnapshotRepository implements SnapshotRepository {
         price: snapshot.price,
         historicalLow: snapshot.historicalLow,
         basePrice: snapshot.basePrice,
+        rawProviderData: snapshot.rawProviderData as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput,
         source: sourceToPrisma(snapshot.source)
       }
     });
@@ -683,6 +779,18 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
       playerSnapshotCount,
       watchlistCount,
       alertCount,
+      priceProvider: getPriceProvider(),
+      priceMode: getPriceMode(),
+      hasGGDealsApiKey: Boolean(getGGDealsApiKey()),
+      lastPriceRefresh: await new PrismaSnapshotRepository().latestPriceRefresh(),
+      realPriceSnapshots:
+        (await new PrismaSnapshotRepository().countPriceSnapshotsBySource("ggdeals")) +
+        (await new PrismaSnapshotRepository().countPriceSnapshotsBySource("price-api")),
+      mockPriceSnapshots: await new PrismaSnapshotRepository().countPriceSnapshotsBySource("mock"),
+      realOffers:
+        (await new PrismaGameRepository().countOffersBySource("ggdeals")) +
+        (await new PrismaGameRepository().countOffersBySource("price-api")),
+      mockOffers: await new PrismaGameRepository().countOffersBySource("mock"),
       realPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("steam-api"),
       mockPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("mock"),
       integrationLogs

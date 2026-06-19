@@ -5,6 +5,8 @@ import {
   appendPriceSnapshot,
   checkTriggeredAlerts,
   countPlayerSnapshotsBySource,
+  countOffersBySource,
+  countPriceSnapshotsBySource,
   createPriceAlert,
   findSteamCatalogEntryBySteamAppId,
   getAdminStatus,
@@ -15,6 +17,7 @@ import {
   getGameSummary,
   getLatestPlayersBySteamAppId,
   getLatestPlayerRefresh,
+  getLatestPriceRefresh,
   getMostActiveGames,
   getOffersForGame,
   getPlayerHistory,
@@ -30,6 +33,7 @@ import {
   searchGames,
   searchSteamCatalogEntries,
   upsertSteamCatalogEntries,
+  upsertStoreOffers,
   getSteamCatalogStatus
 } from "@/lib/store";
 import type {
@@ -42,7 +46,7 @@ import type {
   SteamCatalogUpsertInput,
   WatchlistRepository
 } from "@/lib/repositories/contracts";
-import type { GameImportInput, GamePriceSnapshot, PlayerCountSnapshot } from "@/lib/types";
+import type { GameImportInput, GamePriceSnapshot, PlayerCountSnapshot, StoreOffer } from "@/lib/types";
 
 class MockGameRepository implements GameRepository {
   async list() {
@@ -87,6 +91,14 @@ class MockGameRepository implements GameRepository {
 
   async listOffers(gameId: string) {
     return getOffersForGame(gameId);
+  }
+
+  async upsertOffers(gameId: string, offers: StoreOffer[]) {
+    upsertStoreOffers(gameId, offers);
+  }
+
+  async countOffersBySource(source: "mock" | "ggdeals" | "price-api") {
+    return countOffersBySource(source);
   }
 }
 
@@ -155,6 +167,14 @@ class MockSnapshotRepository implements SnapshotRepository {
 
   async countPlayerSnapshotsBySource(source: "mock" | "steam-api") {
     return countPlayerSnapshotsBySource(source);
+  }
+
+  async latestPriceRefresh() {
+    return getLatestPriceRefresh();
+  }
+
+  async countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api") {
+    return countPriceSnapshotsBySource(source);
   }
 
   async appendPrice(snapshot: GamePriceSnapshot) {

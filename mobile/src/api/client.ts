@@ -2,6 +2,7 @@ import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import type { HttpResponse } from "@capacitor/core";
 import type {
   ApiAdminStatus,
+  ApiGamePricesResponse,
   ApiGameProfile,
   ApiImportGameResponse,
   ApiStatsOverview,
@@ -165,6 +166,7 @@ export function createApiClient(baseUrl: string, transport: ApiClientTransport =
         body: JSON.stringify(input)
       }),
     getGameProfile: (id: string) => request<ApiGameProfile>(`/api/games/${encodeURIComponent(id)}`),
+    getGamePrices: (id: string) => request<ApiGamePricesResponse>(`/api/games/${encodeURIComponent(id)}/prices`),
     getBestDeals: (limit = 8) => request<BestDealsResponse>(`/api/deals/best?limit=${limit}`),
     getStatsOverview: () => request<ApiStatsOverview>("/api/stats/overview"),
     getWatchlist: () => request<WatchlistResponse>("/api/watchlist"),

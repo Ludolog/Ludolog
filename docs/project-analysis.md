@@ -151,6 +151,20 @@ Search now goes beyond the records already stored in the active repository. `Gam
 
 `SteamCatalogEntry` stores the synced Steam application catalog separately from imported games. This prevents the app from creating thousands of full `Game` records before a title is actually observed by the user. Catalog sync is manual/admin-only and uses capped pagination through `IStoreService/GetAppList`; it must not run during Next.js build or on every page visit.
 
+## Price provider layer
+
+Before the GG.deals integration, prices came from mock fixtures and import defaults. `StoreOffer` stored current offers per game, while `GamePriceSnapshot` stored price history, historical lows and discounts. `DealScoreService` used `latestPrice`, `priceHistory` and `offers` to calculate `pricePosition`, `discountQuality` and `offerAvailability`.
+
+The new `PriceProviderService` adds a provider boundary:
+
+- `MockPriceProvider` preserves deterministic fallback behavior.
+- `GGDealsPriceProvider` is selected only when `DATA_MODE=api`, `PRICE_MODE=api`, `PRICE_PROVIDER=ggdeals` and `GGDEALS_API_KEY` exists.
+- Future `ITADPriceProvider` and `CheapSharkPriceProvider` can implement the same methods.
+
+Provider responses are normalized into offers with `provider`, `storeType`, current price, regular price, discount, currency, historical-low metadata, URL, raw provider id and fetch time. Refreshing prices upserts `StoreOffer` rows and appends `GamePriceSnapshot` rows. Missing keys or provider errors are logged and fall back to mock-safe behavior, so the thesis demo still works without secrets.
+
+Official stores, keyshops and marketplaces are preserved as `storeType` when the provider exposes that distinction. This is important because future scoring can weigh store trust differently without changing Android DTOs.
+
 `StatsService` builds analytical sections from `PlayerCountSnapshot`, price snapshots and GameValue Score:
 
 - top current players,

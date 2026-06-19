@@ -54,6 +54,10 @@ export function GameDetailsView({
   if (error || !profile) {
     return <ErrorState message={error ?? "Brak danych profilu."} onRetry={load} />;
   }
+  const bestPrice = profile.bestOffer ?? null;
+  const latestPrice = profile.latestPrice ?? null;
+  const priceSource = latestPrice?.source ?? bestPrice?.source ?? "mock";
+  const storeType = bestPrice?.storeType ?? latestPrice?.storeType ?? "unknown";
 
   return (
     <div className="space-y-5">
@@ -85,8 +89,39 @@ export function GameDetailsView({
       <section className="grid grid-cols-2 gap-3">
         <Metric label="Best price" value={formatPrice(profile.bestOffer?.price ?? profile.latestPrice?.price)} />
         <Metric label="Historical low" value={formatPrice(profile.historicalLow)} />
+        <Metric label="Store" value={bestPrice?.storeName ?? latestPrice?.storeName ?? "n/a"} />
+        <Metric label="Price source" value={priceSourceLabel(priceSource)} />
         <Metric label="Players" value={formatNumber(profile.latestPlayers?.playersOnline)} />
         <Metric label="Steam App ID" value={String(profile.game.steamAppId)} />
+      </section>
+
+      <section className="surface rounded-lg p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${priceSourceClass(priceSource)}`}>
+            {priceSourceLabel(priceSource)}
+          </span>
+          <span className="rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-semibold text-slate-300">
+            {storeTypeLabel(storeType)}
+          </span>
+          {bestPrice?.isHistoricalLow || latestPrice?.isHistoricalLow ? (
+            <span className="rounded-md border border-radar-green/30 bg-radar-green/10 px-2.5 py-1 text-xs font-semibold text-radar-green">
+              Historical low
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-3 text-sm leading-6 text-slate-400">
+          Best offer: {formatPrice(bestPrice?.price ?? latestPrice?.price, bestPrice?.currency ?? latestPrice?.currency ?? "PLN")}
+          {" · "}
+          Regular: {formatPrice(bestPrice?.regularPrice ?? latestPrice?.basePrice, bestPrice?.currency ?? latestPrice?.currency ?? "PLN")}
+          {" · "}
+          Discount: {bestPrice?.discountPercent ?? latestPrice?.discountPercent ?? 0}%
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Last price refresh:{" "}
+          {latestPrice?.fetchedAt ?? latestPrice?.capturedAt ?? bestPrice?.fetchedAt ?? bestPrice?.updatedAt
+            ? new Date(latestPrice?.fetchedAt ?? latestPrice?.capturedAt ?? bestPrice?.fetchedAt ?? bestPrice?.updatedAt ?? "").toLocaleString("pl-PL")
+            : "n/a"}
+        </p>
       </section>
 
       <section className="surface rounded-lg p-4">
@@ -150,6 +185,39 @@ function playerSourceLabel(source: string | undefined): string {
     return "Mock fallback";
   }
   return "Cached Steam";
+}
+
+function priceSourceLabel(source: string | undefined): string {
+  if (source === "ggdeals") {
+    return "GG.deals";
+  }
+  if (source === "mock") {
+    return "Mock fallback";
+  }
+  return "Real price";
+}
+
+function priceSourceClass(source: string | undefined): string {
+  if (source === "ggdeals") {
+    return "border-radar-green/30 bg-radar-green/10 text-radar-green";
+  }
+  if (source === "mock") {
+    return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";
+  }
+  return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
+}
+
+function storeTypeLabel(type: string | undefined): string {
+  if (type === "official") {
+    return "Official store";
+  }
+  if (type === "keyshop") {
+    return "Keyshop";
+  }
+  if (type === "marketplace") {
+    return "Marketplace";
+  }
+  return "Unknown store type";
 }
 
 function Metric({ label, value }: { label: string; value: string }): React.ReactElement {

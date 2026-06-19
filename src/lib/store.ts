@@ -1,4 +1,4 @@
-import { DEMO_USER_ID, getDataMode } from "@/lib/config";
+import { DEMO_USER_ID, getDataMode, getGGDealsApiKey, getPriceMode, getPriceProvider } from "@/lib/config";
 import {
   mockGames,
   mockPlayerSnapshots,
@@ -135,12 +135,19 @@ export function importGameFromCatalog(input: GameImportInput): GameSummary {
   priceSnapshots.push({
     id: `price-${input.id}-import-current`,
     gameId: input.id,
+    provider: "mock",
+    storeType: "official",
     price: input.currentPrice,
     historicalLow: input.historicalLow,
     basePrice: input.basePrice,
     discountPercent: input.basePrice === 0 ? 0 : Math.max(0, Math.round((1 - input.currentPrice / input.basePrice) * 100)),
     storeName: "Steam",
     currency: "PLN",
+    externalUrl: `https://store.steampowered.com/app/${input.steamAppId}`,
+    isHistoricalLow: input.currentPrice <= input.historicalLow,
+    sourceRawId: null,
+    rawProviderData: null,
+    fetchedAt: now,
     capturedAt: now,
     source: "mock"
   });
@@ -148,13 +155,22 @@ export function importGameFromCatalog(input: GameImportInput): GameSummary {
   storeOffers.push({
     id: `offer-${input.id}-import-steam`,
     gameId: input.id,
+    provider: "mock",
     storeName: "Steam",
+    storeType: "official",
     price: input.currentPrice,
+    regularPrice: input.basePrice,
+    historicalLow: input.historicalLow,
     currency: "PLN",
     discountPercent: input.basePrice === 0 ? 0 : Math.max(0, Math.round((1 - input.currentPrice / input.basePrice) * 100)),
     url: `https://store.steampowered.com/app/${input.steamAppId}`,
+    externalUrl: `https://store.steampowered.com/app/${input.steamAppId}`,
     isOfficial: true,
+    isHistoricalLow: input.currentPrice <= input.historicalLow,
     drm: "Steam",
+    sourceRawId: null,
+    rawProviderData: null,
+    fetchedAt: now,
     updatedAt: now,
     source: "mock"
   });
@@ -258,6 +274,17 @@ export function getOffersForGame(gameId: string): StoreOffer[] {
     .sort((a, b) => a.price - b.price);
 }
 
+export function upsertStoreOffers(gameId: string, offers: StoreOffer[]): void {
+  for (const offer of offers) {
+    const index = storeOffers.findIndex((item) => item.id === offer.id);
+    if (index === -1) {
+      storeOffers.push({ ...offer, gameId });
+    } else {
+      storeOffers[index] = { ...storeOffers[index], ...offer, gameId };
+    }
+  }
+}
+
 export function getPriceHistory(gameId: string): GamePriceSnapshot[] {
   return priceHistory(gameId);
 }
@@ -276,6 +303,18 @@ export function getLatestPlayerRefresh(): Date | null {
 
 export function countPlayerSnapshotsBySource(source: "mock" | "steam-api"): number {
   return playerSnapshots.filter((snapshot) => snapshot.source === source).length;
+}
+
+export function getLatestPriceRefresh(): Date | null {
+  return latestByDate(priceSnapshots)?.capturedAt ?? null;
+}
+
+export function countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api"): number {
+  return priceSnapshots.filter((snapshot) => snapshot.source === source).length;
+}
+
+export function countOffersBySource(source: "mock" | "ggdeals" | "price-api"): number {
+  return storeOffers.filter((offer) => offer.source === source).length;
 }
 
 export function appendPriceSnapshot(snapshot: GamePriceSnapshot): void {
@@ -433,6 +472,9 @@ export function listUsers(): User[] {
 }
 
 export function getAdminStatus(): AdminStatus {
+  const realPriceSnapshots = countPriceSnapshotsBySource("ggdeals") + countPriceSnapshotsBySource("price-api");
+  const realOffers = countOffersBySource("ggdeals") + countOffersBySource("price-api");
+
   return {
     mode: getDataMode(),
     gameCount: games.length,
@@ -445,6 +487,14 @@ export function getAdminStatus(): AdminStatus {
     playerSnapshotCount: playerSnapshots.length,
     watchlistCount: watchlistItems.length,
     alertCount: priceAlerts.length,
+    priceProvider: getPriceProvider(),
+    priceMode: getPriceMode(),
+    hasGGDealsApiKey: Boolean(getGGDealsApiKey()),
+    lastPriceRefresh: getLatestPriceRefresh(),
+    realPriceSnapshots,
+    mockPriceSnapshots: countPriceSnapshotsBySource("mock"),
+    realOffers,
+    mockOffers: countOffersBySource("mock"),
     realPlayerSnapshots: countPlayerSnapshotsBySource("steam-api"),
     mockPlayerSnapshots: countPlayerSnapshotsBySource("mock"),
     integrationLogs: listIntegrationLogs()

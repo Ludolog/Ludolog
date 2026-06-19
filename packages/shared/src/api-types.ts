@@ -4,7 +4,13 @@ export type DataMode = "mock" | "api";
 
 export type StatsDataMode = "real" | "mixed" | "mock";
 
-export type DataSource = "mock" | "steam-api" | "price-api" | "prisma";
+export type DataSource = "mock" | "steam-api" | "price-api" | "prisma" | "ggdeals" | "manual";
+
+export type PriceProviderName = "mock" | "ggdeals" | "itad" | "cheapshark";
+
+export type PriceMode = "mock" | "api";
+
+export type StoreType = "official" | "keyshop" | "marketplace" | "unknown";
 
 export type Recommendation = "buy_now" | "wait" | "weak_deal";
 
@@ -29,13 +35,21 @@ export type ApiGame = {
 export type ApiStoreOffer = {
   id: string;
   gameId: string;
+  provider: PriceProviderName | string;
   storeName: string;
+  storeType: StoreType;
   price: number;
+  regularPrice: number | null;
+  historicalLow: number | null;
   currency: string;
   discountPercent: number;
   url: string;
+  externalUrl: string | null;
   isOfficial: boolean;
+  isHistoricalLow: boolean;
   drm: string;
+  sourceRawId: string | null;
+  fetchedAt: DateString | null;
   updatedAt: DateString;
   source: DataSource;
 };
@@ -43,12 +57,18 @@ export type ApiStoreOffer = {
 export type ApiGamePriceSnapshot = {
   id: string;
   gameId: string;
+  provider: PriceProviderName | string;
+  storeType: StoreType;
   price: number;
   historicalLow: number;
   basePrice: number;
   discountPercent: number;
   storeName: string;
   currency: string;
+  externalUrl: string | null;
+  isHistoricalLow: boolean;
+  sourceRawId: string | null;
+  fetchedAt: DateString | null;
   capturedAt: DateString;
   source: DataSource;
 };
@@ -127,6 +147,7 @@ export type ApiStatsGame = {
   gameValueScore: number;
   recommendation: Recommendation;
   playerSource: DataSource;
+  priceSource: DataSource;
   tags: string[];
 };
 
@@ -149,10 +170,15 @@ export type ApiStatsOverview = {
   dataFreshness: {
     latestSteamCatalogSync: DateString | null;
     latestPlayerCountRefresh: DateString | null;
+    latestPriceRefresh: DateString | null;
   };
   sourceCounts: {
     importedGames: number;
     steamCatalogEntries: number;
+    realPriceSnapshots: number;
+    mockPriceSnapshots: number;
+    realOffers: number;
+    mockOffers: number;
     realPlayerSnapshots: number;
     mockPlayerSnapshots: number;
   };
@@ -180,7 +206,7 @@ export type ApiWatchlistItem = {
 
 export type ApiIntegrationLog = {
   id: string;
-  service: "steam" | "price" | "search" | "snapshot" | "alerts";
+  service: "steam" | "ggdeals" | "price" | "search" | "snapshot" | "alerts";
   level: "info" | "warning" | "error";
   message: string;
   createdAt: DateString;
@@ -210,9 +236,53 @@ export type ApiAdminStatus = {
   playerSnapshotCount: number;
   watchlistCount: number;
   alertCount: number;
+  priceProvider: PriceProviderName;
+  priceMode: PriceMode;
+  hasGGDealsApiKey: boolean;
+  lastPriceRefresh: DateString | null;
+  realPriceSnapshots: number;
+  mockPriceSnapshots: number;
+  realOffers: number;
+  mockOffers: number;
   realPlayerSnapshots: number;
   mockPlayerSnapshots: number;
   integrationLogs: ApiIntegrationLog[];
+};
+
+export type ApiPriceRefreshError = {
+  input: string;
+  steamAppId?: number;
+  message: string;
+};
+
+export type ApiPriceRefreshResult = {
+  input: string;
+  gameId: string;
+  steamAppId: number;
+  title: string;
+  provider: PriceProviderName | string;
+  offerCount: number;
+  refreshed: boolean;
+  skipped: boolean;
+  bestPrice: number | null;
+  storeName: string | null;
+};
+
+export type ApiPriceRefreshResponse = {
+  mode: "imported" | "best" | "explicit";
+  dryRun: boolean;
+  requested: number;
+  refreshed: number;
+  skipped: number;
+  failed: number;
+  errors: ApiPriceRefreshError[];
+  results: ApiPriceRefreshResult[];
+};
+
+export type ApiGamePricesResponse = {
+  gameId: string;
+  history: ApiGamePriceSnapshot[];
+  offers: ApiStoreOffer[];
 };
 
 export type ApiPlayerCountRefreshError = {

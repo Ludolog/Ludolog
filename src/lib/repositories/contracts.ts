@@ -32,6 +32,8 @@ export interface GameRepository {
   bestDeals(limit?: number): Promise<GameSummary[]>;
   mostActive(limit?: number): Promise<GameSummary[]>;
   listOffers(gameId: string): Promise<StoreOffer[]>;
+  upsertOffers(gameId: string, offers: StoreOffer[]): Promise<void>;
+  countOffersBySource(source: "mock" | "ggdeals" | "price-api"): Promise<number>;
 }
 
 export type SteamCatalogUpsertInput = Omit<SteamCatalogEntry, "createdAt" | "updatedAt">;
@@ -66,6 +68,8 @@ export interface SnapshotRepository {
   latestPlayersBySteamAppId(steamAppId: number): Promise<PlayerCountSnapshot | null>;
   latestPlayerRefresh(): Promise<Date | null>;
   countPlayerSnapshotsBySource(source: "mock" | "steam-api"): Promise<number>;
+  latestPriceRefresh(): Promise<Date | null>;
+  countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api"): Promise<number>;
   appendPrice(snapshot: GamePriceSnapshot): Promise<void>;
   appendPlayers(snapshot: PlayerCountSnapshot): Promise<void>;
 }

@@ -12,6 +12,8 @@ export function GameCard({
   onOpen: (gameId: string) => void;
 }): React.ReactElement {
   const price = summary.bestOffer?.price ?? summary.latestPrice?.price;
+  const priceSource = summary.latestPrice?.source ?? summary.bestOffer?.source ?? "mock";
+  const storeType = summary.bestOffer?.storeType ?? summary.latestPrice?.storeType ?? "unknown";
 
   return (
     <button
@@ -37,6 +39,12 @@ export function GameCard({
               {formatNumber(summary.latestPlayers?.playersOnline)} online
             </span>
             <ScoreBadge score={summary.score} />
+            <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${priceSourceClass(priceSource)}`}>
+              {priceSourceLabel(priceSource)}
+            </span>
+            <span className="rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-semibold text-slate-300">
+              {storeTypeLabel(storeType)}
+            </span>
           </div>
         </div>
 
@@ -48,6 +56,39 @@ export function GameCard({
       </div>
     </button>
   );
+}
+
+function priceSourceLabel(source: string): string {
+  if (source === "ggdeals") {
+    return "GG.deals";
+  }
+  if (source === "mock") {
+    return "Mock price";
+  }
+  return "Price API";
+}
+
+function priceSourceClass(source: string): string {
+  if (source === "ggdeals") {
+    return "border-radar-green/30 bg-radar-green/10 text-radar-green";
+  }
+  if (source === "mock") {
+    return "border-radar-amber/30 bg-radar-amber/10 text-radar-amber";
+  }
+  return "border-radar-cyan/30 bg-radar-cyan/10 text-radar-cyan";
+}
+
+function storeTypeLabel(type: string): string {
+  if (type === "official") {
+    return "Official";
+  }
+  if (type === "keyshop") {
+    return "Keyshop";
+  }
+  if (type === "marketplace") {
+    return "Marketplace";
+  }
+  return "Store";
 }
 
 function Metric({
