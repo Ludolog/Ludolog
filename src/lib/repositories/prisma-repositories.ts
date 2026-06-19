@@ -1,12 +1,22 @@
 import { Prisma } from "@prisma/client";
 
-import { DEMO_USER_ID, getDataMode, getGGDealsApiKey, getPriceMode, getPriceProvider } from "@/lib/config";
+import {
+  DEMO_USER_ID,
+  getDataMode,
+  getGGDealsApiKey,
+  getGogCountryCode,
+  getGogCurrency,
+  getPriceMode,
+  getPriceProvider,
+  isGogEnabled
+} from "@/lib/config";
 import { prisma } from "@/lib/repositories/prisma-client";
 import type {
   AlertRepository,
   AppRepositories,
   DiagnosticsRepository,
   GameRepository,
+  GogRepository,
   PriceRepository,
   SnapshotRepository,
   SteamCatalogRepository,
@@ -19,10 +29,12 @@ import type {
   AdminStatus,
   DataSource,
   Game,
+  GameExternalMapping,
   GameImportInput,
   GamePriceSnapshot,
   GameProfile,
   GameSummary,
+  GogCatalogEntry,
   IntegrationLog,
   PlayerCountSnapshot,
   PriceAlert,
@@ -40,6 +52,8 @@ type PrismaOffer = Prisma.StoreOfferGetPayload<Record<string, never>>;
 type PrismaPrice = Prisma.GamePriceSnapshotGetPayload<Record<string, never>>;
 type PrismaPlayers = Prisma.PlayerCountSnapshotGetPayload<Record<string, never>>;
 type PrismaSteamCatalogEntry = Prisma.SteamCatalogEntryGetPayload<Record<string, never>>;
+type PrismaGogCatalogEntry = Prisma.GogCatalogEntryGetPayload<Record<string, never>>;
+type PrismaGameExternalMapping = Prisma.GameExternalMappingGetPayload<Record<string, never>>;
 type PrismaWatchlist = Prisma.WatchlistGetPayload<Record<string, never>>;
 type PrismaAlert = Prisma.PriceAlertGetPayload<Record<string, never>>;
 type PrismaLog = Prisma.IntegrationLogGetPayload<Record<string, never>>;
@@ -56,7 +70,7 @@ function sourceFromPrisma(source: string): DataSource {
   return source as DataSource;
 }
 
-function sourceToPrisma(source: DataSource): "mock" | "steam_api" | "price_api" | "prisma" | "ggdeals" | "manual" {
+function sourceToPrisma(source: DataSource): "mock" | "steam_api" | "price_api" | "prisma" | "ggdeals" | "manual" | "gog" {
   if (source === "steam-api") {
     return "steam_api";
   }
@@ -103,6 +117,36 @@ function mapSteamCatalogEntry(entry: PrismaSteamCatalogEntry): SteamCatalogEntry
   };
 }
 
+function mapGogCatalogEntry(entry: PrismaGogCatalogEntry): GogCatalogEntry {
+  return {
+    id: entry.id,
+    gogProductId: entry.gogProductId,
+    title: entry.title,
+    slug: entry.slug,
+    url: entry.url,
+    imageUrl: entry.imageUrl,
+    isActive: entry.isActive,
+    productType: entry.productType,
+    rawData: entry.rawData,
+    syncedAt: entry.syncedAt,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt
+  };
+}
+
+function mapGameExternalMapping(mapping: PrismaGameExternalMapping): GameExternalMapping {
+  return {
+    id: mapping.id,
+    gameId: mapping.gameId,
+    provider: mapping.provider,
+    externalId: mapping.externalId,
+    externalSlug: mapping.externalSlug,
+    confidence: mapping.confidence as GameExternalMapping["confidence"],
+    createdAt: mapping.createdAt,
+    updatedAt: mapping.updatedAt
+  };
+}
+
 function mapOffer(offer: PrismaOffer): StoreOffer {
   return {
     id: offer.id,
@@ -134,7 +178,9 @@ function mapOffer(offer: PrismaOffer): StoreOffer {
     createdAt: offer.createdAt,
     updatedAt: offer.updatedAt,
     source: sourceFromPrisma(offer.source),
-    sourceConfidence: sourceConfidence(sourceFromPrisma(offer.source))
+    sourceConfidence: sourceConfidence(sourceFromPrisma(offer.source)),
+    sourceName: sourceName(sourceFromPrisma(offer.source)),
+    sourceType: sourceType(sourceFromPrisma(offer.source))
   };
 }
 
@@ -162,7 +208,9 @@ function mapPrice(snapshot: PrismaPrice): GamePriceSnapshot {
     capturedAt: snapshot.capturedAt,
     createdAt: snapshot.createdAt,
     source: sourceFromPrisma(snapshot.source),
-    sourceConfidence: sourceConfidence(sourceFromPrisma(snapshot.source))
+    sourceConfidence: sourceConfidence(sourceFromPrisma(snapshot.source)),
+    sourceName: sourceName(sourceFromPrisma(snapshot.source)),
+    sourceType: sourceType(sourceFromPrisma(snapshot.source))
   };
 }
 
@@ -194,13 +242,45 @@ function sourceConfidence(source: DataSource): StoreOffer["sourceConfidence"] {
   if (source === "mock") {
     return "internal-mock";
   }
-  if (source === "manual" || source === "prisma") {
+  if (source === "manual" || source === "prisma" || source === "gog") {
     return "internal-real";
   }
   if (source === "ggdeals" || source === "price-api") {
     return "external-legacy";
   }
   return "no-price-data";
+}
+
+function sourceName(source: DataSource): string {
+  if (source === "manual") {
+    return "manual-admin";
+  }
+  if (source === "gog") {
+    return "gog";
+  }
+  if (source === "ggdeals") {
+    return "ggdeals";
+  }
+  if (source === "price-api") {
+    return "legacy-price-api";
+  }
+  if (source === "mock") {
+    return "mock-seed";
+  }
+  return source;
+}
+
+function sourceType(source: DataSource): StoreOffer["sourceType"] {
+  if (source === "manual") {
+    return "manual";
+  }
+  if (source === "gog" || source === "ggdeals") {
+    return "store-api";
+  }
+  if (source === "mock") {
+    return "mock";
+  }
+  return "partner";
 }
 
 function compareOffers(a: StoreOffer, b: StoreOffer): number {
@@ -610,7 +690,7 @@ class PrismaGameRepository implements GameRepository {
     }
   }
 
-  async countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual"): Promise<number> {
+  async countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): Promise<number> {
     return prisma.storeOffer.count({ where: { source: sourceToPrisma(source) } });
   }
 
@@ -720,6 +800,138 @@ class PrismaSteamCatalogRepository implements SteamCatalogRepository {
       activeGameCount,
       lastSyncedAt: latest?.syncedAt ?? null,
       nextStartAfterAppId: highestAppId?.steamAppId ?? null
+    };
+  }
+}
+
+class PrismaGogRepository implements GogRepository {
+  async searchCatalog(query: string, limit = 10): Promise<GogCatalogEntry[]> {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    const entries = await prisma.gogCatalogEntry.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { title: { contains: trimmed, mode: "insensitive" } },
+          { slug: { contains: trimmed.toLowerCase(), mode: "insensitive" } },
+          { gogProductId: trimmed }
+        ]
+      },
+      orderBy: [{ title: "asc" }],
+      take: limit
+    });
+    return entries.map(mapGogCatalogEntry);
+  }
+
+  async upsertCatalogEntries(entries: Array<Omit<GogCatalogEntry, "createdAt" | "updatedAt">>) {
+    let created = 0;
+    let updated = 0;
+
+    for (const entry of entries) {
+      const existing = await prisma.gogCatalogEntry.findUnique({ where: { gogProductId: entry.gogProductId } });
+      await prisma.gogCatalogEntry.upsert({
+        where: { gogProductId: entry.gogProductId },
+        update: {
+          title: entry.title,
+          slug: entry.slug,
+          url: entry.url,
+          imageUrl: entry.imageUrl,
+          isActive: entry.isActive,
+          productType: entry.productType,
+          rawData: entry.rawData as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput,
+          syncedAt: entry.syncedAt
+        },
+        create: {
+          id: entry.id,
+          gogProductId: entry.gogProductId,
+          title: entry.title,
+          slug: entry.slug,
+          url: entry.url,
+          imageUrl: entry.imageUrl,
+          isActive: entry.isActive,
+          productType: entry.productType,
+          rawData: entry.rawData as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput,
+          syncedAt: entry.syncedAt
+        }
+      });
+      if (existing) {
+        updated += 1;
+      } else {
+        created += 1;
+      }
+    }
+
+    return { created, updated };
+  }
+
+  async listMappings(limit = 100): Promise<GameExternalMapping[]> {
+    const mappings = await prisma.gameExternalMapping.findMany({
+      where: { provider: "gog" },
+      orderBy: { updatedAt: "desc" },
+      take: limit
+    });
+    return mappings.map(mapGameExternalMapping);
+  }
+
+  async findMappingByGameId(gameId: string): Promise<GameExternalMapping | null> {
+    const mapping = await prisma.gameExternalMapping.findUnique({
+      where: { gameId_provider: { gameId, provider: "gog" } }
+    });
+    return mapping ? mapGameExternalMapping(mapping) : null;
+  }
+
+  async findMappingsByGameIds(gameIds: string[]): Promise<GameExternalMapping[]> {
+    if (gameIds.length === 0) {
+      return [];
+    }
+    const mappings = await prisma.gameExternalMapping.findMany({
+      where: { provider: "gog", gameId: { in: gameIds } }
+    });
+    return mappings.map(mapGameExternalMapping);
+  }
+
+  async upsertMapping(input: {
+    gameId: string;
+    externalId: string;
+    externalSlug?: string | null;
+    confidence: GameExternalMapping["confidence"];
+  }): Promise<GameExternalMapping> {
+    const now = new Date();
+    const mapping = await prisma.gameExternalMapping.upsert({
+      where: { gameId_provider: { gameId: input.gameId, provider: "gog" } },
+      update: {
+        externalId: input.externalId,
+        externalSlug: input.externalSlug ?? null,
+        confidence: input.confidence,
+        updatedAt: now
+      },
+      create: {
+        id: `mapping-gog-${input.gameId}-${input.externalId}`,
+        gameId: input.gameId,
+        provider: "gog",
+        externalId: input.externalId,
+        externalSlug: input.externalSlug ?? null,
+        confidence: input.confidence,
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+    return mapGameExternalMapping(mapping);
+  }
+
+  async status() {
+    const [gogCatalogEntries, gogMappings, latest] = await Promise.all([
+      prisma.gogCatalogEntry.count(),
+      prisma.gameExternalMapping.count({ where: { provider: "gog" } }),
+      prisma.gogCatalogEntry.findFirst({ orderBy: { syncedAt: "desc" } })
+    ]);
+    return {
+      gogCatalogEntries,
+      gogMappings,
+      lastGogSync: latest?.syncedAt ?? null
     };
   }
 }
@@ -838,7 +1050,7 @@ class PrismaSnapshotRepository implements SnapshotRepository {
     return snapshot?.capturedAt ?? null;
   }
 
-  async countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual"): Promise<number> {
+  async countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): Promise<number> {
     return prisma.gamePriceSnapshot.count({ where: { source: sourceToPrisma(source) } });
   }
 
@@ -951,9 +1163,11 @@ class PrismaPriceRepository implements PriceRepository {
       storeCount,
       priceSourceCount,
       latestPriceSnapshot,
-      realInternalPriceSnapshots,
+      manualPriceSnapshots,
+      gogPriceSnapshots,
       mockPriceSnapshots,
-      realOffers,
+      manualOffers,
+      gogOffers,
       mockOffers
     ] = await Promise.all([
       prisma.storeOffer.count(),
@@ -962,10 +1176,14 @@ class PrismaPriceRepository implements PriceRepository {
       prisma.priceSource.count(),
       new PrismaSnapshotRepository().latestPriceRefresh(),
       new PrismaSnapshotRepository().countPriceSnapshotsBySource("manual"),
+      new PrismaSnapshotRepository().countPriceSnapshotsBySource("gog"),
       new PrismaSnapshotRepository().countPriceSnapshotsBySource("mock"),
       new PrismaGameRepository().countOffersBySource("manual"),
+      new PrismaGameRepository().countOffersBySource("gog"),
       new PrismaGameRepository().countOffersBySource("mock")
     ]);
+    const realInternalPriceSnapshots = manualPriceSnapshots + gogPriceSnapshots;
+    const realOffers = manualOffers + gogOffers;
     return {
       offerCount,
       priceSnapshotCount,
@@ -1027,15 +1245,24 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
         prisma.priceAlert.count(),
         this.listIntegrationLogs()
       ]);
-    const realInternalPriceSnapshots = await new PrismaSnapshotRepository().countPriceSnapshotsBySource("manual");
+    const manualPriceSnapshots = await new PrismaSnapshotRepository().countPriceSnapshotsBySource("manual");
+    const gogPriceSnapshots = await new PrismaSnapshotRepository().countPriceSnapshotsBySource("gog");
+    const realInternalPriceSnapshots = manualPriceSnapshots + gogPriceSnapshots;
     const realPriceSnapshots =
       realInternalPriceSnapshots +
       (await new PrismaSnapshotRepository().countPriceSnapshotsBySource("ggdeals")) +
       (await new PrismaSnapshotRepository().countPriceSnapshotsBySource("price-api"));
     const realOffers =
       (await new PrismaGameRepository().countOffersBySource("manual")) +
+      (await new PrismaGameRepository().countOffersBySource("gog")) +
       (await new PrismaGameRepository().countOffersBySource("ggdeals")) +
       (await new PrismaGameRepository().countOffersBySource("price-api"));
+    const [gogStatus, gogOfferCount, lastGogPriceRefresh] = await Promise.all([
+      new PrismaGogRepository().status(),
+      new PrismaGameRepository().countOffersBySource("gog"),
+      prisma.gamePriceSnapshot.findFirst({ where: { source: "gog" }, orderBy: { capturedAt: "desc" } })
+    ]);
+    const gogLogs = integrationLogs.filter((log) => log.service === "gog");
     const ggdealsRuntime = resolveGGDealsStatusFromLogs({
       hasApiKey: Boolean(getGGDealsApiKey()),
       logs: integrationLogs,
@@ -1068,6 +1295,15 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
       mockPriceSnapshots: await new PrismaSnapshotRepository().countPriceSnapshotsBySource("mock"),
       realOffers,
       mockOffers: await new PrismaGameRepository().countOffersBySource("mock"),
+      gogEnabled: isGogEnabled(),
+      gogCatalogEntries: gogStatus.gogCatalogEntries,
+      gogMappings: gogStatus.gogMappings,
+      gogOfferCount,
+      lastGogSync: gogStatus.lastGogSync,
+      lastGogError: gogLogs.find((log) => log.level === "error") ?? null,
+      lastGogPriceRefresh: lastGogPriceRefresh?.capturedAt ?? null,
+      gogCountryCode: getGogCountryCode(),
+      gogCurrency: getGogCurrency(),
       realPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("steam-api"),
       mockPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("mock"),
       integrationLogs
@@ -1080,6 +1316,7 @@ export function createPrismaRepositories(): AppRepositories {
     provider: "prisma",
     games: new PrismaGameRepository(),
     steamCatalog: new PrismaSteamCatalogRepository(),
+    gog: new PrismaGogRepository(),
     prices: new PrismaPriceRepository(),
     watchlist: new PrismaWatchlistRepository(),
     alerts: new PrismaAlertRepository(),

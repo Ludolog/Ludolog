@@ -58,6 +58,9 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <StatusCard icon={<ShoppingCart size={18} />} label="Internal snaps" value={String(status.realInternalPriceSnapshots)} />
         <StatusCard icon={<ShoppingCart size={18} />} label="Real price snaps" value={String(status.realPriceSnapshots)} />
         <StatusCard icon={<ShoppingCart size={18} />} label="Real offers" value={String(status.realOffers)} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="GOG enabled" value={status.gogEnabled ? "YES" : "NO"} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="GOG mappings" value={String(status.gogMappings)} />
+        <StatusCard icon={<ShoppingCart size={18} />} label="GOG offers" value={String(status.gogOfferCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Player snapshots" value={String(status.playerSnapshotCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Real player snaps" value={String(status.realPlayerSnapshots)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Mock player snaps" value={String(status.mockPlayerSnapshots)} />
@@ -162,6 +165,84 @@ export default async function AdminPage(): Promise<React.ReactElement> {
       </section>
 
       <section className="surface rounded-lg p-5">
+        <h2 className="text-lg font-semibold text-white">GOG Connector</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Backend-only store connector for the internal GameValue Price API. It uses public GOG JSON endpoints in small
+          batches, stores only parsed JSON price data and keeps uncertain matches as manual-review suggestions.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <InlineStatus icon={<ShoppingCart size={18} />} label="Enabled" value={status.gogEnabled ? "true" : "false"} />
+          <InlineStatus icon={<Database size={18} />} label="Country" value={status.gogCountryCode} />
+          <InlineStatus icon={<Database size={18} />} label="Currency" value={status.gogCurrency} />
+          <InlineStatus icon={<Database size={18} />} label="Catalog entries" value={String(status.gogCatalogEntries)} />
+          <InlineStatus icon={<Database size={18} />} label="Mappings" value={String(status.gogMappings)} />
+          <InlineStatus icon={<ShoppingCart size={18} />} label="GOG offers" value={String(status.gogOfferCount)} />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Last GOG sync"
+            value={status.lastGogSync ? formatDate(status.lastGogSync) : "n/a"}
+          />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Last GOG price"
+            value={status.lastGogPriceRefresh ? formatDate(status.lastGogPriceRefresh) : "n/a"}
+          />
+        </div>
+        {status.lastGogError ? (
+          <p className="mt-4 rounded-md border border-radar-red/30 bg-radar-red/10 p-3 text-sm leading-6 text-radar-red">
+            {status.lastGogError.message}
+          </p>
+        ) : null}
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <AdminActionButton
+            endpoint="/api/admin/gog/catalog/search"
+            label="Search GOG catalog"
+            body={{ query: "witcher", limit: 10 }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/gog/resolve-game"
+            label="Resolve game to GOG"
+            body={{ gameId: "cyberpunk-2077", limit: 10 }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/gog/mappings"
+            label="Map Cyberpunk to GOG"
+            body={{
+              gameId: "cyberpunk-2077",
+              gogProductId: "2093619782",
+              externalSlug: "cyberpunk_2077",
+              confidence: "manual"
+            }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/gog/prices/test"
+            label="Test GOG price"
+            body={{ gogProductId: "2093619782", externalSlug: "cyberpunk_2077", countryCode: "PL", currency: "PLN" }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/gog/prices/refresh"
+            label="Refresh mapped GOG prices"
+            body={{ mode: "mapped-games", gameIds: ["cyberpunk-2077"], limit: 1 }}
+            editableBody
+            requireSecret
+          />
+        </div>
+        <div className="mt-4 rounded-md border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-400">
+          Set `GOG_ENABLED=true` only after `GOG_API_BASE_URL`, `GOG_CATALOG_BASE_URL`, `GOG_COUNTRY_CODE`,
+          `GOG_CURRENCY` and `GOG_REQUEST_LIMIT_PER_HOUR` are configured. Keep refresh limits small; do not run mass
+          syncs.
+        </div>
+      </section>
+
+      <section className="surface rounded-lg p-5">
         <h2 className="text-lg font-semibold text-white">Steam catalog status</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
           Manual admin actions only. Set `ADMIN_API_SECRET` in Vercel, redeploy, then paste it into the local
@@ -262,6 +343,8 @@ export default async function AdminPage(): Promise<React.ReactElement> {
               {gameRows.map(({ game, summary }) => {
                 const priceSource =
                   summary?.latestPrice?.sourceConfidence ?? summary?.bestOffer?.sourceConfidence ?? "no-price-data";
+                const priceDataSource = summary?.latestPrice?.source ?? summary?.bestOffer?.source ?? null;
+                const priceSourceName = summary?.latestPrice?.sourceName ?? summary?.bestOffer?.sourceName ?? null;
 
                 return (
                   <tr key={game.id} className="text-slate-300">
@@ -272,7 +355,7 @@ export default async function AdminPage(): Promise<React.ReactElement> {
                     </td>
                     <td className="py-3">
                       <span>{formatPrice(summary?.bestOffer?.price ?? summary?.latestPrice?.price)}</span>
-                      <p className="mt-1 text-xs text-slate-500">{formatSourceConfidence(priceSource)}</p>
+                      <p className="mt-1 text-xs text-slate-500">{formatSourceConfidence(priceSource, priceDataSource, priceSourceName)}</p>
                     </td>
                     <td className="py-3">{formatNumber(summary?.latestPlayers?.playersOnline)}</td>
                     <td className="py-3">{summary?.score.score ?? "n/a"}</td>
@@ -347,7 +430,10 @@ function InlineStatus({
   );
 }
 
-function formatSourceConfidence(status: string): string {
+function formatSourceConfidence(status: string, source: string | null, sourceName: string | null): string {
+  if (source === "gog" || sourceName === "gog") {
+    return "GameValue / GOG";
+  }
   if (status === "internal-real") {
     return "GameValue internal";
   }

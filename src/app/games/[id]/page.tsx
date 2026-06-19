@@ -28,6 +28,8 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
   const { game, latestPrice, latestPlayers, bestOffer, score } = profile;
   const factors = Object.entries(score.factors);
   const priceSource = latestPrice?.sourceConfidence ?? bestOffer?.sourceConfidence ?? "no-price-data";
+  const priceDataSource = latestPrice?.source ?? bestOffer?.source ?? null;
+  const priceSourceName = latestPrice?.sourceName ?? bestOffer?.sourceName ?? null;
 
   return (
     <div className="space-y-6">
@@ -80,7 +82,7 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
                   Price data is demo/mock seed until GameValue Price API receives tracked offers.
                 </p>
               ) : null}
-              <p className="mt-3 text-xs text-slate-500">{sourceConfidenceLabel(priceSource)}</p>
+              <p className="mt-3 text-xs text-slate-500">{sourceConfidenceLabel(priceSource, priceDataSource, priceSourceName)}</p>
             </div>
           </div>
 
@@ -136,7 +138,12 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
                     <td className="py-3">{formatPrice(offer.price, offer.currency)}</td>
                     <td className="py-3">{offer.discountPercent}%</td>
                     <td className="py-3">{offer.drm}</td>
-                    <td className="py-3">{offer.isOfficial ? "Official" : "Adapter-ready"}</td>
+                    <td className="py-3">
+                      {offer.isOfficial ? "Official" : "Adapter-ready"}
+                      {offer.source === "gog" || offer.sourceName === "gog" ? (
+                        <p className="mt-1 text-xs text-radar-violet">GameValue / GOG store API</p>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -193,14 +200,17 @@ function Metric({
   );
 }
 
-function sourceConfidenceLabel(source: string): string {
-  if (source === "internal-real") {
+function sourceConfidenceLabel(confidence: string, source: string | null, sourceName: string | null): string {
+  if (source === "gog" || sourceName === "gog") {
+    return "GameValue / GOG store API price data";
+  }
+  if (confidence === "internal-real") {
     return "GameValue internal price data";
   }
-  if (source === "internal-mock") {
+  if (confidence === "internal-mock") {
     return "Demo/mock price data";
   }
-  if (source === "external-legacy") {
+  if (confidence === "external-legacy") {
     return "External legacy price data";
   }
   return "No tracked price data";

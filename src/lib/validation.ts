@@ -101,6 +101,36 @@ export const priceAlertCreateSchema = z.object({
   thresholdPrice: z.number().positive().max(9999)
 });
 
+export const gogCatalogSearchSchema = z.object({
+  query: z.string().trim().min(1).max(120),
+  limit: z.number().int().positive().max(25).default(10)
+});
+
+export const gogMappingSchema = z.object({
+  gameId: z.string().trim().min(1).max(120),
+  gogProductId: z.string().trim().min(1).max(80),
+  externalSlug: z.string().trim().min(1).max(160).nullable().optional(),
+  confidence: z.enum(["exact", "title-match", "manual", "unknown"]).default("manual")
+});
+
+export const gogResolveGameSchema = z.object({
+  gameId: z.string().trim().min(1).max(120),
+  limit: z.number().int().positive().max(25).default(10)
+});
+
+export const gogPriceTestSchema = z.object({
+  gogProductId: z.string().trim().min(1).max(80),
+  externalSlug: z.string().trim().min(1).max(160).nullable().optional(),
+  countryCode: z.string().trim().min(2).max(2).optional(),
+  currency: z.string().trim().min(3).max(3).optional()
+});
+
+export const gogPriceRefreshSchema = z.object({
+  mode: z.literal("mapped-games").default("mapped-games"),
+  gameIds: z.array(z.string().trim().min(1).max(120)).max(10).optional(),
+  limit: z.number().int().positive().max(10).default(10)
+});
+
 export function parseJsonBody<T>(schema: z.ZodType<T>, value: unknown): T {
   return schema.parse(value);
 }

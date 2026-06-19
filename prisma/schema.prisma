@@ -15,6 +15,7 @@ enum DataSource {
   prisma
   ggdeals
   manual
+  gog
 }
 
 enum Recommendation {
@@ -32,6 +33,7 @@ enum IntegrationLevel {
 enum IntegrationService {
   steam
   ggdeals
+  gog
   price
   search
   snapshot
@@ -57,6 +59,7 @@ model Game {
   offers               StoreOffer[]
   priceSnapshots       GamePriceSnapshot[]
   playerCountSnapshots PlayerCountSnapshot[]
+  externalMappings     GameExternalMapping[]
   watchlistItems       Watchlist[]
   priceAlerts          PriceAlert[]
   scoreSnapshots       DealScoreSnapshot[]
@@ -108,6 +111,43 @@ model SteamCatalogEntry {
   @@index([title])
   @@index([isGame, isActive])
   @@index([syncedAt])
+}
+
+model GogCatalogEntry {
+  id           String   @id
+  gogProductId String   @unique
+  title        String
+  slug         String
+  url          String?
+  imageUrl     String?
+  isActive     Boolean  @default(true)
+  productType  String?
+  rawData      Json?
+  syncedAt     DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([title])
+  @@index([slug])
+  @@index([isActive])
+  @@index([syncedAt])
+}
+
+model GameExternalMapping {
+  id           String   @id
+  gameId       String
+  game         Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  provider     String
+  externalId   String
+  externalSlug String?
+  confidence   String   @default("unknown")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([gameId, provider])
+  @@unique([provider, externalId])
+  @@index([provider])
+  @@index([provider, externalSlug])
 }
 
 model StoreOffer {

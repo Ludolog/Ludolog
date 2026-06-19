@@ -2,9 +2,9 @@ export type DataMode = "mock" | "api";
 
 export type StatsDataMode = "real" | "mixed" | "mock";
 
-export type DataSource = "mock" | "steam-api" | "price-api" | "prisma" | "ggdeals" | "manual";
+export type DataSource = "mock" | "steam-api" | "price-api" | "prisma" | "ggdeals" | "manual" | "gog";
 
-export type PriceProviderName = "gamevalue" | "mock" | "ggdeals" | "itad" | "cheapshark";
+export type PriceProviderName = "gamevalue" | "mock" | "ggdeals" | "itad" | "cheapshark" | "gog";
 
 export type PriceMode = "internal" | "mock" | "api";
 
@@ -23,6 +23,40 @@ export type PriceSource = {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type GogMappingConfidence = "exact" | "title-match" | "manual" | "unknown";
+
+export type GogCatalogEntry = {
+  id: string;
+  gogProductId: string;
+  title: string;
+  slug: string;
+  url: string | null;
+  imageUrl: string | null;
+  isActive: boolean;
+  productType: string | null;
+  rawData: unknown | null;
+  syncedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type GameExternalMapping = {
+  id: string;
+  gameId: string;
+  provider: "gog" | string;
+  externalId: string;
+  externalSlug: string | null;
+  confidence: GogMappingConfidence;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type GogRepositoryStatus = {
+  gogCatalogEntries: number;
+  gogMappings: number;
+  lastGogSync: Date | null;
 };
 
 export type Store = {
@@ -112,6 +146,8 @@ export type StoreOffer = {
   updatedAt: Date;
   source: DataSource;
   sourceConfidence: PriceSourceConfidence;
+  sourceName?: string | null;
+  sourceType?: PriceSourceType | null;
 };
 
 export type GamePriceSnapshot = {
@@ -138,6 +174,8 @@ export type GamePriceSnapshot = {
   createdAt: Date;
   source: DataSource;
   sourceConfidence: PriceSourceConfidence;
+  sourceName?: string | null;
+  sourceType?: PriceSourceType | null;
 };
 
 export type PlayerCountSnapshot = {
@@ -202,7 +240,7 @@ export type PriceAlert = {
 
 export type IntegrationLog = {
   id: string;
-  service: "steam" | "ggdeals" | "price" | "search" | "snapshot" | "alerts";
+  service: "steam" | "ggdeals" | "gog" | "price" | "search" | "snapshot" | "alerts";
   level: "info" | "warning" | "error";
   message: string;
   createdAt: Date;
@@ -276,6 +314,15 @@ export type AdminStatus = {
   mockPriceSnapshots: number;
   realOffers: number;
   mockOffers: number;
+  gogEnabled: boolean;
+  gogCatalogEntries: number;
+  gogMappings: number;
+  gogOfferCount: number;
+  lastGogSync: Date | null;
+  lastGogError: IntegrationLog | null;
+  lastGogPriceRefresh: Date | null;
+  gogCountryCode: string;
+  gogCurrency: string;
   realPlayerSnapshots: number;
   mockPlayerSnapshots: number;
   integrationLogs: IntegrationLog[];

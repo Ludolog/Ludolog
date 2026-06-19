@@ -4,9 +4,9 @@ export type DataMode = "mock" | "api";
 
 export type StatsDataMode = "real" | "mixed" | "mock";
 
-export type DataSource = "mock" | "steam-api" | "price-api" | "prisma" | "ggdeals" | "manual";
+export type DataSource = "mock" | "steam-api" | "price-api" | "prisma" | "ggdeals" | "manual" | "gog";
 
-export type PriceProviderName = "gamevalue" | "mock" | "ggdeals" | "itad" | "cheapshark";
+export type PriceProviderName = "gamevalue" | "mock" | "ggdeals" | "itad" | "cheapshark" | "gog";
 
 export type PriceMode = "internal" | "mock" | "api";
 
@@ -108,6 +108,8 @@ export type ApiStoreOffer = {
   updatedAt: DateString;
   source: DataSource;
   sourceConfidence: PriceSourceConfidence;
+  sourceName?: string | null;
+  sourceType?: PriceSourceType | null;
 };
 
 export type ApiGamePriceSnapshot = {
@@ -133,6 +135,8 @@ export type ApiGamePriceSnapshot = {
   createdAt: DateString;
   source: DataSource;
   sourceConfidence: PriceSourceConfidence;
+  sourceName?: string | null;
+  sourceType?: PriceSourceType | null;
 };
 
 export type ApiPlayerCountSnapshot = {
@@ -274,7 +278,7 @@ export type ApiWatchlistItem = {
 
 export type ApiIntegrationLog = {
   id: string;
-  service: "steam" | "ggdeals" | "price" | "search" | "snapshot" | "alerts";
+  service: "steam" | "ggdeals" | "gog" | "price" | "search" | "snapshot" | "alerts";
   level: "info" | "warning" | "error";
   message: string;
   createdAt: DateString;
@@ -317,6 +321,15 @@ export type ApiAdminStatus = {
   mockPriceSnapshots: number;
   realOffers: number;
   mockOffers: number;
+  gogEnabled: boolean;
+  gogCatalogEntries: number;
+  gogMappings: number;
+  gogOfferCount: number;
+  lastGogSync: DateString | null;
+  lastGogError: ApiIntegrationLog | null;
+  lastGogPriceRefresh: DateString | null;
+  gogCountryCode: string;
+  gogCurrency: string;
   realPlayerSnapshots: number;
   mockPlayerSnapshots: number;
   integrationLogs: ApiIntegrationLog[];
@@ -335,6 +348,137 @@ export type ApiPricesStatus = {
   mockPriceSnapshots: number;
   realOffers: number;
   mockOffers: number;
+};
+
+export type ApiGogMappingConfidence = "exact" | "title-match" | "manual" | "unknown";
+
+export type ApiGogCatalogEntry = {
+  id: string;
+  gogProductId: string;
+  title: string;
+  slug: string;
+  url: string | null;
+  imageUrl: string | null;
+  isActive: boolean;
+  productType: string | null;
+  syncedAt: DateString;
+  createdAt: DateString;
+  updatedAt: DateString;
+};
+
+export type ApiGameExternalMapping = {
+  id: string;
+  gameId: string;
+  provider: "gog" | string;
+  externalId: string;
+  externalSlug: string | null;
+  confidence: ApiGogMappingConfidence;
+  createdAt: DateString;
+  updatedAt: DateString;
+};
+
+export type ApiGogStatus = {
+  gogEnabled: boolean;
+  gogCatalogEntries: number;
+  gogMappings: number;
+  lastGogSync: DateString | null;
+  lastGogError: ApiIntegrationLog | null;
+  requestLimitPerHour: number;
+  countryCode: string;
+  currency: string;
+  gogOfferCount: number;
+  lastGogPriceRefresh: DateString | null;
+  integrationLogs: ApiIntegrationLog[];
+};
+
+export type ApiGogCatalogSearchRequest = {
+  query: string;
+  limit?: number;
+};
+
+export type ApiGogCatalogSearchResponse = {
+  query: string;
+  results: ApiGogCatalogEntry[];
+  upserted: {
+    created: number;
+    updated: number;
+  };
+};
+
+export type ApiGogMappingRequest = {
+  gameId: string;
+  gogProductId: string;
+  externalSlug?: string | null;
+  confidence?: ApiGogMappingConfidence;
+};
+
+export type ApiGogResolveGameRequest = {
+  gameId: string;
+  limit?: number;
+};
+
+export type ApiGogResolveGameResponse = {
+  gameId: string;
+  existingMapping: ApiGameExternalMapping | null;
+  suggestions: Array<ApiGogCatalogEntry & { confidence: ApiGogMappingConfidence; reason: string }>;
+};
+
+export type ApiGogPriceTestRequest = {
+  gogProductId: string;
+  externalSlug?: string | null;
+  countryCode?: string;
+  currency?: string;
+};
+
+export type ApiGogPricePreview = {
+  gogProductId: string;
+  title: string;
+  slug: string;
+  storeName: "GOG";
+  storeType: "official";
+  sourceName: "gog";
+  sourceType: "store-api";
+  price: number;
+  regularPrice: number | null;
+  currency: string;
+  countryCode: string;
+  discountPercent: number;
+  drm: "DRM-free";
+  externalUrl: string;
+  available: boolean;
+};
+
+export type ApiGogPriceTestResponse = {
+  configured: boolean;
+  result: ApiGogPricePreview | null;
+  error: string | null;
+};
+
+export type ApiGogPriceRefreshRequest = {
+  mode?: "mapped-games";
+  gameIds?: string[];
+  limit?: number;
+};
+
+export type ApiGogPriceRefreshResult = {
+  gameId: string;
+  gogProductId: string;
+  refreshed: boolean;
+  skipped: boolean;
+  offerId: string | null;
+  snapshotId: string | null;
+  message: string | null;
+};
+
+export type ApiGogPriceRefreshResponse = {
+  provider: "gamevalue";
+  sourceName: "gog";
+  requested: number;
+  refreshed: number;
+  skipped: number;
+  failed: number;
+  errors: Array<{ gameId: string; gogProductId?: string; message: string }>;
+  results: ApiGogPriceRefreshResult[];
 };
 
 export type ApiManualOfferRequest = {

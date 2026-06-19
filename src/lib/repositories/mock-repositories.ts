@@ -8,11 +8,14 @@ import {
   countOffersBySource,
   countPriceSnapshotsBySource,
   createPriceAlert,
+  findGogMappingByGameId,
+  findGogMappingsByGameIds,
   findSteamCatalogEntryBySteamAppId,
   getAdminStatus,
   getBestDeals,
   getGameById,
   getGameBySteamAppId,
+  getGogRepositoryStatus,
   getGameProfile,
   getGameSummary,
   getLatestPlayersBySteamAppId,
@@ -27,13 +30,17 @@ import {
   importGameFromCatalog,
   listImportedGames,
   listGames,
+  listGogMappings,
   listIntegrationLogs,
   listPriceAlerts,
   listWatchlist,
   recordIntegrationLog,
   removeWatchlistItem,
   searchGames,
+  searchGogCatalogEntries,
   searchSteamCatalogEntries,
+  upsertGogCatalogEntries,
+  upsertGogMapping,
   upsertPriceSource,
   upsertSteamCatalogEntries,
   upsertStore,
@@ -45,6 +52,7 @@ import type {
   AppRepositories,
   DiagnosticsRepository,
   GameRepository,
+  GogRepository,
   PriceRepository,
   SnapshotRepository,
   SteamCatalogRepository,
@@ -102,7 +110,7 @@ class MockGameRepository implements GameRepository {
     upsertStoreOffers(gameId, offers);
   }
 
-  async countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual") {
+  async countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog") {
     return countOffersBySource(source);
   }
 }
@@ -126,18 +134,24 @@ class MockPriceRepository implements PriceRepository {
 
   async status() {
     return {
-      offerCount: countOffersBySource("mock") + countOffersBySource("manual") + countOffersBySource("ggdeals") + countOffersBySource("price-api"),
+      offerCount:
+        countOffersBySource("mock") +
+        countOffersBySource("manual") +
+        countOffersBySource("gog") +
+        countOffersBySource("ggdeals") +
+        countOffersBySource("price-api"),
       priceSnapshotCount:
         countPriceSnapshotsBySource("mock") +
         countPriceSnapshotsBySource("manual") +
+        countPriceSnapshotsBySource("gog") +
         countPriceSnapshotsBySource("ggdeals") +
         countPriceSnapshotsBySource("price-api"),
       storeCount: listStores().length,
       priceSourceCount: listPriceSources().length,
       lastPriceSnapshot: getLatestPriceRefresh(),
-      realInternalPriceSnapshots: countPriceSnapshotsBySource("manual"),
+      realInternalPriceSnapshots: countPriceSnapshotsBySource("manual") + countPriceSnapshotsBySource("gog"),
       mockPriceSnapshots: countPriceSnapshotsBySource("mock"),
-      realOffers: countOffersBySource("manual"),
+      realOffers: countOffersBySource("manual") + countOffersBySource("gog"),
       mockOffers: countOffersBySource("mock")
     };
   }
@@ -158,6 +172,36 @@ class MockSteamCatalogRepository implements SteamCatalogRepository {
 
   async status() {
     return getSteamCatalogStatus();
+  }
+}
+
+class MockGogRepository implements GogRepository {
+  async searchCatalog(query: string, limit?: number) {
+    return searchGogCatalogEntries(query, limit);
+  }
+
+  async upsertCatalogEntries(entries: Parameters<typeof upsertGogCatalogEntries>[0]) {
+    return upsertGogCatalogEntries(entries);
+  }
+
+  async listMappings(limit?: number) {
+    return listGogMappings(limit);
+  }
+
+  async findMappingByGameId(gameId: string) {
+    return findGogMappingByGameId(gameId);
+  }
+
+  async findMappingsByGameIds(gameIds: string[]) {
+    return findGogMappingsByGameIds(gameIds);
+  }
+
+  async upsertMapping(input: Parameters<typeof upsertGogMapping>[0]) {
+    return upsertGogMapping(input);
+  }
+
+  async status() {
+    return getGogRepositoryStatus();
   }
 }
 
@@ -214,7 +258,7 @@ class MockSnapshotRepository implements SnapshotRepository {
     return getLatestPriceRefresh();
   }
 
-  async countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual") {
+  async countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog") {
     return countPriceSnapshotsBySource(source);
   }
 
@@ -246,6 +290,7 @@ export function createMockRepositories(): AppRepositories {
     provider: "mock",
     games: new MockGameRepository(),
     steamCatalog: new MockSteamCatalogRepository(),
+    gog: new MockGogRepository(),
     prices: new MockPriceRepository(),
     watchlist: new MockWatchlistRepository(),
     alerts: new MockAlertRepository(),

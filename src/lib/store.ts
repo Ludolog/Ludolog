@@ -1,4 +1,13 @@
-import { DEMO_USER_ID, getDataMode, getGGDealsApiKey, getPriceMode, getPriceProvider } from "@/lib/config";
+import {
+  DEMO_USER_ID,
+  getDataMode,
+  getGGDealsApiKey,
+  getGogCountryCode,
+  getGogCurrency,
+  getPriceMode,
+  getPriceProvider,
+  isGogEnabled
+} from "@/lib/config";
 import {
   mockGames,
   mockPlayerSnapshots,
@@ -13,10 +22,14 @@ import { resolveGGDealsStatusFromLogs } from "@/lib/services/ggdeals-diagnostics
 import type {
   AdminStatus,
   Game,
+  GameExternalMapping,
   GameImportInput,
   GamePriceSnapshot,
   GameProfile,
   GameSummary,
+  GogCatalogEntry,
+  GogMappingConfidence,
+  GogRepositoryStatus,
   IntegrationLog,
   PlayerCountSnapshot,
   PriceAlert,
@@ -47,6 +60,8 @@ const priceSources: PriceSource[] = [
 ];
 const playerSnapshots: PlayerCountSnapshot[] = [...mockPlayerSnapshots];
 const steamCatalogEntries: SteamCatalogEntry[] = [];
+const gogCatalogEntries: GogCatalogEntry[] = [];
+const gameExternalMappings: GameExternalMapping[] = [];
 const users: User[] = [...mockUsers];
 const watchlistItems: WatchlistItem[] = [...mockWatchlistItems];
 const priceAlerts: PriceAlert[] = [...mockPriceAlerts];
@@ -429,11 +444,11 @@ export function getLatestPriceRefresh(): Date | null {
   return latestByDate(priceSnapshots)?.capturedAt ?? null;
 }
 
-export function countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual"): number {
+export function countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): number {
   return priceSnapshots.filter((snapshot) => snapshot.source === source).length;
 }
 
-export function countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual"): number {
+export function countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): number {
   return storeOffers.filter((offer) => offer.source === source).length;
 }
 
@@ -493,6 +508,100 @@ export function getSteamCatalogStatus(): SteamCatalogStatus {
     activeGameCount: steamCatalogEntries.filter((entry) => entry.isGame && entry.isActive).length,
     lastSyncedAt: latest?.capturedAt ?? null,
     nextStartAfterAppId: highestAppId
+  };
+}
+
+export function searchGogCatalogEntries(query: string, limit = 10): GogCatalogEntry[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+
+  return gogCatalogEntries
+    .filter(
+      (entry) =>
+        entry.isActive &&
+        (entry.title.toLowerCase().includes(normalized) ||
+          entry.slug.toLowerCase().includes(normalized) ||
+          entry.gogProductId === normalized)
+    )
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .slice(0, limit);
+}
+
+export function upsertGogCatalogEntries(
+  entries: Array<Omit<GogCatalogEntry, "createdAt" | "updatedAt">>
+): { created: number; updated: number } {
+  let created = 0;
+  let updated = 0;
+  const now = new Date();
+
+  for (const entry of entries) {
+    const existing = gogCatalogEntries.find((item) => item.gogProductId === entry.gogProductId);
+    if (existing) {
+      Object.assign(existing, entry, { updatedAt: now });
+      updated += 1;
+    } else {
+      gogCatalogEntries.push({ ...entry, createdAt: now, updatedAt: now });
+      created += 1;
+    }
+  }
+
+  return { created, updated };
+}
+
+export function listGogMappings(limit = 100): GameExternalMapping[] {
+  return gameExternalMappings
+    .filter((mapping) => mapping.provider === "gog")
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, limit);
+}
+
+export function findGogMappingByGameId(gameId: string): GameExternalMapping | null {
+  return gameExternalMappings.find((mapping) => mapping.provider === "gog" && mapping.gameId === gameId) ?? null;
+}
+
+export function findGogMappingsByGameIds(gameIds: string[]): GameExternalMapping[] {
+  const wanted = new Set(gameIds);
+  return gameExternalMappings.filter((mapping) => mapping.provider === "gog" && wanted.has(mapping.gameId));
+}
+
+export function upsertGogMapping(input: {
+  gameId: string;
+  externalId: string;
+  externalSlug?: string | null;
+  confidence: GogMappingConfidence;
+}): GameExternalMapping {
+  const existing = gameExternalMappings.find((mapping) => mapping.provider === "gog" && mapping.gameId === input.gameId);
+  const now = new Date();
+  if (existing) {
+    existing.externalId = input.externalId;
+    existing.externalSlug = input.externalSlug ?? null;
+    existing.confidence = input.confidence;
+    existing.updatedAt = now;
+    return existing;
+  }
+
+  const mapping: GameExternalMapping = {
+    id: `mapping-gog-${input.gameId}-${input.externalId}`,
+    gameId: input.gameId,
+    provider: "gog",
+    externalId: input.externalId,
+    externalSlug: input.externalSlug ?? null,
+    confidence: input.confidence,
+    createdAt: now,
+    updatedAt: now
+  };
+  gameExternalMappings.push(mapping);
+  return mapping;
+}
+
+export function getGogRepositoryStatus(): GogRepositoryStatus {
+  const latest = latestByDate(gogCatalogEntries.map((entry) => ({ capturedAt: entry.syncedAt })));
+  return {
+    gogCatalogEntries: gogCatalogEntries.length,
+    gogMappings: gameExternalMappings.filter((mapping) => mapping.provider === "gog").length,
+    lastGogSync: latest?.capturedAt ?? null
   };
 }
 
@@ -592,11 +701,16 @@ export function listUsers(): User[] {
 }
 
 export function getAdminStatus(): AdminStatus {
-  const realInternalPriceSnapshots = countPriceSnapshotsBySource("manual");
+  const realInternalPriceSnapshots = countPriceSnapshotsBySource("manual") + countPriceSnapshotsBySource("gog");
   const realPriceSnapshots =
     realInternalPriceSnapshots + countPriceSnapshotsBySource("ggdeals") + countPriceSnapshotsBySource("price-api");
-  const realOffers = countOffersBySource("manual") + countOffersBySource("ggdeals") + countOffersBySource("price-api");
+  const realOffers =
+    countOffersBySource("manual") +
+    countOffersBySource("gog") +
+    countOffersBySource("ggdeals") +
+    countOffersBySource("price-api");
   const integrationLogs = listIntegrationLogs();
+  const gogLogs = integrationLogs.filter((log) => log.service === "gog");
   const ggdealsRuntime = resolveGGDealsStatusFromLogs({
     hasApiKey: Boolean(getGGDealsApiKey()),
     logs: integrationLogs,
@@ -629,6 +743,15 @@ export function getAdminStatus(): AdminStatus {
     mockPriceSnapshots: countPriceSnapshotsBySource("mock"),
     realOffers,
     mockOffers: countOffersBySource("mock"),
+    gogEnabled: isGogEnabled(),
+    gogCatalogEntries: gogCatalogEntries.length,
+    gogMappings: gameExternalMappings.filter((mapping) => mapping.provider === "gog").length,
+    gogOfferCount: countOffersBySource("gog"),
+    lastGogSync: getGogRepositoryStatus().lastGogSync,
+    lastGogError: gogLogs.find((log) => log.level === "error") ?? null,
+    lastGogPriceRefresh: latestByDate(priceSnapshots.filter((snapshot) => snapshot.source === "gog"))?.capturedAt ?? null,
+    gogCountryCode: getGogCountryCode(),
+    gogCurrency: getGogCurrency(),
     realPlayerSnapshots: countPlayerSnapshotsBySource("steam-api"),
     mockPlayerSnapshots: countPlayerSnapshotsBySource("mock"),
     integrationLogs

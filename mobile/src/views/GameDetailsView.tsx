@@ -6,7 +6,7 @@ import { PlayerChart, PriceChart } from "@/components/MobileCharts";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { formatNumber, formatPrice, recommendationLabel } from "@/format";
-import type { ApiGameProfile, PriceSourceConfidence } from "@shared/api-types";
+import type { ApiGameProfile, DataSource, PriceSourceConfidence } from "@shared/api-types";
 
 export function GameDetailsView({
   gameId,
@@ -57,7 +57,10 @@ export function GameDetailsView({
   const bestPrice = profile.bestOffer ?? null;
   const latestPrice = profile.latestPrice ?? null;
   const priceSource = latestPrice?.sourceConfidence ?? bestPrice?.sourceConfidence ?? "no-price-data";
+  const priceDataSource = latestPrice?.source ?? bestPrice?.source ?? null;
+  const priceSourceName = latestPrice?.sourceName ?? bestPrice?.sourceName ?? null;
   const storeType = bestPrice?.storeType ?? latestPrice?.storeType ?? "unknown";
+  const isGogPrice = priceDataSource === "gog" || priceSourceName === "gog" || bestPrice?.storeName === "GOG";
 
   return (
     <div className="space-y-5">
@@ -90,7 +93,7 @@ export function GameDetailsView({
         <Metric label="Best price" value={formatPrice(profile.bestOffer?.price ?? profile.latestPrice?.price)} />
         <Metric label="Historical low" value={formatPrice(profile.historicalLow)} />
         <Metric label="Store" value={bestPrice?.storeName ?? latestPrice?.storeName ?? "n/a"} />
-        <Metric label="Price source" value={priceSourceLabel(priceSource)} />
+        <Metric label="Price source" value={priceSourceLabel(priceSource, priceDataSource, priceSourceName)} />
         <Metric label="Players" value={formatNumber(profile.latestPlayers?.playersOnline)} />
         <Metric label="Steam App ID" value={String(profile.game.steamAppId)} />
       </section>
@@ -98,7 +101,7 @@ export function GameDetailsView({
       <section className="surface rounded-lg p-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${priceSourceClass(priceSource)}`}>
-            {priceSourceLabel(priceSource)}
+            {priceSourceLabel(priceSource, priceDataSource, priceSourceName)}
           </span>
           <span className="rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-semibold text-slate-300">
             {storeTypeLabel(storeType)}
@@ -106,6 +109,11 @@ export function GameDetailsView({
           {bestPrice?.isHistoricalLow || latestPrice?.isHistoricalLow ? (
             <span className="rounded-md border border-radar-green/30 bg-radar-green/10 px-2.5 py-1 text-xs font-semibold text-radar-green">
               Historical low
+            </span>
+          ) : null}
+          {isGogPrice ? (
+            <span className="rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2.5 py-1 text-xs font-semibold text-radar-violet">
+              GOG DRM-free
             </span>
           ) : null}
         </div>
@@ -116,6 +124,7 @@ export function GameDetailsView({
           {" · "}
           Discount: {bestPrice?.discountPercent ?? latestPrice?.discountPercent ?? 0}%
         </p>
+        {isGogPrice ? <p className="mt-1 text-xs text-slate-500">Source: GameValue / GOG store API</p> : null}
         <p className="mt-1 text-xs text-slate-500">
           Last price refresh:{" "}
           {latestPrice?.fetchedAt ?? latestPrice?.capturedAt ?? bestPrice?.fetchedAt ?? bestPrice?.updatedAt
@@ -184,6 +193,7 @@ export function GameDetailsView({
               </div>
               <p className="mt-1 text-sm text-slate-400">
                 {offer.discountPercent}% · {offer.drm} · {offer.isOfficial ? "official" : "adapter-ready"}
+                {offer.source === "gog" || offer.sourceName === "gog" ? " · GameValue / GOG store API" : ""}
               </p>
             </div>
           ))}
@@ -203,14 +213,21 @@ function playerSourceLabel(source: string | undefined): string {
   return "Cached Steam";
 }
 
-function priceSourceLabel(source: PriceSourceConfidence | undefined): string {
-  if (source === "internal-real") {
+function priceSourceLabel(
+  confidence: PriceSourceConfidence | undefined,
+  source: DataSource | null,
+  sourceName: string | null
+): string {
+  if (source === "gog" || sourceName === "gog") {
+    return "GameValue / GOG store API";
+  }
+  if (confidence === "internal-real") {
     return "GameValue internal";
   }
-  if (source === "internal-mock") {
+  if (confidence === "internal-mock") {
     return "Mock fallback";
   }
-  if (source === "external-legacy") {
+  if (confidence === "external-legacy") {
     return "External legacy";
   }
   return "No price data";

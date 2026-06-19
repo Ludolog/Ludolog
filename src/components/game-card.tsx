@@ -8,6 +8,8 @@ import { ScoreBadge } from "@/components/score-badge";
 export function GameCard({ summary }: { summary: GameSummary }): React.ReactElement {
   const { game, latestPrice, latestPlayers, bestOffer } = summary;
   const priceSource = latestPrice?.sourceConfidence ?? bestOffer?.sourceConfidence ?? "no-price-data";
+  const priceDataSource = latestPrice?.source ?? bestOffer?.source ?? null;
+  const priceSourceName = latestPrice?.sourceName ?? bestOffer?.sourceName ?? null;
 
   return (
     <article className="surface overflow-hidden rounded-lg transition hover:border-radar-cyan/35 hover:shadow-glow">
@@ -55,20 +57,23 @@ export function GameCard({ summary }: { summary: GameSummary }): React.ReactElem
             <span>low</span>
           </div>
         </div>
-        <p className="text-xs text-slate-500">{sourceConfidenceLabel(priceSource)}</p>
+        <p className="text-xs text-slate-500">{sourceConfidenceLabel(priceSource, priceDataSource, priceSourceName)}</p>
       </div>
     </article>
   );
 }
 
-function sourceConfidenceLabel(source: string): string {
-  if (source === "internal-real") {
+function sourceConfidenceLabel(confidence: string, source: string | null, sourceName: string | null): string {
+  if (source === "gog" || sourceName === "gog") {
+    return "GameValue / GOG store API";
+  }
+  if (confidence === "internal-real") {
     return "GameValue internal";
   }
-  if (source === "internal-mock") {
+  if (confidence === "internal-mock") {
     return "Demo/mock seed";
   }
-  if (source === "external-legacy") {
+  if (confidence === "external-legacy") {
     return "External legacy";
   }
   return "No price data";

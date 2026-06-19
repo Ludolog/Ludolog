@@ -170,7 +170,7 @@ function StatsGameCard({
               {playerSourceLabel(game.playerSource)}
             </span>
             <span className={`rounded-md border px-2 py-1 font-semibold ${priceSourceClass(game.priceSourceConfidence)}`}>
-              {priceSourceLabel(game.priceSourceConfidence)}
+              {priceSourceLabel(game.priceSourceConfidence, game.priceSource)}
             </span>
             <span className={`rounded-md border px-2 py-1 font-semibold ${isUp ? "border-radar-green/30 bg-radar-green/10 text-radar-green" : "border-radar-red/30 bg-radar-red/10 text-radar-red"}`}>
               {isUp ? "+" : ""}
@@ -209,14 +209,17 @@ function playerSourceClass(source: ApiStatsGame["playerSource"]): string {
   return "border-white/10 bg-black/20 text-slate-300";
 }
 
-function priceSourceLabel(source: ApiStatsGame["priceSourceConfidence"]): string {
-  if (source === "internal-real") {
+function priceSourceLabel(confidence: ApiStatsGame["priceSourceConfidence"], source: ApiStatsGame["priceSource"]): string {
+  if (source === "gog") {
+    return "GameValue / GOG";
+  }
+  if (confidence === "internal-real") {
     return "GameValue internal";
   }
-  if (source === "internal-mock") {
+  if (confidence === "internal-mock") {
     return "Mock price";
   }
-  if (source === "external-legacy") {
+  if (confidence === "external-legacy") {
     return "External legacy";
   }
   return "No price data";

@@ -68,10 +68,42 @@ export function getGGDealsCurrency(): string {
   return getOptionalEnv("GGDEALS_CURRENCY") ?? "PLN";
 }
 
+export function isGogEnabled(): boolean {
+  return getOptionalEnv("GOG_ENABLED") === "true";
+}
+
+export function getGogApiBaseUrl(): string {
+  return trimTrailingSlash(getOptionalEnv("GOG_API_BASE_URL") ?? "https://api.gog.com");
+}
+
+export function getGogCatalogBaseUrl(): string {
+  return trimTrailingSlash(getOptionalEnv("GOG_CATALOG_BASE_URL") ?? "https://catalog.gog.com");
+}
+
+export function getGogCountryCode(): string {
+  return (getOptionalEnv("GOG_COUNTRY_CODE") ?? "PL").toUpperCase();
+}
+
+export function getGogCurrency(): string {
+  return (getOptionalEnv("GOG_CURRENCY") ?? "PLN").toUpperCase();
+}
+
+export function getGogRequestLimitPerHour(): number {
+  const raw = Number(getOptionalEnv("GOG_REQUEST_LIMIT_PER_HOUR") ?? "200");
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return 200;
+  }
+  return Math.min(Math.floor(raw), 200);
+}
+
 export function getAdminApiSecret(): string | undefined {
   return getOptionalEnv("ADMIN_API_SECRET");
 }
 
 export function getCronSecret(): string | undefined {
   return getOptionalEnv("CRON_SECRET");
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/g, "");
 }

@@ -187,9 +187,9 @@ The Stats screen shows a data mode badge:
 - `Mixed data` when real and fallback data are combined,
 - `Mock fallback` when the app is running on demonstration data.
 
-Game details shows the current player-count source, best price, historical low, store, GameValue price source, store type and last price snapshot. Deals and Stats show price source badges such as `GameValue internal`, `Mock price`, `External legacy` or `No price data`, plus official/keyshop/marketplace badges when available.
+Game details shows the current player-count source, best price, historical low, store, GameValue price source, store type and last price snapshot. Deals and Stats show price source badges such as `GameValue internal`, `GameValue / GOG store API`, `Mock price`, `External legacy` or `No price data`, plus official/keyshop/marketplace badges when available.
 
-It does not run admin write actions from Android. `POST /api/games/{id}/refresh-players`, `POST /api/admin/games/bulk-import`, `POST /api/admin/prices/manual-offer`, `POST /api/admin/prices/import-json`, `POST /api/admin/prices/import-csv`, `POST /api/admin/prices/snapshot`, `POST /api/admin/prices/recalculate` and `POST /api/admin/player-counts/refresh` are backend/admin endpoints protected by `ADMIN_API_SECRET`, so the APK must not call them or contain that secret.
+It does not run admin write actions from Android. `POST /api/games/{id}/refresh-players`, `POST /api/admin/games/bulk-import`, `POST /api/admin/prices/manual-offer`, `POST /api/admin/prices/import-json`, `POST /api/admin/prices/import-csv`, `POST /api/admin/prices/snapshot`, `POST /api/admin/prices/recalculate`, `POST /api/admin/gog/*` and `POST /api/admin/player-counts/refresh` are backend/admin endpoints protected by `ADMIN_API_SECRET`, so the APK must not call them or contain that secret.
 
 Diagnostics should show:
 
@@ -202,6 +202,7 @@ Diagnostics should show:
 - imported game count,
 - real internal/mock price snapshot counts,
 - real/mock offer counts,
+- GOG enabled state, mapped game count, GOG offer count and last GOG refresh,
 - real/mock player snapshot counts,
 - last Steam catalog sync,
 - last price refresh,

@@ -161,8 +161,11 @@ The internal price layer adds:
 - `Store` for normalized store metadata such as Steam, GOG, Epic Games Store, Fanatical, Green Man Gaming, Humble Store, Eneba and Kinguin.
 - extended `StoreOffer` rows for current tracked offers.
 - extended `GamePriceSnapshot` rows for durable price history.
+- `GogCatalogEntry` and `GameExternalMapping` for manual Steam/GameValue-to-GOG product mapping.
 
 `GameValuePriceService` validates admin inputs, creates stores and sources when needed, upserts offers and appends snapshots. `sourceConfidence` distinguishes `internal-real`, `internal-mock`, `external-legacy` and `no-price-data`, which lets web and Android show clear badges without exposing technical provider failures.
+
+`GogService` is the first real store connector in that layer. It is disabled by default, uses public GOG JSON endpoints only, respects small admin batches and writes official DRM-free `source=gog` offers after manual mapping approval. It rejects HTML/non-JSON responses and never stores Cloudflare or page HTML as a price record.
 
 Legacy `PriceProviderService` and GG.deals diagnostics remain as disabled safety code, but `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` no longer call external aggregators.
 

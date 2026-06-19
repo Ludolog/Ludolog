@@ -171,6 +171,22 @@ GG.deals, ITAD and CheapShark are legacy/disabled providers in the active applic
 
 Price data now enters through GameValue-controlled sources: `manual-admin`, `csv-import`, `json-import`, `partner-feed-placeholder`, `mock-seed` and future legal store APIs. `StoreOffer` stores current tracked offers, `Store` stores normalized store metadata, `PriceSource` stores the ingest source, and `GamePriceSnapshot` stores durable price history for charts, deals and GameValue Score.
 
+The first store connector is GOG. It is backend-only, disabled by default and feeds the same internal price tables with
+`sourceName=gog`, `sourceType=store-api`, `storeName=GOG`, `storeType=official` and `drm=DRM-free`. It uses public GOG JSON
+API responses only. It does not scrape HTML, bypass Cloudflare, use browser sessions, cookies, Playwright/Puppeteer or
+proxies, and it rejects non-JSON responses instead of storing them.
+
+GOG configuration:
+
+```env
+GOG_ENABLED=false
+GOG_API_BASE_URL=https://api.gog.com
+GOG_CATALOG_BASE_URL=https://catalog.gog.com
+GOG_COUNTRY_CODE=PL
+GOG_CURRENCY=PLN
+GOG_REQUEST_LIMIT_PER_HOUR=200
+```
+
 Public price endpoints:
 
 - `GET /api/prices/status`
@@ -203,6 +219,19 @@ curl -X POST https://apka-seven.vercel.app/api/admin/prices/recalculate \
 ```
 
 Legacy `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` return disabled responses and do not call external aggregators.
+
+GOG admin operations:
+
+- `GET /api/admin/gog/status`
+- `GET /api/admin/gog/mappings` with `x-admin-secret`
+- `POST /api/admin/gog/mappings` with `x-admin-secret`
+- `POST /api/admin/gog/resolve-game` with `x-admin-secret`
+- `POST /api/admin/gog/catalog/search` with `x-admin-secret`
+- `POST /api/admin/gog/prices/test` with `x-admin-secret`
+- `POST /api/admin/gog/prices/refresh` with `x-admin-secret`
+
+Keep GOG refreshes small (`limit <= 10`) and map games manually before writing prices. Unknown-confidence mappings are
+skipped by refresh.
 
 Admin/dev Steam operations:
 

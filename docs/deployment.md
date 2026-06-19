@@ -89,6 +89,12 @@ ADMIN_API_SECRET=
 CRON_SECRET=
 PRICE_PROVIDER=gamevalue
 PRICE_MODE=internal
+GOG_ENABLED=false
+GOG_API_BASE_URL=https://api.gog.com
+GOG_CATALOG_BASE_URL=https://catalog.gog.com
+GOG_COUNTRY_CODE=PL
+GOG_CURRENCY=PLN
+GOG_REQUEST_LIMIT_PER_HOUR=200
 ENABLE_LEGACY_PRICE_PROVIDERS=false
 # Legacy fallbacks:
 PRICE_API_PROVIDER=gamevalue
@@ -104,6 +110,10 @@ Notes:
 - `MOBILE_ALLOWED_ORIGINS` should be explicit in production. Do not use `*`.
 - `STEAM_WEB_API_KEY` is backend-only. It enables real Steam catalog sync and real current-player refreshes.
 - `PRICE_PROVIDER=gamevalue` and `PRICE_MODE=internal` enable the internal GameValue Price API.
+- `GOG_ENABLED=false` keeps the GOG connector disabled until you explicitly test it. When enabled, it reads public GOG
+  JSON endpoints in small backend-only batches and writes `sourceName=gog` official-store offers into the internal price
+  tables.
+- `GOG_REQUEST_LIMIT_PER_HOUR` is capped at 200 in code. Keep manual refresh limits small and do not run mass syncs.
 - GG.deals, ITAD and CheapShark are legacy/disabled providers in active production flow. Do not set them as active providers unless a future legal/API-safe integration is added intentionally.
 - GG.deals was disabled after Vercel received Cloudflare challenge HTML instead of API JSON. Do not bypass Cloudflare with browser sessions, cookies, Playwright/Puppeteer, proxies or scraping, and do not store raw HTML as price data.
 - Admin price writes use internal sources such as `manual-admin`, `json-import`, `csv-import`, `mock-seed` and future legal partner/store feeds.
@@ -158,6 +168,12 @@ The GameValue Price API schema migration is stored in:
 prisma/migrations/000004_gamevalue_price_api/migration.sql
 ```
 
+The GOG connector schema migration is stored in:
+
+```text
+prisma/migrations/000005_gog_connector/migration.sql
+```
+
 ## 5. Seed demo data
 
 For a demo production database:
@@ -179,6 +195,7 @@ https://apka-seven.vercel.app/api/games/search?q=cyberpunk
 https://apka-seven.vercel.app/api/games/dota-2/prices
 https://apka-seven.vercel.app/api/stats/overview
 https://apka-seven.vercel.app/api/admin/steam-catalog/status
+https://apka-seven.vercel.app/api/admin/gog/status
 ```
 
 `/api/admin/status` should show non-zero game and snapshot counts after seed.

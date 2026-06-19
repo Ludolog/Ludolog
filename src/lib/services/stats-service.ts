@@ -33,18 +33,23 @@ export class StatsService {
       repositories.steamCatalog.status(),
       repositories.snapshots.countPlayerSnapshotsBySource("steam-api"),
       repositories.snapshots.countPlayerSnapshotsBySource("mock"),
-      repositories.snapshots.countPriceSnapshotsBySource("manual"),
       Promise.all([
         repositories.snapshots.countPriceSnapshotsBySource("manual"),
+        repositories.snapshots.countPriceSnapshotsBySource("gog")
+      ]).then(([manual, gog]) => manual + gog),
+      Promise.all([
+        repositories.snapshots.countPriceSnapshotsBySource("manual"),
+        repositories.snapshots.countPriceSnapshotsBySource("gog"),
         repositories.snapshots.countPriceSnapshotsBySource("ggdeals"),
         repositories.snapshots.countPriceSnapshotsBySource("price-api")
-      ]).then(([manual, ggdeals, priceApi]) => manual + ggdeals + priceApi),
+      ]).then(([manual, gog, ggdeals, priceApi]) => manual + gog + ggdeals + priceApi),
       repositories.snapshots.countPriceSnapshotsBySource("mock"),
       Promise.all([
         repositories.games.countOffersBySource("manual"),
+        repositories.games.countOffersBySource("gog"),
         repositories.games.countOffersBySource("ggdeals"),
         repositories.games.countOffersBySource("price-api")
-      ]).then(([manual, ggdeals, priceApi]) => manual + ggdeals + priceApi),
+      ]).then(([manual, gog, ggdeals, priceApi]) => manual + gog + ggdeals + priceApi),
       repositories.games.countOffersBySource("mock"),
       repositories.games.listImported(500),
       repositories.snapshots.latestPlayerRefresh(),

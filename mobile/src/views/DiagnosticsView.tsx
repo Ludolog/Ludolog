@@ -69,9 +69,15 @@ export function DiagnosticsView(): React.ReactElement {
         <Metric label="Real price snaps" value={formatNumber(status.realPriceSnapshots)} />
         <Metric label="Mock price snaps" value={formatNumber(status.mockPriceSnapshots)} />
         <Metric label="Real offers" value={formatNumber(status.realOffers)} />
+        <Metric label="GOG enabled" value={status.gogEnabled ? "true" : "false"} />
+        <Metric label="GOG mapped games" value={formatNumber(status.gogMappings)} />
+        <Metric label="GOG offers" value={formatNumber(status.gogOfferCount)} />
+        <Metric label="GOG country" value={status.gogCountryCode} />
+        <Metric label="GOG currency" value={status.gogCurrency} />
         <Metric label="Steam catalog" value={formatNumber(status.steamCatalogEntryCount)} />
         <Metric label="Imported games" value={formatNumber(status.importedGameCount)} />
         <Metric label="Last price refresh" value={status.lastPriceRefresh ? formatShortDate(status.lastPriceRefresh) : "n/a"} />
+        <Metric label="Last GOG refresh" value={status.lastGogPriceRefresh ? formatShortDate(status.lastGogPriceRefresh) : "n/a"} />
         <Metric label="Last catalog sync" value={status.lastSteamCatalogSync ? formatShortDate(status.lastSteamCatalogSync) : "n/a"} />
         <Metric label="Last player refresh" value={status.lastPlayerCountRefresh ? formatShortDate(status.lastPlayerCountRefresh) : "n/a"} />
         <Metric label="Real snaps" value={formatNumber(stats?.sourceCounts.realPlayerSnapshots)} />

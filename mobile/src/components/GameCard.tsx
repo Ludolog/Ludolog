@@ -2,7 +2,7 @@ import { Activity, BadgePercent, ShoppingCart } from "lucide-react";
 
 import { formatNumber, formatPrice } from "@/format";
 import { ScoreBadge } from "@/components/ScoreBadge";
-import type { ApiGameSummary, PriceSourceConfidence } from "@shared/api-types";
+import type { ApiGameSummary, DataSource, PriceSourceConfidence } from "@shared/api-types";
 
 export function GameCard({
   summary,
@@ -14,6 +14,8 @@ export function GameCard({
   const price = summary.bestOffer?.price ?? summary.latestPrice?.price;
   const priceSource =
     summary.latestPrice?.sourceConfidence ?? summary.bestOffer?.sourceConfidence ?? "no-price-data";
+  const priceSourceName = summary.latestPrice?.sourceName ?? summary.bestOffer?.sourceName ?? null;
+  const priceDataSource = summary.latestPrice?.source ?? summary.bestOffer?.source ?? null;
   const storeType = summary.bestOffer?.storeType ?? summary.latestPrice?.storeType ?? "unknown";
 
   return (
@@ -38,7 +40,7 @@ export function GameCard({
               </span>
               <ScoreBadge score={summary.score} />
               <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${priceSourceClass(priceSource)}`}>
-                {priceSourceLabel(priceSource)}
+                {priceSourceLabel(priceSource, priceDataSource, priceSourceName)}
               </span>
               <span className="rounded-md border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-semibold text-slate-300">
                 {storeTypeLabel(storeType)}
@@ -57,14 +59,17 @@ export function GameCard({
   );
 }
 
-function priceSourceLabel(source: PriceSourceConfidence): string {
-  if (source === "internal-real") {
+function priceSourceLabel(confidence: PriceSourceConfidence, source: DataSource | null, sourceName: string | null): string {
+  if (source === "gog" || sourceName === "gog") {
+    return "GameValue / GOG";
+  }
+  if (confidence === "internal-real") {
     return "GameValue internal";
   }
-  if (source === "internal-mock") {
+  if (confidence === "internal-mock") {
     return "Mock price";
   }
-  if (source === "external-legacy") {
+  if (confidence === "external-legacy") {
     return "External legacy";
   }
   return "No price data";

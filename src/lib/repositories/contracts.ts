@@ -1,10 +1,14 @@
 import type {
   AdminStatus,
+  GameExternalMapping,
   Game,
   GameImportInput,
   GamePriceSnapshot,
   GameProfile,
   GameSummary,
+  GogCatalogEntry,
+  GogMappingConfidence,
+  GogRepositoryStatus,
   IntegrationLog,
   PlayerCountSnapshot,
   PriceAlert,
@@ -37,7 +41,7 @@ export interface GameRepository {
   mostActive(limit?: number): Promise<GameSummary[]>;
   listOffers(gameId: string): Promise<StoreOffer[]>;
   upsertOffers(gameId: string, offers: StoreOffer[]): Promise<void>;
-  countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual"): Promise<number>;
+  countOffersBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): Promise<number>;
 }
 
 export type PriceStoreInput = {
@@ -86,6 +90,30 @@ export interface SteamCatalogRepository {
   status(): Promise<SteamCatalogStatus>;
 }
 
+export type GogCatalogUpsertInput = Omit<GogCatalogEntry, "createdAt" | "updatedAt">;
+
+export type GogCatalogUpsertResult = {
+  created: number;
+  updated: number;
+};
+
+export type GogMappingInput = {
+  gameId: string;
+  externalId: string;
+  externalSlug?: string | null;
+  confidence: GogMappingConfidence;
+};
+
+export interface GogRepository {
+  searchCatalog(query: string, limit?: number): Promise<GogCatalogEntry[]>;
+  upsertCatalogEntries(entries: GogCatalogUpsertInput[]): Promise<GogCatalogUpsertResult>;
+  listMappings(limit?: number): Promise<GameExternalMapping[]>;
+  findMappingByGameId(gameId: string): Promise<GameExternalMapping | null>;
+  findMappingsByGameIds(gameIds: string[]): Promise<GameExternalMapping[]>;
+  upsertMapping(input: GogMappingInput): Promise<GameExternalMapping>;
+  status(): Promise<GogRepositoryStatus>;
+}
+
 export interface WatchlistRepository {
   list(userId?: string): Promise<WatchlistWithSummary[]>;
   add(gameId: string, targetPrice?: number | null, userId?: string): Promise<WatchlistItem>;
@@ -105,7 +133,7 @@ export interface SnapshotRepository {
   latestPlayerRefresh(): Promise<Date | null>;
   countPlayerSnapshotsBySource(source: "mock" | "steam-api"): Promise<number>;
   latestPriceRefresh(): Promise<Date | null>;
-  countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual"): Promise<number>;
+  countPriceSnapshotsBySource(source: "mock" | "ggdeals" | "price-api" | "manual" | "gog"): Promise<number>;
   appendPrice(snapshot: GamePriceSnapshot): Promise<void>;
   appendPlayers(snapshot: PlayerCountSnapshot): Promise<void>;
 }
@@ -120,6 +148,7 @@ export interface AppRepositories {
   provider: RepositoryProvider;
   games: GameRepository;
   steamCatalog: SteamCatalogRepository;
+  gog: GogRepository;
   prices: PriceRepository;
   watchlist: WatchlistRepository;
   alerts: AlertRepository;
