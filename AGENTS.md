@@ -53,9 +53,11 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 - Public API mode reports missing real player data as no-data/missing instead of `playerSource="mock"` when `ENABLE_DEV_MOCK_FALLBACK=false`.
 - Dev mock fallback is allowed only behind `ENABLE_DEV_MOCK_FALLBACK=true` or local mock mode.
 - Do not import the full Steam catalog into `Game`; keep the large catalog in `SteamCatalogEntry`.
+- TOP 100 import must not depend exclusively on a partial `SteamCatalogEntry`; it can create tracked games from curated App IDs through safe fallbacks.
 - Do not run mass price refreshes over the full Steam catalog.
 - Use `TopTrackedGame` for daily practical refresh scope instead of the full Steam catalog.
 - Keep TOP 100 refreshes capped at 100 entries.
+- TOP 100 import fallback order is: existing `Game` -> `SteamCatalogEntry` -> Steam Store `appdetails` -> curated TOP 100 fallback metadata.
 - Use `CatalogStoreOffer` for catalog price backfill instead of creating tracked `Game` records.
 - GOG mapping suggestions require manual approval before price writes.
 - GOG soundtrack, DLC, demo, tool and bundle-like catalog entries are skipped by default during catalog price backfill unless an admin explicitly enables that product type in the request.
@@ -204,6 +206,7 @@ Names only; never write real values in docs, commits, logs, or chat.
 - GOG is enabled; mappings are still manual approval only.
 - GOG public output is hidden by default; admin GOG status/tools remain visible.
 - TOP 100 Steam scope exists for practical daily tracking and scoring readiness.
+- TOP 100 can reach 100 tracked `Game` rows even when the synced Steam catalog is partial.
 - TOP 100 coverage tracks full score, insufficient data, no-player-data, no-price-data and public mock counts; public mock count should remain zero.
 - Steam Store prices are enabled for small imported-game refreshes and catalog backfill.
 - `CatalogStoreOffer` keeps catalog price backfill separate from imported `Game` rows.

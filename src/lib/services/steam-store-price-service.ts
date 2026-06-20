@@ -54,6 +54,10 @@ type CachedDetails = {
 
 const detailsCache = new Map<string, CachedDetails>();
 
+export function clearSteamStoreDetailsCacheForTests(): void {
+  detailsCache.clear();
+}
+
 export class SteamStoreConnectorError extends Error {
   constructor(
     message: string,

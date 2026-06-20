@@ -1,15 +1,26 @@
 import {
+  getSteamStoreApiBaseUrl,
+  getSteamStoreCountryCode,
   getTopGamesStalePlayerHours,
   getTopGamesStalePriceHours
 } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
-import { gameSearchService } from "@/lib/services/game-search-service";
 import { GameTagNormalizer } from "@/lib/services/category-service";
 import { steamApiService } from "@/lib/services/steam-api-service";
 import { steamStorePriceService } from "@/lib/services/steam-store-price-service";
 import { publicGameProfile, publicPlayerSnapshot } from "@/lib/services/public-data-service";
 import { curatedTopTrackedGames } from "@/lib/top-games-seed";
-import type { CatalogStoreOffer, Game, GamePriceSnapshot, GameProfile, PlayerCountSnapshot, StoreOffer, TopTrackedGame } from "@/lib/types";
+import type {
+  CatalogStoreOffer,
+  Game,
+  GameImportInput,
+  GamePriceSnapshot,
+  GameProfile,
+  PlayerCountSnapshot,
+  SteamCatalogEntry,
+  StoreOffer,
+  TopTrackedGame
+} from "@/lib/types";
 import type {
   ApiSteamStorePriceRefreshResult,
   ApiTopGameItem,
@@ -40,6 +51,47 @@ type TopGameEntryWithGame = {
 
 type TopSteamPrice = GamePriceSnapshot | StoreOffer | CatalogStoreOffer;
 
+type TopGamesImportSource = ApiTopGamesImportResponse["results"][number]["sourceUsed"];
+
+type ImportPlan =
+  | {
+      kind: "existing";
+      entry: TopTrackedGame;
+      game: Game;
+    }
+  | {
+      kind: "steam-catalog";
+      entry: TopTrackedGame;
+      catalogEntry: SteamCatalogEntry;
+    }
+  | {
+      kind: "fallback";
+      entry: TopTrackedGame;
+    };
+
+type SteamStoreAppDetailsPayload = Record<
+  string,
+  {
+    success?: boolean;
+    data?: {
+      name?: string;
+      type?: string;
+      header_image?: string;
+      short_description?: string;
+      developers?: string[];
+      publishers?: string[];
+      release_date?: {
+        date?: string;
+      };
+      genres?: Array<{
+        description?: string;
+      }>;
+    };
+  }
+>;
+
+type SteamStoreTopGameDetails = NonNullable<SteamStoreAppDetailsPayload[string]["data"]>;
+
 export class TopGamesService {
   async list(options: TopGamesListOptions = {}): Promise<ApiTopGamesResponse> {
     const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 100)));
@@ -69,79 +121,38 @@ export class TopGamesService {
   async importTopGames(input: { limit?: number; dryRun?: boolean }): Promise<ApiTopGamesImportResponse> {
     const dryRun = input.dryRun ?? true;
     const limit = Math.max(1, Math.min(100, Math.floor(input.limit ?? 100)));
-    const entries = await this.resolveTopEntries(limit, dryRun);
+    const entries = await this.resolveTopEntries(limit, !dryRun);
     const response: ApiTopGamesImportResponse = {
       dryRun,
       requested: entries.length,
       imported: 0,
       alreadyExisting: 0,
+      createdFromSteamCatalog: 0,
+      createdFromSteamStore: 0,
+      createdFromCuratedFallback: 0,
+      missingMetadata: 0,
       missingFromSteamCatalog: 0,
       failed: 0,
       errors: [],
       results: []
     };
+    const plans: ImportPlan[] = [];
 
     for (const entry of entries) {
       try {
         const existing = await repositories.games.findBySteamAppId(entry.steamAppId);
         if (existing) {
-          if (!dryRun) {
-            await repositories.topTrackedGames.linkGame(entry.steamAppId, existing.id);
-          }
-          response.alreadyExisting += 1;
-          response.results.push({
-            steamAppId: entry.steamAppId,
-            title: entry.title,
-            gameId: existing.id,
-            imported: false,
-            alreadyExisting: true,
-            missingFromSteamCatalog: false,
-            message: "Game already exists in tracked Game table."
-          });
+          plans.push({ kind: "existing", entry, game: existing });
           continue;
         }
 
         const catalogEntry = await repositories.steamCatalog.findBySteamAppId(entry.steamAppId);
-        if (!catalogEntry || !catalogEntry.isGame || !catalogEntry.isActive) {
-          response.missingFromSteamCatalog += 1;
-          response.results.push({
-            steamAppId: entry.steamAppId,
-            title: entry.title,
-            gameId: null,
-            imported: false,
-            alreadyExisting: false,
-            missingFromSteamCatalog: true,
-            message: "Top game is not present in local SteamCatalogEntry yet."
-          });
+        if (catalogEntry?.isGame && catalogEntry.isActive) {
+          plans.push({ kind: "steam-catalog", entry, catalogEntry });
           continue;
         }
 
-        if (dryRun) {
-          response.results.push({
-            steamAppId: entry.steamAppId,
-            title: catalogEntry.title,
-            gameId: null,
-            imported: false,
-            alreadyExisting: false,
-            missingFromSteamCatalog: false,
-            message: "Dry run only; this game would be imported from SteamCatalogEntry."
-          });
-          continue;
-        }
-
-        const imported = await gameSearchService.importGame({ steamAppId: entry.steamAppId }, { refreshPlayers: false });
-        await repositories.topTrackedGames.linkGame(entry.steamAppId, imported.gameId);
-        response.imported += imported.created ? 1 : 0;
-        response.alreadyExisting += imported.created ? 0 : 1;
-        response.results.push({
-          steamAppId: entry.steamAppId,
-          title: imported.summary.game.title,
-          gameId: imported.gameId,
-          imported: imported.created,
-          alreadyExisting: !imported.created,
-          missingFromSteamCatalog: false,
-          message: imported.created ? "Imported into Game." : "Game already existed."
-        });
+        plans.push({ kind: "fallback", entry });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown TOP 100 import error.";
         response.failed += 1;
@@ -152,7 +163,98 @@ export class TopGamesService {
           gameId: null,
           imported: false,
           alreadyExisting: false,
+          sourceUsed: "curated-top-100",
           missingFromSteamCatalog: false,
+          message
+        });
+      }
+    }
+
+    const fallbackDetails = await fetchSteamStoreDetails(
+      plans.filter((plan): plan is Extract<ImportPlan, { kind: "fallback" }> => plan.kind === "fallback").map((plan) => plan.entry)
+    );
+
+    for (const plan of plans) {
+      try {
+        if (plan.kind === "existing") {
+          if (!dryRun) {
+            await repositories.topTrackedGames.linkGame(plan.entry.steamAppId, plan.game.id);
+          }
+          response.alreadyExisting += 1;
+          response.results.push({
+            steamAppId: plan.entry.steamAppId,
+            title: plan.game.title,
+            gameId: plan.game.id,
+            imported: false,
+            alreadyExisting: true,
+            sourceUsed: "existing-game",
+            missingFromSteamCatalog: false,
+            message: "Game already exists in tracked Game table."
+          });
+          continue;
+        }
+
+        if (plan.kind === "steam-catalog") {
+          await this.completeImportPlan({
+            entry: plan.entry,
+            sourceUsed: "steam-catalog",
+            missingFromSteamCatalog: false,
+            input: gameImportInputFromSteamCatalogEntry(plan.catalogEntry),
+            dryRun,
+            response,
+            message: dryRun
+              ? "Dry run only; this game would be imported from SteamCatalogEntry."
+              : "Imported from SteamCatalogEntry."
+          });
+          response.createdFromSteamCatalog += 1;
+          continue;
+        }
+
+        response.missingFromSteamCatalog += 1;
+        const steamStoreDetails = fallbackDetails.get(plan.entry.steamAppId) ?? null;
+        if (steamStoreDetails) {
+          await this.completeImportPlan({
+            entry: plan.entry,
+            sourceUsed: "steam-store-appdetails",
+            missingFromSteamCatalog: true,
+            input: gameImportInputFromSteamStoreDetails(plan.entry, steamStoreDetails),
+            catalogEntry: steamCatalogEntryFromTopGame(plan.entry, steamStoreDetails),
+            dryRun,
+            response,
+            message: dryRun
+              ? "Dry run only; this game would be imported from Steam Store appdetails."
+              : "Imported from Steam Store appdetails fallback."
+          });
+          response.createdFromSteamStore += 1;
+          continue;
+        }
+
+        await this.completeImportPlan({
+          entry: plan.entry,
+          sourceUsed: "curated-top-100",
+          missingFromSteamCatalog: true,
+          input: gameImportInputFromCuratedTopGame(plan.entry),
+          catalogEntry: steamCatalogEntryFromTopGame(plan.entry, null),
+          dryRun,
+          response,
+          message: dryRun
+            ? "Dry run only; this game would be imported from curated TOP 100 fallback metadata."
+            : "Imported from curated TOP 100 fallback metadata."
+        });
+        response.createdFromCuratedFallback += 1;
+        response.missingMetadata += 1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown TOP 100 import error.";
+        response.failed += 1;
+        response.errors.push({ steamAppId: plan.entry.steamAppId, title: plan.entry.title, message });
+        response.results.push({
+          steamAppId: plan.entry.steamAppId,
+          title: plan.entry.title,
+          gameId: null,
+          imported: false,
+          alreadyExisting: false,
+          sourceUsed: plan.kind === "steam-catalog" ? "steam-catalog" : "curated-top-100",
+          missingFromSteamCatalog: plan.kind !== "steam-catalog",
           message
         });
       }
@@ -161,7 +263,7 @@ export class TopGamesService {
     await repositories.diagnostics.recordIntegrationLog({
       service: "search",
       level: response.failed > 0 ? "warning" : "info",
-      message: `TOP 100 import finished. dryRun=${dryRun}, requested=${response.requested}, imported=${response.imported}, alreadyExisting=${response.alreadyExisting}, missingFromSteamCatalog=${response.missingFromSteamCatalog}, failed=${response.failed}.`
+      message: `TOP 100 import finished. dryRun=${dryRun}, requested=${response.requested}, imported=${response.imported}, alreadyExisting=${response.alreadyExisting}, createdFromSteamCatalog=${response.createdFromSteamCatalog}, createdFromSteamStore=${response.createdFromSteamStore}, createdFromCuratedFallback=${response.createdFromCuratedFallback}, missingMetadata=${response.missingMetadata}, missingFromSteamCatalog=${response.missingFromSteamCatalog}, failed=${response.failed}.`
     });
 
     return response;
@@ -170,7 +272,7 @@ export class TopGamesService {
   async refreshPlayers(input: { limit?: number; dryRun?: boolean }): Promise<ApiTopGamesRefreshPlayersResponse> {
     const dryRun = input.dryRun ?? true;
     const limit = Math.max(1, Math.min(100, Math.floor(input.limit ?? 100)));
-    const entries = await this.resolveTopEntries(limit, dryRun);
+    const entries = await this.resolveTopEntries(limit, !dryRun);
     const response: ApiTopGamesRefreshPlayersResponse = {
       dryRun,
       requested: entries.length,
@@ -282,6 +384,9 @@ export class TopGamesService {
   async refreshPrices(input: { limit?: number; dryRun?: boolean }): Promise<ApiTopGamesRefreshPricesResponse> {
     const dryRun = input.dryRun ?? true;
     const limit = Math.max(1, Math.min(100, Math.floor(input.limit ?? 100)));
+    if (!dryRun) {
+      await this.resolveTopEntries(limit, true);
+    }
     const steamResponse = await steamStorePriceService.refreshPrices({
       mode: "top-100",
       limit,
@@ -369,6 +474,48 @@ export class TopGamesService {
     }
     return game;
   }
+
+  private async completeImportPlan(input: {
+    entry: TopTrackedGame;
+    sourceUsed: TopGamesImportSource;
+    missingFromSteamCatalog: boolean;
+    input: GameImportInput;
+    catalogEntry?: SteamCatalogEntry;
+    dryRun: boolean;
+    response: ApiTopGamesImportResponse;
+    message: string;
+  }): Promise<void> {
+    if (input.dryRun) {
+      input.response.results.push({
+        steamAppId: input.entry.steamAppId,
+        title: input.input.title,
+        gameId: null,
+        imported: false,
+        alreadyExisting: false,
+        sourceUsed: input.sourceUsed,
+        missingFromSteamCatalog: input.missingFromSteamCatalog,
+        message: input.message
+      });
+      return;
+    }
+
+    if (input.catalogEntry) {
+      await repositories.steamCatalog.upsertMany([input.catalogEntry]);
+    }
+    const summary = await repositories.games.importFromCatalog(input.input);
+    await repositories.topTrackedGames.linkGame(input.entry.steamAppId, summary.game.id);
+    input.response.imported += 1;
+    input.response.results.push({
+      steamAppId: input.entry.steamAppId,
+      title: summary.game.title,
+      gameId: summary.game.id,
+      imported: true,
+      alreadyExisting: false,
+      sourceUsed: input.sourceUsed,
+      missingFromSteamCatalog: input.missingFromSteamCatalog,
+      message: input.message
+    });
+  }
 }
 
 function pickSteamPrice(profile: GameProfile | null, catalogOffer: CatalogStoreOffer | null): TopSteamPrice | null {
@@ -382,6 +529,180 @@ function pickSteamPrice(profile: GameProfile | null, catalogOffer: CatalogStoreO
     .filter((offer) => offer.source === "steam-store" || offer.source === "manual")
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
   return steamStoreOffer ?? catalogOffer;
+}
+
+async function fetchSteamStoreDetails(entries: TopTrackedGame[]): Promise<Map<number, SteamStoreTopGameDetails>> {
+  const results = new Map<number, SteamStoreTopGameDetails>();
+  await mapWithConcurrency(entries, 5, async (entry) => {
+    const details = await fetchSteamStoreDetailsForEntry(entry.steamAppId);
+    if (details) {
+      results.set(entry.steamAppId, details);
+    }
+  });
+  return results;
+}
+
+async function fetchSteamStoreDetailsForEntry(steamAppId: number): Promise<SteamStoreTopGameDetails | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const url = new URL(`${getSteamStoreApiBaseUrl()}/appdetails`);
+    url.searchParams.set("appids", String(steamAppId));
+    url.searchParams.set("cc", getSteamStoreCountryCode());
+    url.searchParams.set("filters", "basic");
+
+    const response = await fetch(url.toString(), {
+      headers: { accept: "application/json", "user-agent": "GameValueRadar/1.0" },
+      signal: controller.signal
+    });
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!response.ok || !contentType.toLowerCase().includes("json")) {
+      return null;
+    }
+    const payload = (await response.json()) as SteamStoreAppDetailsPayload;
+    const entry = payload[String(steamAppId)];
+    if (!entry?.success || !entry.data?.name) {
+      return null;
+    }
+    return entry.data;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function mapWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  let index = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (index < items.length) {
+      const item = items[index];
+      index += 1;
+      await worker(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
+function gameImportInputFromSteamCatalogEntry(entry: SteamCatalogEntry): GameImportInput {
+  return gameImportInput({
+    steamAppId: entry.steamAppId,
+    title: entry.title,
+    description: `${entry.title} imported from the Steam catalog. Player activity can be refreshed from Steam Web API.`,
+    coverUrl: steamHeaderImageUrl(entry.steamAppId),
+    genres: ["Steam"],
+    developer: "Unknown",
+    publisher: "Unknown",
+    releaseDate: "1970-01-01"
+  });
+}
+
+function gameImportInputFromSteamStoreDetails(entry: TopTrackedGame, details: SteamStoreTopGameDetails): GameImportInput {
+  const title = normalizedTitle(details.name, entry.title);
+  return gameImportInput({
+    steamAppId: entry.steamAppId,
+    title,
+    description: details.short_description?.trim() || `${title} imported from Steam Store appdetails for the curated TOP 100 scope.`,
+    coverUrl: details.header_image?.trim() || steamHeaderImageUrl(entry.steamAppId),
+    genres: normalizeSteamStoreGenres(details),
+    developer: details.developers?.filter(Boolean).join(", ") || "Unknown",
+    publisher: details.publishers?.filter(Boolean).join(", ") || "Unknown",
+    releaseDate: parseSteamStoreReleaseDate(details.release_date?.date)
+  });
+}
+
+function gameImportInputFromCuratedTopGame(entry: TopTrackedGame): GameImportInput {
+  return gameImportInput({
+    steamAppId: entry.steamAppId,
+    title: entry.title,
+    description: `${entry.title} imported from the curated TOP 100 Steam scope. Steam Store metadata was not available during import.`,
+    coverUrl: steamHeaderImageUrl(entry.steamAppId),
+    genres: ["Steam"],
+    developer: "Unknown",
+    publisher: "Unknown",
+    releaseDate: "1970-01-01"
+  });
+}
+
+function gameImportInput(input: {
+  steamAppId: number;
+  title: string;
+  description: string;
+  coverUrl: string;
+  genres: string[];
+  developer: string;
+  publisher: string;
+  releaseDate: string;
+}): GameImportInput {
+  const slug = slugify(input.title) || `steam-app-${input.steamAppId}`;
+  return {
+    id: slug,
+    steamAppId: input.steamAppId,
+    title: input.title,
+    slug,
+    platform: "Steam",
+    description: input.description,
+    coverUrl: input.coverUrl,
+    genres: input.genres.length > 0 ? input.genres : ["Steam"],
+    developer: input.developer,
+    publisher: input.publisher,
+    releaseDate: input.releaseDate,
+    reviewScore: 70,
+    source: "steam-api",
+    basePrice: 0,
+    currentPrice: 0,
+    historicalLow: 0,
+    currentPlayers: 0,
+    trendFactor: 1
+  };
+}
+
+function steamCatalogEntryFromTopGame(entry: TopTrackedGame, details: SteamStoreTopGameDetails | null): SteamCatalogEntry {
+  const now = new Date();
+  return {
+    id: `steam-catalog-${entry.steamAppId}`,
+    steamAppId: entry.steamAppId,
+    title: details ? normalizedTitle(details.name, entry.title) : entry.title,
+    appType: details?.type?.trim() || "game",
+    lastModified: null,
+    priceChangeNumber: null,
+    isGame: true,
+    isActive: true,
+    source: "steam-api",
+    syncedAt: now,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function normalizeSteamStoreGenres(details: SteamStoreTopGameDetails): string[] {
+  const genres = details.genres?.map((genre) => genre.description?.trim()).filter((genre): genre is string => Boolean(genre)) ?? [];
+  return genres.length > 0 ? genres : ["Steam"];
+}
+
+function parseSteamStoreReleaseDate(value: string | undefined): string {
+  if (!value) {
+    return "1970-01-01";
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "1970-01-01" : parsed.toISOString().slice(0, 10);
+}
+
+function normalizedTitle(candidate: string | undefined, fallback: string): string {
+  const title = candidate?.trim();
+  return title && title.length > 0 ? title : fallback;
+}
+
+function steamHeaderImageUrl(steamAppId: number): string {
+  return `https://cdn.akamai.steamstatic.com/steam/apps/${steamAppId}/header.jpg`;
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
 function toTopGameItem(row: TopGameEntryWithGame, rank: number): ApiTopGameItem {

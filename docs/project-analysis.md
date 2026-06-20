@@ -58,6 +58,10 @@ score-readiness for this practical daily scope. Admin endpoints can import the l
 Steam Store prices in capped batches. This keeps useful data fresh without turning the whole Steam catalog into tracked
 `Game` rows.
 
+TOP 100 import is resilient to a partial Steam catalog. It resolves each curated App ID as existing `Game`,
+`SteamCatalogEntry`, Steam Store `appdetails`, then curated fallback metadata. The curated fallback creates minimal
+tracked metadata only; missing player or price data remains no-data, not mock.
+
 Public API mode does not expose mock player counts when `ENABLE_DEV_MOCK_FALLBACK=false`. If a TOP 100 game has no real
 Steam snapshot, the public response reports no-data and leaves the TOP 100 score as `insufficient-data` until a real
 player snapshot and trusted Steam/manual price exist. The detailed operational contract is in `docs/top-100-scope.md`.
@@ -208,6 +212,8 @@ player refresh and Steam Store price refresh for at most 100 entries. `GET|POST 
 daily Vercel Hobby-safe cron for that scope. TOP 100 GameValue output returns a nullable score and
 `insufficient-data` recommendation when player or trusted price data is missing. Coverage includes full score,
 insufficient data, no-player-data, no-price-data and public-mock counters; the public mock counter should stay zero.
+The import report distinguishes `existing-game`, `steam-catalog`, `steam-store-appdetails` and `curated-top-100`
+sources so operators can see why a curated App ID was imported even when `SteamCatalogEntry` is incomplete.
 
 Mock price cleanup is separated from general database maintenance. `GET /api/admin/prices/mock-cleanup/preview` reports affected mock offers, mock snapshots and mock price sources; `POST /api/admin/prices/mock-cleanup/run` requires `DELETE_MOCK_PRICE_DATA_ONLY` and does not delete games, catalogs, external mappings or player snapshots.
 

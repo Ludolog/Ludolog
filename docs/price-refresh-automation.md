@@ -35,6 +35,8 @@ The curated daily production scope uses:
 
 `TopTrackedGame` is intentionally separate from `SteamCatalogEntry`. It stores the 100 Steam App IDs that are practical to keep fresh every day. TOP 100 refreshes may import missing tracked rows into `Game`, refresh current players and refresh Steam Store prices, but they must not expand into a full catalog refresh. Public TOP 100 responses expose missing player data as no-data rather than mock player counts in production API mode.
 
+TOP 100 import uses safe metadata fallbacks when the synced Steam catalog is partial: existing `Game` -> `SteamCatalogEntry` -> Steam Store `appdetails` -> curated TOP 100 metadata. This can create 100 tracked games without importing the whole Steam catalog. Curated fallback metadata only fills identity fields and a standard Steam CDN cover; missing player and price data remain no-data.
+
 GOG catalog backfill reads stored `GogCatalogEntry` rows first. If GOG returns no price, or a fallback catalog lookup cannot find an already stored product, the run reports a skipped warning and leaves a cooldown instead of counting it as `failed`. Failed is reserved for technical lookup errors such as invalid JSON, HTTP/provider errors or network timeouts.
 
 ## Environment variables
@@ -151,6 +153,7 @@ TOP 100 freshness uses `fresh`, `stale` or `missing`; `coverage.mockPublicDataCo
 
 - Do not run mass refreshes across all 2000 catalog entries.
 - Keep TOP 100 refreshes capped at 100 and do not reuse them as full catalog backfill.
+- Treat `missingFromSteamCatalog` in TOP 100 import as diagnostic only; try Steam Store appdetails and curated fallback before reporting a failed import.
 - Do not store HTML or provider challenge pages as offers or snapshots.
 - Do not expose `playerSource="mock"` publicly in `DATA_MODE=api` unless `ENABLE_DEV_MOCK_FALLBACK=true` is intentionally enabled for local/dev work.
 - Count no-price catalog checks as skipped/no-price, not failed; failed is for technical errors.

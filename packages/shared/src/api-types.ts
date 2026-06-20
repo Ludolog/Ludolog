@@ -1187,6 +1187,7 @@ export type ApiTopGamesImportResult = {
   gameId: string | null;
   imported: boolean;
   alreadyExisting: boolean;
+  sourceUsed: "existing-game" | "steam-catalog" | "steam-store-appdetails" | "curated-top-100";
   missingFromSteamCatalog: boolean;
   message: string | null;
 };
@@ -1196,6 +1197,10 @@ export type ApiTopGamesImportResponse = {
   requested: number;
   imported: number;
   alreadyExisting: number;
+  createdFromSteamCatalog: number;
+  createdFromSteamStore: number;
+  createdFromCuratedFallback: number;
+  missingMetadata: number;
   missingFromSteamCatalog: number;
   failed: number;
   errors: Array<{ steamAppId: number; title: string; message: string }>;
