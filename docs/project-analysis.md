@@ -58,6 +58,10 @@ score-readiness for this practical daily scope. Admin endpoints can import the l
 Steam Store prices in capped batches. This keeps useful data fresh without turning the whole Steam catalog into tracked
 `Game` rows.
 
+Public API mode does not expose mock player counts when `ENABLE_DEV_MOCK_FALLBACK=false`. If a TOP 100 game has no real
+Steam snapshot, the public response reports no-data and leaves the TOP 100 score as `insufficient-data` until a real
+player snapshot and trusted Steam/manual price exist. The detailed operational contract is in `docs/top-100-scope.md`.
+
 ## Cel systemu
 
 GameValue Radar to aplikacja webowa wspomagająca decyzje zakupowe graczy PC. System łączy dane o cenach, ofertach sklepów, historii cen, liczbie aktywnych graczy oraz autorskim wskaźniku opłacalności zakupu. Projekt nie jest kopią SteamDB ani GG.deals i nie wykonuje scrapingu stron HTML. Integracje są zamknięte w adapterach, a tryb demonstracyjny działa na danych mockowych.
@@ -202,7 +206,8 @@ conversion.
 `TopGamesService` coordinates the TOP 100 path. `POST /api/admin/top-games/bootstrap` can dry-run or execute import,
 player refresh and Steam Store price refresh for at most 100 entries. `GET|POST /api/cron/refresh-top-games` is the
 daily Vercel Hobby-safe cron for that scope. TOP 100 GameValue output returns a nullable score and
-`insufficient-data` recommendation when player or trusted price data is missing.
+`insufficient-data` recommendation when player or trusted price data is missing. Coverage includes full score,
+insufficient data, no-player-data, no-price-data and public-mock counters; the public mock counter should stay zero.
 
 Mock price cleanup is separated from general database maintenance. `GET /api/admin/prices/mock-cleanup/preview` reports affected mock offers, mock snapshots and mock price sources; `POST /api/admin/prices/mock-cleanup/run` requires `DELETE_MOCK_PRICE_DATA_ONLY` and does not delete games, catalogs, external mappings or player snapshots.
 

@@ -1,4 +1,4 @@
-import { Activity, ShoppingCart, Trophy } from "lucide-react";
+import { Activity, BadgePercent, ShoppingCart, ShieldAlert, Trophy } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiClient } from "@/api/client";
@@ -54,10 +54,10 @@ export function TopGamesView({
       </section>
 
       <section className="grid grid-cols-2 gap-3">
-        <Coverage label="Player count" value={`${data.coverage.withPlayerCount}/${data.coverage.topTrackedCount}`} />
+        <Coverage label="Real players" value={`${data.coverage.withPlayerCount}/${data.coverage.topTrackedCount}`} />
         <Coverage label="Steam cena" value={`${data.coverage.withSteamPrice}/${data.coverage.topTrackedCount}`} />
-        <Coverage label="Świeże ceny" value={`${data.coverage.withFreshSteamPrice}/${data.coverage.topTrackedCount}`} />
-        <Coverage label="Brak ceny" value={String(data.coverage.noPriceCount)} />
+        <Coverage label="Pełny score" value={`${data.coverage.fullScoreCount}/${data.coverage.topTrackedCount}`} />
+        <Coverage label="No-data" value={String(data.coverage.noPlayerDataCount)} />
       </section>
 
       <section className="space-y-3">
@@ -87,9 +87,16 @@ export function TopGamesView({
                   <ShoppingCart size={13} />
                   {game.bestSteamPrice === null ? "Brak ceny" : formatPrice(game.bestSteamPrice, game.currency ?? "PLN")}
                 </span>
+                {game.recommendation === "insufficient-data" ? (
+                  <span className="inline-flex items-center gap-1 text-radar-amber">
+                    <ShieldAlert size={13} />
+                    niepełne dane
+                  </span>
+                ) : null}
               </div>
             </div>
-            <span className="rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 text-xs font-semibold text-radar-violet">
+            <span className="inline-flex items-center gap-1 rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 text-xs font-semibold text-radar-violet">
+              <BadgePercent size={13} />
               {game.gameValueScore ?? "-"}
             </span>
           </button>

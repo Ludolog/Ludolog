@@ -7,6 +7,7 @@ import { POST as createGogMapping } from "@/app/api/admin/gog/mappings/route";
 import { POST as suggestGogMappings } from "@/app/api/admin/gog/mappings/suggest/route";
 import { POST as backfillGogCatalogPrices } from "@/app/api/admin/gog/prices/backfill-catalog/route";
 import { POST as refreshGogPrices } from "@/app/api/admin/gog/prices/refresh/route";
+import { GET as getGogAdminStatus } from "@/app/api/admin/gog/status/route";
 import { repositories } from "@/lib/repositories";
 import {
   GogCatalogConnector,
@@ -166,6 +167,19 @@ describe("GOG connector", () => {
     );
 
     expect(response.status).toBe(401);
+  });
+
+  it("keeps GOG visible in admin status even when public GOG data is hidden", async () => {
+    vi.stubEnv("GOG_ENABLED", "true");
+    vi.stubEnv("SHOW_GOG_PUBLIC", "false");
+
+    const response = await getGogAdminStatus();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.gogEnabled).toBe(true);
+    expect(body).toHaveProperty("gogCatalogEntries");
+    expect(body).toHaveProperty("gogMappings");
   });
 
   it("creates a manual GOG mapping through the admin route", async () => {

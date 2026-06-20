@@ -7,6 +7,7 @@ import { gameSearchService } from "@/lib/services/game-search-service";
 import { GameTagNormalizer } from "@/lib/services/category-service";
 import { steamApiService } from "@/lib/services/steam-api-service";
 import { steamStorePriceService } from "@/lib/services/steam-store-price-service";
+import { publicGameProfile, publicPlayerSnapshot } from "@/lib/services/public-data-service";
 import { curatedTopTrackedGames } from "@/lib/top-games-seed";
 import type { CatalogStoreOffer, Game, GamePriceSnapshot, GameProfile, PlayerCountSnapshot, StoreOffer, TopTrackedGame } from "@/lib/types";
 import type {
@@ -175,6 +176,7 @@ export class TopGamesService {
       requested: entries.length,
       refreshed: 0,
       skippedFreshCache: 0,
+      noData: 0,
       failed: 0,
       createdSnapshots: 0,
       errors: [],
@@ -185,6 +187,7 @@ export class TopGamesService {
     for (const entry of entries) {
       const game = await this.findTopGame(entry);
       if (!game) {
+        response.noData += 1;
         response.results.push({
           steamAppId: entry.steamAppId,
           gameId: null,
@@ -197,7 +200,7 @@ export class TopGamesService {
         continue;
       }
 
-      const latest = await repositories.snapshots.latestPlayersBySteamAppId(entry.steamAppId);
+      const latest = publicPlayerSnapshot(await repositories.snapshots.latestPlayersBySteamAppId(entry.steamAppId));
       if (latest && latest.capturedAt >= staleBefore) {
         response.skippedFreshCache += 1;
         response.results.push({
@@ -228,16 +231,15 @@ export class TopGamesService {
       try {
         const snapshot = await steamApiService.refreshPlayerCount(entry.steamAppId);
         if (!snapshot) {
-          response.failed += 1;
-          response.errors.push({ steamAppId: entry.steamAppId, gameId: game.id, message: "No player snapshot was stored." });
+          response.noData += 1;
           response.results.push({
             steamAppId: entry.steamAppId,
             gameId: game.id,
             refreshed: false,
-            skipped: false,
+            skipped: true,
             playersOnline: null,
             snapshotId: null,
-            message: "No player snapshot was stored."
+            message: "Steam API did not return player data."
           });
           continue;
         }
@@ -271,7 +273,7 @@ export class TopGamesService {
     await repositories.diagnostics.recordIntegrationLog({
       service: "steam",
       level: response.failed > 0 ? "warning" : "info",
-      message: `TOP 100 player refresh finished. dryRun=${dryRun}, requested=${response.requested}, refreshed=${response.refreshed}, skippedFreshCache=${response.skippedFreshCache}, failed=${response.failed}.`
+      message: `TOP 100 player refresh finished. dryRun=${dryRun}, requested=${response.requested}, refreshed=${response.refreshed}, skippedFreshCache=${response.skippedFreshCache}, noData=${response.noData}, failed=${response.failed}.`
     });
 
     return response;
@@ -351,8 +353,9 @@ export class TopGamesService {
     return Promise.all(
       entries.map(async (entry) => {
         const game = await this.findTopGame(entry);
-        const profile = game ? await repositories.games.getProfile(game.id) : null;
-        const latestPlayers = await repositories.snapshots.latestPlayersBySteamAppId(entry.steamAppId);
+        const rawProfile = game ? await repositories.games.getProfile(game.id) : null;
+        const profile = rawProfile ? publicGameProfile(rawProfile) : null;
+        const latestPlayers = publicPlayerSnapshot(await repositories.snapshots.latestPlayersBySteamAppId(entry.steamAppId)) ?? profile?.latestPlayers ?? null;
         const steamPrice = pickSteamPrice(profile, catalogOffers.find((offer) => offer.steamAppId === entry.steamAppId) ?? null);
         return { entry, game, profile, latestPlayers, steamPrice };
       })
@@ -410,7 +413,7 @@ function toTopGameItem(row: TopGameEntryWithGame, rank: number): ApiTopGameItem 
     gameValueScore: score.score,
     scoreExplanation: score.explanation,
     recommendation: score.recommendation,
-    noDataReasons: noDataReasons(latestPlayers, steamPrice, game, profile)
+    noDataReasons: noDataReasons(latestPlayers, steamPrice, game)
   };
 }
 
@@ -421,14 +424,14 @@ function topGameScore(input: {
 }): { score: number | null; recommendation: TopGameRecommendation; explanation: string[] } {
   const explanation: string[] = [];
   if (!input.game) {
-    return { score: null, recommendation: "insufficient-data", explanation: ["Game is not imported into the tracked table yet."] };
+    return { score: null, recommendation: "insufficient-data", explanation: ["Gra nie jest jeszcze zaimportowana do tabeli śledzonych gier."] };
   }
   if (!input.latestPlayers || !input.steamPrice) {
     if (!input.latestPlayers) {
-      explanation.push("Missing Steam player count.");
+      explanation.push("Brak aktualnych danych o liczbie graczy.");
     }
     if (!input.steamPrice) {
-      explanation.push("Missing Steam Store price.");
+      explanation.push("Brak aktualnej ceny Steam Store.");
     }
     return { score: null, recommendation: "insufficient-data", explanation };
   }
@@ -447,10 +450,10 @@ function topGameScore(input: {
       : 0;
   const score = Math.max(0, Math.min(100, Math.round(playerScore + priceScore + discountScore + freshnessScore)));
 
-  explanation.push(`${players.toLocaleString("en-US")} current Steam players.`);
-  explanation.push(freeToPlay ? "Free-to-play Steam Store price." : `Steam Store price ${price.toFixed(2)} ${input.steamPrice.currency}.`);
+  explanation.push(`${players.toLocaleString("pl-PL")} aktualnych graczy Steam.`);
+  explanation.push(freeToPlay ? "Cena Steam Store: free-to-play." : `Cena Steam Store: ${price.toFixed(2)} ${input.steamPrice.currency}.`);
   if (discount > 0) {
-    explanation.push(`${discount}% current discount.`);
+    explanation.push(`Aktualna zniżka: ${discount}%.`);
   }
 
   return {
@@ -470,17 +473,24 @@ function topGameScore(input: {
 }
 
 function coverageForItems(items: ApiTopGameItem[]): ApiTopGamesCoverage {
+  const noPlayerDataCount = items.filter((item) => item.currentPlayers === null || item.playerSource === "no-data").length;
+  const noPriceDataCount = items.filter((item) => item.bestSteamPrice === null).length;
   return {
     topTrackedCount: items.length,
     importedCount: items.filter((item) => item.gameId !== null).length,
-    withPlayerCount: items.filter((item) => item.currentPlayers !== null).length,
+    withPlayerCount: items.filter((item) => item.currentPlayers !== null && item.playerSource !== "mock").length,
     withFreshPlayerCount: items.filter((item) => item.playerFreshness === "fresh").length,
     withSteamPrice: items.filter((item) => item.bestSteamPrice !== null).length,
     withFreshSteamPrice: items.filter((item) => item.priceFreshness === "fresh").length,
     freeToPlayCount: items.filter((item) => item.bestSteamPrice === 0).length,
-    noPriceCount: items.filter((item) => item.bestSteamPrice === null).length,
+    noPriceCount: noPriceDataCount,
     stalePriceCount: items.filter((item) => item.priceFreshness === "stale").length,
-    failedLastRefreshCount: 0
+    failedLastRefreshCount: 0,
+    fullScoreCount: items.filter((item) => item.gameValueScore !== null && item.recommendation !== "insufficient-data").length,
+    insufficientDataCount: items.filter((item) => item.gameValueScore === null || item.recommendation === "insufficient-data").length,
+    noPlayerDataCount,
+    noPriceDataCount,
+    mockPublicDataCount: items.filter((item) => item.playerSource === "mock" || item.noDataReasons.includes("player-count-not-real")).length
   };
 }
 
@@ -510,7 +520,7 @@ function freshnessRank(item: ApiTopGameItem): number {
 
 function freshness(date: Date | null, staleHours: number): TopGameFreshness {
   if (!date) {
-    return "no-data";
+    return "missing";
   }
   return Date.now() - date.getTime() > staleHours * 60 * 60 * 1000 ? "stale" : "fresh";
 }
@@ -546,8 +556,7 @@ function priceSourceName(price: TopSteamPrice | null): "steam-store" | "manual" 
 function noDataReasons(
   latestPlayers: PlayerCountSnapshot | null,
   steamPrice: TopSteamPrice | null,
-  game: Game | null,
-  profile: GameProfile | null
+  game: Game | null
 ): string[] {
   const reasons: string[] = [];
   if (!game) {
@@ -559,7 +568,7 @@ function noDataReasons(
   if (!steamPrice) {
     reasons.push("missing-steam-price");
   }
-  if (profile && profile.latestPlayers?.source === "mock") {
+  if (latestPlayers?.source === "mock") {
     reasons.push("player-count-not-real");
   }
   return reasons;

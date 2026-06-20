@@ -33,7 +33,7 @@ The curated daily production scope uses:
 
 `CatalogStoreOffer` is intentionally separate from `Game`. It lets the backend store a small price backfill for synced catalog rows without creating thousands of tracked games. `CatalogPriceCheckStatus` records available/no-price/unavailable/unsupported/error cooldowns so the same no-price or unsupported item is not retried on every run. Public search can show catalog prices when present, while import still remains an intentional user/admin action.
 
-`TopTrackedGame` is intentionally separate from `SteamCatalogEntry`. It stores the 100 Steam App IDs that are practical to keep fresh every day. TOP 100 refreshes may import missing tracked rows into `Game`, refresh current players and refresh Steam Store prices, but they must not expand into a full catalog refresh.
+`TopTrackedGame` is intentionally separate from `SteamCatalogEntry`. It stores the 100 Steam App IDs that are practical to keep fresh every day. TOP 100 refreshes may import missing tracked rows into `Game`, refresh current players and refresh Steam Store prices, but they must not expand into a full catalog refresh. Public TOP 100 responses expose missing player data as no-data rather than mock player counts in production API mode.
 
 GOG catalog backfill reads stored `GogCatalogEntry` rows first. If GOG returns no price, or a fallback catalog lookup cannot find an already stored product, the run reports a skipped warning and leaves a cooldown instead of counting it as `failed`. Failed is reserved for technical lookup errors such as invalid JSON, HTTP/provider errors or network timeouts.
 
@@ -139,17 +139,20 @@ Freshness is exposed in:
 
 - `GET /api/games/search`
 - `GET /api/games/:id/prices`
+- `GET /api/top-games`
 - `GET /api/stats/overview`
 - `GET /api/prices/status`
 - `GET /api/admin/status`
 
 Public search results can include `catalogOffer`, `freshness`, `nextRefreshAt`, `dataSource` and `confidence` for catalog rows. Game price responses include the latest price refresh timestamp and next expected refresh time.
+TOP 100 freshness uses `fresh`, `stale` or `missing`; `coverage.mockPublicDataCount` should stay `0`.
 
 ## Guardrails
 
 - Do not run mass refreshes across all 2000 catalog entries.
 - Keep TOP 100 refreshes capped at 100 and do not reuse them as full catalog backfill.
 - Do not store HTML or provider challenge pages as offers or snapshots.
+- Do not expose `playerSource="mock"` publicly in `DATA_MODE=api` unless `ENABLE_DEV_MOCK_FALLBACK=true` is intentionally enabled for local/dev work.
 - Count no-price catalog checks as skipped/no-price, not failed; failed is for technical errors.
 - Count unavailable GOG catalog products and unsupported product types as skipped warnings with cooldowns, not failed.
 - Do not delete `Game`, `SteamCatalogEntry`, `GogCatalogEntry`, `GameExternalMapping`, `PlayerCountSnapshot` or real price data during cleanup.

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GET as getCategoryDetails } from "@/app/api/categories/[slug]/route";
 import { GET as getCategoriesOverview } from "@/app/api/categories/overview/route";
@@ -6,6 +6,10 @@ import { categoryRankingService, GameTagNormalizer } from "@/lib/services/catego
 import type { Game } from "@/lib/types";
 
 describe("CategoryRankingService", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("classifies games using manual fallback and normalized tags", () => {
     const dota = gameFixture({ steamAppId: 570, genres: ["Steam"] });
     const strategy = gameFixture({ steamAppId: 999999, genres: ["Grand Strategy", "Simulation"] });
@@ -37,6 +41,19 @@ describe("CategoryRankingService", () => {
     expect(detailsResponse.status).toBe(200);
     expect(details.slug).toBe("strategy");
     expect(Array.isArray(details.games)).toBe(true);
+  });
+
+  it("does not leak mojibake or mock player sources in production public category DTOs", async () => {
+    vi.stubEnv("DATA_MODE", "api");
+    vi.stubEnv("ENABLE_DEV_MOCK_FALLBACK", "false");
+
+    const response = await getCategoriesOverview(new Request("http://localhost/api/categories/overview"));
+    const body = await response.json();
+    const serialized = JSON.stringify(body);
+
+    expect(response.status).toBe(200);
+    expect(serialized).not.toMatch(/[ĂÄÅÂĹ]/);
+    expect(serialized).not.toContain('"playerSource":"mock"');
   });
 });
 

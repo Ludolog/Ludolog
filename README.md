@@ -59,7 +59,8 @@ Android App -> Vercel Next.js API -> Neon PostgreSQL
 
 Deployment instructions are in [docs/deployment.md](docs/deployment.md). The current data-flow map is in
 [docs/architecture-map.md](docs/architecture-map.md), and production refresh operations are in
-[docs/price-refresh-automation.md](docs/price-refresh-automation.md).
+[docs/price-refresh-automation.md](docs/price-refresh-automation.md). The curated production tracking scope is
+documented in [docs/top-100-scope.md](docs/top-100-scope.md).
 
 ## PostgreSQL and Prisma
 
@@ -209,7 +210,7 @@ Search now combines local database results and synced Steam catalog entries stor
 
 Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending up/down, best value, free-to-play games, tracked deals, watchlist popularity, hidden gems, genre categories, missing-data hints, data freshness and source counts. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app can use cached real snapshots; mock player snapshots are not returned as production fallback unless `ENABLE_DEV_MOCK_FALLBACK=true`.
 
-The practical production scope is `TopTrackedGame`: a curated TOP 100 Steam list that can be imported and refreshed without touching the full Steam catalog. `GET /api/top-games` returns ranking, coverage and score readiness for web and Android. A TOP 100 score is nullable and returns `insufficient-data` until the game has both player data and a trusted Steam/manual price.
+The practical production scope is `TopTrackedGame`: a curated TOP 100 Steam list that can be imported and refreshed without touching the full Steam catalog. `GET /api/top-games` returns ranking, coverage and score readiness for web and Android. A TOP 100 score is nullable and returns `insufficient-data` until the game has both player data and a trusted Steam/manual price. In production API mode, missing real player data is exposed as no-data (`currentPlayers=null`, `playerSource="no-data"`, `playerFreshness="missing"`) instead of public mock values.
 
 Game taxonomy is built server-side by `CategoryRankingService` and `GameTagNormalizer`. It uses `Game.genres`, known Steam App ID fallback mappings and data-source/price status to return production-friendly categories through `GET /api/categories/overview`, `GET /api/categories/:slug` and `GET /api/stats/categories`. Current category groups include Popularne teraz, Największy wzrost graczy, Największy spadek graczy, Najlepsza wartość, Darmowe gry, Gry premium, Ceny śledzone, Brak danych cenowych, Real player data, Dane mieszane, Dane demonstracyjne and genre categories such as Action, RPG, Strategy, Simulation, Indie, Multiplayer, Co-op, Survival, Shooter, Sports/Racing, Management, Sandbox, Horror and Adventure.
 

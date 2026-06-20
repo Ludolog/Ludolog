@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, BadgePercent, Clock3, Database, ShoppingCart, Trophy } from "lucide-react";
+import { Activity, BadgePercent, Clock3, Database, ShieldAlert, ShoppingCart, Trophy } from "lucide-react";
 
 import { formatNumber, formatPrice } from "@/lib/format";
 import { topGamesService } from "@/lib/services/top-games-service";
@@ -34,9 +34,13 @@ export default async function TopGamesPage(): Promise<React.ReactElement> {
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <CoverageCard icon={<Database size={18} />} label="Zaimportowane" value={`${coverage.importedCount}/${coverage.topTrackedCount}`} />
-        <CoverageCard icon={<Activity size={18} />} label="Player count" value={`${coverage.withPlayerCount}/${coverage.topTrackedCount}`} />
+        <CoverageCard icon={<Activity size={18} />} label="Real player count" value={`${coverage.withPlayerCount}/${coverage.topTrackedCount}`} />
         <CoverageCard icon={<ShoppingCart size={18} />} label="Cena Steam" value={`${coverage.withSteamPrice}/${coverage.topTrackedCount}`} />
         <CoverageCard icon={<Clock3 size={18} />} label="Świeże ceny" value={`${coverage.withFreshSteamPrice}/${coverage.topTrackedCount}`} />
+        <CoverageCard icon={<BadgePercent size={18} />} label="Pełny score" value={`${coverage.fullScoreCount}/${coverage.topTrackedCount}`} />
+        <CoverageCard icon={<ShieldAlert size={18} />} label="No-data gracze" value={String(coverage.noPlayerDataCount)} />
+        <CoverageCard icon={<ShoppingCart size={18} />} label="Brak ceny" value={String(coverage.noPriceDataCount)} />
+        <CoverageCard icon={<ShieldAlert size={18} />} label="Public mock" value={String(coverage.mockPublicDataCount)} />
       </section>
 
       <section className="surface overflow-hidden rounded-lg">
@@ -68,7 +72,7 @@ export default async function TopGamesPage(): Promise<React.ReactElement> {
                   <p className="text-xs text-slate-500">Steam App ID {item.steamAppId}</p>
                 </div>
               </div>
-              <span className="font-semibold text-white">{item.currentPlayers === null ? "brak" : formatNumber(item.currentPlayers)}</span>
+              <span className="font-semibold text-white">{item.currentPlayers === null ? "brak danych" : formatNumber(item.currentPlayers)}</span>
               <span className="font-semibold text-radar-green">
                 {item.bestSteamPrice === null ? "brak" : formatPrice(item.bestSteamPrice, item.currency ?? "PLN")}
               </span>

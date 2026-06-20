@@ -121,11 +121,15 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           <InlineStatus icon={<Database size={18} />} label="Tracked seed" value={String(topGames.coverage.topTrackedCount)} />
           <InlineStatus icon={<Database size={18} />} label="Imported" value={String(topGames.coverage.importedCount)} />
-          <InlineStatus icon={<RefreshCw size={18} />} label="Player count" value={String(topGames.coverage.withPlayerCount)} />
+          <InlineStatus icon={<RefreshCw size={18} />} label="Real player count" value={String(topGames.coverage.withPlayerCount)} />
+          <InlineStatus icon={<AlertTriangle size={18} />} label="No player data" value={String(topGames.coverage.noPlayerDataCount)} />
           <InlineStatus icon={<ShoppingCart size={18} />} label="Steam price" value={String(topGames.coverage.withSteamPrice)} />
           <InlineStatus icon={<Clock size={18} />} label="Fresh players" value={String(topGames.coverage.withFreshPlayerCount)} />
           <InlineStatus icon={<Clock size={18} />} label="Fresh prices" value={String(topGames.coverage.withFreshSteamPrice)} />
-          <InlineStatus icon={<ShoppingCart size={18} />} label="No price" value={String(topGames.coverage.noPriceCount)} />
+          <InlineStatus icon={<ShoppingCart size={18} />} label="No price" value={String(topGames.coverage.noPriceDataCount)} />
+          <InlineStatus icon={<Database size={18} />} label="Full score" value={String(topGames.coverage.fullScoreCount)} />
+          <InlineStatus icon={<AlertTriangle size={18} />} label="Insufficient data" value={String(topGames.coverage.insufficientDataCount)} />
+          <InlineStatus icon={<AlertTriangle size={18} />} label="Public mock count" value={String(topGames.coverage.mockPublicDataCount)} />
           <InlineStatus icon={<AlertTriangle size={18} />} label="Last errors" value={String(topGames.coverage.failedLastRefreshCount)} />
         </div>
         <div className="mt-4 rounded-md border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-300">
@@ -135,10 +139,10 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <AdminActionButton endpoint="/api/admin/top-games/import" label="Dry run import TOP 100" body={{ limit: 100, dryRun: true }} requireSecret />
           <AdminActionButton endpoint="/api/admin/top-games/import" label="Import TOP 100" body={{ limit: 100, dryRun: false }} requireSecret confirmBeforeRun />
-          <AdminActionButton endpoint="/api/admin/top-games/refresh-players" label="Dry run refresh players" body={{ limit: 100, dryRun: true }} requireSecret />
-          <AdminActionButton endpoint="/api/admin/top-games/refresh-players" label="Refresh players" body={{ limit: 100, dryRun: false }} requireSecret confirmBeforeRun />
-          <AdminActionButton endpoint="/api/admin/top-games/refresh-prices" label="Dry run refresh prices" body={{ limit: 100, dryRun: true }} requireSecret />
-          <AdminActionButton endpoint="/api/admin/top-games/refresh-prices" label="Refresh prices" body={{ limit: 100, dryRun: false }} requireSecret confirmBeforeRun />
+          <AdminActionButton endpoint="/api/admin/top-games/refresh-players" label="Dry run refresh players TOP 100" body={{ limit: 100, dryRun: true }} requireSecret />
+          <AdminActionButton endpoint="/api/admin/top-games/refresh-players" label="Refresh players TOP 100" body={{ limit: 100, dryRun: false }} requireSecret confirmBeforeRun />
+          <AdminActionButton endpoint="/api/admin/top-games/refresh-prices" label="Dry run refresh prices TOP 100" body={{ limit: 100, dryRun: true }} requireSecret />
+          <AdminActionButton endpoint="/api/admin/top-games/refresh-prices" label="Refresh prices TOP 100" body={{ limit: 100, dryRun: false }} requireSecret confirmBeforeRun />
           <AdminActionButton endpoint="/api/admin/top-games/bootstrap" label="Dry run bootstrap TOP 100" body={{ limit: 100, dryRun: true }} requireSecret />
           <AdminActionButton endpoint="/api/admin/top-games/bootstrap" label="Bootstrap TOP 100" body={{ limit: 100, dryRun: false }} requireSecret confirmBeforeRun />
         </div>
@@ -146,7 +150,7 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           {topGames.items.map((game) => (
             <div key={game.steamAppId} className="rounded-md border border-white/10 bg-black/20 p-3">
               <p className="line-clamp-1 font-semibold text-white">{game.title}</p>
-              <p className="mt-1 text-xs text-slate-400">{formatNumber(game.currentPlayers)} players</p>
+              <p className="mt-1 text-xs text-slate-400">{game.currentPlayers === null ? "no player data" : `${formatNumber(game.currentPlayers)} players`}</p>
               <p className="mt-1 text-xs text-radar-green">
                 {game.bestSteamPrice === null ? "No price" : formatPrice(game.bestSteamPrice, game.currency ?? "PLN")}
               </p>

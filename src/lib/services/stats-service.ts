@@ -14,6 +14,7 @@ import {
   type CategoryStatsSource
 } from "@/lib/services/category-service";
 import { resolveGGDealsStatusFromLogs } from "@/lib/services/ggdeals-diagnostics";
+import { publicPlayerSnapshot } from "@/lib/services/public-data-service";
 import { topGamesService } from "@/lib/services/top-games-service";
 import type { StatsDataMode } from "@/lib/types";
 import type { ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
@@ -67,9 +68,9 @@ export class StatsService {
 
     const [topGamesCoverage] = await Promise.all([topGamesService.coverage()]);
     const playerStaleBefore = new Date(Date.now() - getPlayerCountStaleMinutes() * 60 * 1000);
-    const importedPlayerSnapshots = await Promise.all(
-      importedGames.map((game) => repositories.snapshots.latestPlayersBySteamAppId(game.steamAppId))
-    );
+    const importedPlayerSnapshots = (
+      await Promise.all(importedGames.map((game) => repositories.snapshots.latestPlayersBySteamAppId(game.steamAppId)))
+    ).map(publicPlayerSnapshot);
     const gamesWithoutPlayerData = importedPlayerSnapshots.filter((snapshot) => snapshot === null).length;
     const stalePlayerSnapshots = importedPlayerSnapshots.filter(
       (snapshot) => snapshot !== null && snapshot.capturedAt < playerStaleBefore

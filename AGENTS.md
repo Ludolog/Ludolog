@@ -50,6 +50,7 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 - Do not work on Google Play release or release signing now.
 - Mock/demo prices must never be treated as trusted or real prices.
 - Production API mode must not silently substitute mock catalog, mock price, fake deal, fake chart, or mock player data.
+- Public API mode reports missing real player data as no-data/missing instead of `playerSource="mock"` when `ENABLE_DEV_MOCK_FALLBACK=false`.
 - Dev mock fallback is allowed only behind `ENABLE_DEV_MOCK_FALLBACK=true` or local mock mode.
 - Do not import the full Steam catalog into `Game`; keep the large catalog in `SteamCatalogEntry`.
 - Do not run mass price refreshes over the full Steam catalog.
@@ -203,6 +204,7 @@ Names only; never write real values in docs, commits, logs, or chat.
 - GOG is enabled; mappings are still manual approval only.
 - GOG public output is hidden by default; admin GOG status/tools remain visible.
 - TOP 100 Steam scope exists for practical daily tracking and scoring readiness.
+- TOP 100 coverage tracks full score, insufficient data, no-player-data, no-price-data and public mock counts; public mock count should remain zero.
 - Steam Store prices are enabled for small imported-game refreshes and catalog backfill.
 - `CatalogStoreOffer` keeps catalog price backfill separate from imported `Game` rows.
 - Steam Store no-price catalog checks count as `skippedNoPrice`, not `failed`, and retry only after cooldown.

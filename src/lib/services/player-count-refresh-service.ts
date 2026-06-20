@@ -1,6 +1,7 @@
 import { getPlayerCountStaleMinutes } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
 import { steamApiService } from "@/lib/services/steam-api-service";
+import { publicPlayerSnapshot } from "@/lib/services/public-data-service";
 import type { PlayerCountSnapshot } from "@/lib/types";
 
 export type PlayerCountRefreshMode = "watchlist" | "top" | "all-imported" | "top-100";
@@ -89,7 +90,7 @@ export class PlayerCountRefreshService {
         break;
       }
       try {
-        const latest = await repositories.snapshots.latestPlayersBySteamAppId(steamAppId);
+        const latest = publicPlayerSnapshot(await repositories.snapshots.latestPlayersBySteamAppId(steamAppId));
         if (latest && Date.now() - latest.capturedAt.getTime() < staleMs) {
           skippedFreshCache += 1;
           continue;

@@ -1,5 +1,6 @@
 import { repositories } from "@/lib/repositories";
 import { isDevMockFallbackEnabled } from "@/lib/config";
+import { publicGameProfile, publicGameSummary } from "@/lib/services/public-data-service";
 import { steamApiService } from "@/lib/services/steam-api-service";
 import { steamAppCatalogService } from "@/lib/services/steam-app-catalog-service";
 import type { CatalogStoreOffer, Game, GameImportInput, GameProfile, GameSummary, SteamCatalogEntry } from "@/lib/types";
@@ -39,8 +40,8 @@ export class GameSearchService {
     return repositories.games.list();
   }
 
-  search(query: string): Promise<GameSummary[]> {
-    return repositories.games.search(query);
+  async search(query: string): Promise<GameSummary[]> {
+    return (await repositories.games.search(query)).map(publicGameSummary);
   }
 
   async searchCatalog(query: string, options: SearchCatalogOptions = {}): Promise<SearchResponse> {
@@ -61,7 +62,7 @@ export class GameSearchService {
 
     for (const summary of localResults) {
       seenSteamIds.add(summary.game.steamAppId);
-      allResults.push(libraryResult(summary));
+      allResults.push(libraryResult(publicGameSummary(summary)));
     }
 
     for (const entry of databaseCatalogResults) {
@@ -74,7 +75,7 @@ export class GameSearchService {
         const summary = await repositories.games.getSummary(existing.id);
         if (summary) {
           seenSteamIds.add(existing.steamAppId);
-          allResults.push(libraryResult(summary));
+          allResults.push(libraryResult(publicGameSummary(summary)));
         }
         continue;
       }
@@ -93,7 +94,7 @@ export class GameSearchService {
         const summary = await repositories.games.getSummary(existing.id);
         if (summary) {
           seenSteamIds.add(existing.steamAppId);
-          allResults.push(libraryResult(summary));
+          allResults.push(libraryResult(publicGameSummary(summary)));
         }
         continue;
       }
@@ -120,7 +121,7 @@ export class GameSearchService {
       if (!summary) {
         throw new Error("Existing game could not be summarized.");
       }
-      return importResponse(false, "library", summary);
+      return importResponse(false, "library", publicGameSummary(summary));
     }
 
     const resolved = await this.resolveCatalogGame(request);
@@ -141,27 +142,29 @@ export class GameSearchService {
       message: `Imported ${catalogGame.title} from ${source === "steam-catalog" ? "Steam catalog" : "mock catalog"}.`
     });
 
-    return importResponse(true, source, summary);
+    return importResponse(true, source, publicGameSummary(summary));
   }
 
   findGame(id: string): Promise<Game | null> {
     return repositories.games.findById(id);
   }
 
-  getProfile(id: string): Promise<GameProfile | null> {
-    return repositories.games.getProfile(id);
+  async getProfile(id: string): Promise<GameProfile | null> {
+    const profile = await repositories.games.getProfile(id);
+    return profile ? publicGameProfile(profile) : null;
   }
 
-  getSummary(id: string): Promise<GameSummary | null> {
-    return repositories.games.getSummary(id);
+  async getSummary(id: string): Promise<GameSummary | null> {
+    const summary = await repositories.games.getSummary(id);
+    return summary ? publicGameSummary(summary) : null;
   }
 
-  bestDeals(limit?: number): Promise<GameSummary[]> {
-    return repositories.games.bestDeals(limit);
+  async bestDeals(limit?: number): Promise<GameSummary[]> {
+    return (await repositories.games.bestDeals(limit)).map(publicGameSummary);
   }
 
-  mostActive(limit?: number): Promise<GameSummary[]> {
-    return repositories.games.mostActive(limit);
+  async mostActive(limit?: number): Promise<GameSummary[]> {
+    return (await repositories.games.mostActive(limit)).map(publicGameSummary);
   }
 
   private async searchDatabaseCatalog(query: string, limit = 16): Promise<SteamCatalogEntry[]> {

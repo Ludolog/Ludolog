@@ -261,7 +261,7 @@ export type ApiStatsGame = {
   discountPercent: number;
   gameValueScore: number;
   recommendation: Recommendation;
-  playerSource: DataSource;
+  playerSource: DataSource | "no-data";
   priceSource: ApiPriceDataSource;
   priceSourceConfidence: PriceSourceConfidence;
   priceConfidence: PriceSourceConfidence;
@@ -272,7 +272,7 @@ export type ApiStatsGame = {
   tags: string[];
 };
 
-export type TopGameFreshness = "fresh" | "stale" | "no-data";
+export type TopGameFreshness = "fresh" | "stale" | "missing";
 
 export type ApiTopGameValueScore = {
   score: number | null;
@@ -316,6 +316,11 @@ export type ApiTopGamesCoverage = {
   noPriceCount: number;
   stalePriceCount: number;
   failedLastRefreshCount: number;
+  fullScoreCount: number;
+  insufficientDataCount: number;
+  noPlayerDataCount: number;
+  noPriceDataCount: number;
+  mockPublicDataCount: number;
 };
 
 export type ApiTopGamesResponse = {
@@ -1202,6 +1207,7 @@ export type ApiTopGamesRefreshPlayersResponse = {
   requested: number;
   refreshed: number;
   skippedFreshCache: number;
+  noData: number;
   failed: number;
   createdSnapshots: number;
   errors: Array<{ steamAppId: number; gameId?: string | null; message: string }>;

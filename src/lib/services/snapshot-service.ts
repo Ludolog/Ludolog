@@ -1,4 +1,6 @@
+import { isDevMockFallbackEnabled } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
+import { publicGameProfile } from "@/lib/services/public-data-service";
 import type { GameProfile, GamePriceSnapshot, PlayerCountSnapshot } from "@/lib/types";
 
 function nextPrice(profile: GameProfile): number {
@@ -25,6 +27,10 @@ export class SnapshotService {
 
     if (!game || !profile) {
       return null;
+    }
+
+    if (!isDevMockFallbackEnabled()) {
+      return publicGameProfile(profile);
     }
 
     const now = new Date();

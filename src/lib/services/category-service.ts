@@ -1,4 +1,5 @@
 import { repositories } from "@/lib/repositories";
+import { publicGameProfile } from "@/lib/services/public-data-service";
 import type { Game, GameProfile, StoreOffer } from "@/lib/types";
 import type {
   ApiCategoriesOverview,
@@ -154,7 +155,9 @@ export class CategoryRankingService {
 
     const profiles = (
       await Promise.all(games.map((game) => repositories.games.getProfile(game.id)))
-    ).filter((profile): profile is GameProfile => profile !== null);
+    )
+      .filter((profile): profile is GameProfile => profile !== null)
+      .map(publicGameProfile);
 
     return profiles.map((profile) => ({
       profile,
@@ -260,7 +263,7 @@ function buildDefinitions(): CategoryDefinition[] {
       title: "Dane demonstracyjne",
       description: "Gry, które nadal mają wyłącznie demonstracyjne dane cenowe lub graczy.",
       type: "data-source",
-      predicate: (source) => source.profile.latestPlayers?.source === "mock" || !hasTrustedPrice(source),
+      predicate: (source) => !source.profile.latestPlayers || !hasTrustedPrice(source),
       sortModes: ["players"]
     },
     {
@@ -300,7 +303,7 @@ export function toStatsGame(source: CategoryStatsSource): ApiStatsGame {
     discountPercent: priceSnapshot?.discountPercent ?? sourceOffer?.discountPercent ?? 0,
     gameValueScore: profile.score.score,
     recommendation: profile.score.recommendation,
-    playerSource: profile.latestPlayers?.source ?? "mock",
+    playerSource: profile.latestPlayers?.source ?? "no-data",
     priceSource,
     priceSourceConfidence,
     priceConfidence: priceSourceConfidence,
