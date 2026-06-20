@@ -1,20 +1,23 @@
 ﻿import { Suspense } from "react";
+import Link from "next/link";
 import { Activity, BadgePercent, Layers, Radar } from "lucide-react";
 
 import { GameCard } from "@/components/game-card";
 import { SearchBox } from "@/components/forms/search-box";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatPrice } from "@/lib/format";
 import { gameSearchService } from "@/lib/services/game-search-service";
 import { statsService } from "@/lib/services/stats-service";
+import { topGamesService } from "@/lib/services/top-games-service";
 import type { ApiStatsGame } from "@shared/api-types";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage(): Promise<React.ReactElement> {
-  const [bestDeals, activeGames, stats] = await Promise.all([
+  const [bestDeals, activeGames, stats, topGames] = await Promise.all([
     gameSearchService.bestDeals(4),
     gameSearchService.mostActive(4),
-    statsService.overview(6)
+    statsService.overview(6),
+    topGamesService.list({ limit: 6, sort: "players" })
   ]);
   const topScore = bestDeals[0]?.score.score ?? 0;
   const totalPlayers = activeGames.reduce((sum, summary) => sum + (summary.latestPlayers?.playersOnline ?? 0), 0);
@@ -53,6 +56,45 @@ export default async function HomePage(): Promise<React.ReactElement> {
             <p className="text-xs uppercase text-slate-500">Brak cen</p>
             <p className="mt-1 text-2xl font-semibold text-white">{formatNumber(stats.sourceCounts.gamesWithoutPrices)}</p>
           </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-white">TOP 100 gier</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              {topGames.coverage.withPlayerCount}/{topGames.coverage.topTrackedCount} z player countem,{" "}
+              {topGames.coverage.withSteamPrice}/{topGames.coverage.topTrackedCount} z ceną Steam.
+            </p>
+          </div>
+          <Link
+            href="/top-games"
+            className="rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-3 py-2 text-sm font-semibold text-radar-cyan"
+          >
+            Otwórz ranking
+          </Link>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {topGames.items.slice(0, 6).map((game) => (
+            <article key={game.steamAppId} className="surface rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                {game.coverUrl ? <img src={game.coverUrl} alt="" className="h-12 w-24 rounded-md object-cover" loading="lazy" /> : null}
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-white">{game.title}</p>
+                  <p className="text-xs text-slate-400">{formatNumber(game.currentPlayers)} graczy</p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between text-sm">
+                <span className="text-radar-green">
+                  {game.bestSteamPrice === null ? "Brak ceny" : formatPrice(game.bestSteamPrice, game.currency ?? "PLN")}
+                </span>
+                <span className="rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 text-xs font-semibold text-radar-violet">
+                  {game.gameValueScore ?? "-"}
+                </span>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 

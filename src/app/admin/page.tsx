@@ -15,6 +15,10 @@ import {
   getPriceRefreshMaxRuntimeMs,
   getPriceRefreshSteamStoreLimit,
   getSteamStorePriceStaleHours,
+  getTopGamesPlayerRefreshLimit,
+  getTopGamesPriceRefreshLimit,
+  getTopGamesStalePlayerHours,
+  getTopGamesStalePriceHours,
   isPriceRefreshCatalogBackfillEnabled,
   isPriceRefreshEnabled
 } from "@/lib/config";
@@ -24,6 +28,7 @@ import { categoryRankingService } from "@/lib/services/category-service";
 import { gameSearchService } from "@/lib/services/game-search-service";
 import { gogService } from "@/lib/services/gog-service";
 import { steamCatalogStatusService } from "@/lib/services/steam-catalog-status-service";
+import { topGamesService } from "@/lib/services/top-games-service";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +41,7 @@ export default async function AdminPage(): Promise<React.ReactElement> {
   const status = await repositories.diagnostics.getAdminStatus();
   const steamStatus = await steamCatalogStatusService.getStatus();
   const gogRuntimeStatus = await gogService.status();
+  const topGames = await topGamesService.list({ limit: 5, sort: "players" });
   const categoryOverview = await categoryRankingService.overview(4);
   const games = await gameSearchService.list();
   const gameRows = await Promise.all(
@@ -98,6 +104,55 @@ export default async function AdminPage(): Promise<React.ReactElement> {
         <StatusCard icon={<RefreshCw size={18} />} label="Player snapshots" value={String(status.playerSnapshotCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Real player snaps" value={String(status.realPlayerSnapshots)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Mock player snaps" value={String(status.mockPlayerSnapshots)} />
+      </section>
+
+      <section className="surface rounded-lg p-5">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-lg border border-radar-cyan/35 bg-radar-cyan/10 text-radar-cyan">
+            <Database size={20} aria-hidden />
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold text-white">TOP 100 Steam</h2>
+            <p className="text-sm text-slate-400">
+              Curated production scope. GOG remains experimental/admin-only and is hidden from public UI by default.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <InlineStatus icon={<Database size={18} />} label="Tracked seed" value={String(topGames.coverage.topTrackedCount)} />
+          <InlineStatus icon={<Database size={18} />} label="Imported" value={String(topGames.coverage.importedCount)} />
+          <InlineStatus icon={<RefreshCw size={18} />} label="Player count" value={String(topGames.coverage.withPlayerCount)} />
+          <InlineStatus icon={<ShoppingCart size={18} />} label="Steam price" value={String(topGames.coverage.withSteamPrice)} />
+          <InlineStatus icon={<Clock size={18} />} label="Fresh players" value={String(topGames.coverage.withFreshPlayerCount)} />
+          <InlineStatus icon={<Clock size={18} />} label="Fresh prices" value={String(topGames.coverage.withFreshSteamPrice)} />
+          <InlineStatus icon={<ShoppingCart size={18} />} label="No price" value={String(topGames.coverage.noPriceCount)} />
+          <InlineStatus icon={<AlertTriangle size={18} />} label="Last errors" value={String(topGames.coverage.failedLastRefreshCount)} />
+        </div>
+        <div className="mt-4 rounded-md border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-300">
+          Player stale threshold: {getTopGamesStalePlayerHours()}h. Price stale threshold: {getTopGamesStalePriceHours()}h.
+          Cron limits: players {getTopGamesPlayerRefreshLimit()}, prices {getTopGamesPriceRefreshLimit()}.
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <AdminActionButton endpoint="/api/admin/top-games/import" label="Dry run import TOP 100" body={{ limit: 100, dryRun: true }} requireSecret />
+          <AdminActionButton endpoint="/api/admin/top-games/import" label="Import TOP 100" body={{ limit: 100, dryRun: false }} requireSecret confirmBeforeRun />
+          <AdminActionButton endpoint="/api/admin/top-games/refresh-players" label="Dry run refresh players" body={{ limit: 100, dryRun: true }} requireSecret />
+          <AdminActionButton endpoint="/api/admin/top-games/refresh-players" label="Refresh players" body={{ limit: 100, dryRun: false }} requireSecret confirmBeforeRun />
+          <AdminActionButton endpoint="/api/admin/top-games/refresh-prices" label="Dry run refresh prices" body={{ limit: 100, dryRun: true }} requireSecret />
+          <AdminActionButton endpoint="/api/admin/top-games/refresh-prices" label="Refresh prices" body={{ limit: 100, dryRun: false }} requireSecret confirmBeforeRun />
+          <AdminActionButton endpoint="/api/admin/top-games/bootstrap" label="Dry run bootstrap TOP 100" body={{ limit: 100, dryRun: true }} requireSecret />
+          <AdminActionButton endpoint="/api/admin/top-games/bootstrap" label="Bootstrap TOP 100" body={{ limit: 100, dryRun: false }} requireSecret confirmBeforeRun />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-5">
+          {topGames.items.map((game) => (
+            <div key={game.steamAppId} className="rounded-md border border-white/10 bg-black/20 p-3">
+              <p className="line-clamp-1 font-semibold text-white">{game.title}</p>
+              <p className="mt-1 text-xs text-slate-400">{formatNumber(game.currentPlayers)} players</p>
+              <p className="mt-1 text-xs text-radar-green">
+                {game.bestSteamPrice === null ? "No price" : formatPrice(game.bestSteamPrice, game.currency ?? "PLN")}
+              </p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="surface rounded-lg p-5">

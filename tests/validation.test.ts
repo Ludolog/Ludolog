@@ -6,11 +6,14 @@ import {
   gogMappingApproveSchema,
   gogMappingSuggestSchema,
   gogPriceRefreshSchema,
+  playerCountsRefreshSchema,
   priceProviderDiagnosticsSchema,
   priceRefreshSchema,
   searchQuerySchema,
   steamCatalogSyncUntilSchema,
   steamStorePriceRefreshSchema,
+  topGamesActionSchema,
+  topGamesQuerySchema,
   watchlistCreateSchema
 } from "@/lib/validation";
 
@@ -81,5 +84,19 @@ describe("validation schemas", () => {
 
     expect(payload).toMatchObject({ mode: "catalog-backfill", limit: 10, dryRun: true });
     expect(() => steamStorePriceRefreshSchema.parse({ mode: "catalog-backfill", limit: 500 })).toThrow();
+  });
+
+  it("accepts bounded TOP 100 refresh and query inputs", () => {
+    const action = topGamesActionSchema.parse({ limit: 100 });
+    const query = topGamesQuerySchema.parse({ limit: 25, offset: 10, sort: "score", category: "rpg" });
+    const playerRefresh = playerCountsRefreshSchema.parse({ mode: "top-100", limit: 100 });
+    const steamStoreRefresh = steamStorePriceRefreshSchema.parse({ mode: "top-100", limit: 100, dryRun: true });
+
+    expect(action).toMatchObject({ limit: 100, dryRun: true });
+    expect(query).toMatchObject({ limit: 25, offset: 10, sort: "score", category: "rpg" });
+    expect(playerRefresh).toMatchObject({ mode: "top-100", limit: 100 });
+    expect(steamStoreRefresh).toMatchObject({ mode: "top-100", limit: 100, dryRun: true });
+    expect(() => topGamesActionSchema.parse({ limit: 101 })).toThrow();
+    expect(() => topGamesQuerySchema.parse({ sort: "all-catalog" })).toThrow();
   });
 });

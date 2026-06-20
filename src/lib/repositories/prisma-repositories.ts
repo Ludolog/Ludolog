@@ -34,6 +34,8 @@ import type {
   SnapshotRepository,
   SteamCatalogRepository,
   SteamCatalogUpsertInput,
+  TopTrackedGameRepository,
+  TopTrackedGameUpsertInput,
   WatchlistRepository
 } from "@/lib/repositories/contracts";
 import { calculateGameValueScore } from "@/lib/services/deal-score-service";
@@ -65,6 +67,7 @@ import type {
   Store,
   StoreOffer,
   StoreType,
+  TopTrackedGame,
   WatchlistItem
 } from "@/lib/types";
 
@@ -73,6 +76,7 @@ type PrismaOffer = Prisma.StoreOfferGetPayload<Record<string, never>>;
 type PrismaPrice = Prisma.GamePriceSnapshotGetPayload<Record<string, never>>;
 type PrismaPlayers = Prisma.PlayerCountSnapshotGetPayload<Record<string, never>>;
 type PrismaSteamCatalogEntry = Prisma.SteamCatalogEntryGetPayload<Record<string, never>>;
+type PrismaTopTrackedGame = Prisma.TopTrackedGameGetPayload<Record<string, never>>;
 type PrismaGogCatalogEntry = Prisma.GogCatalogEntryGetPayload<Record<string, never>>;
 type PrismaGameExternalMapping = Prisma.GameExternalMappingGetPayload<Record<string, never>>;
 type PrismaWatchlist = Prisma.WatchlistGetPayload<Record<string, never>>;
@@ -163,6 +167,20 @@ function mapSteamCatalogEntry(entry: PrismaSteamCatalogEntry): SteamCatalogEntry
     isActive: entry.isActive,
     source: sourceFromPrisma(entry.source),
     syncedAt: entry.syncedAt,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt
+  };
+}
+
+function mapTopTrackedGame(entry: PrismaTopTrackedGame): TopTrackedGame {
+  return {
+    id: entry.id,
+    steamAppId: entry.steamAppId,
+    title: entry.title,
+    priority: entry.priority,
+    source: entry.source,
+    isActive: entry.isActive,
+    gameId: entry.gameId,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt
   };
@@ -1068,6 +1086,75 @@ class PrismaSteamCatalogRepository implements SteamCatalogRepository {
   }
 }
 
+class PrismaTopTrackedGameRepository implements TopTrackedGameRepository {
+  async listActive(limit = 100): Promise<TopTrackedGame[]> {
+    const entries = await prisma.topTrackedGame.findMany({
+      where: { isActive: true },
+      orderBy: [{ priority: "asc" }, { title: "asc" }],
+      take: Math.max(1, Math.min(100, Math.floor(limit)))
+    });
+    return entries.map(mapTopTrackedGame);
+  }
+
+  async upsertMany(entries: TopTrackedGameUpsertInput[]): Promise<{ created: number; updated: number }> {
+    let created = 0;
+    let updated = 0;
+
+    for (const entry of entries) {
+      const existing = await prisma.topTrackedGame.findUnique({ where: { steamAppId: entry.steamAppId } });
+      await prisma.topTrackedGame.upsert({
+        where: { steamAppId: entry.steamAppId },
+        update: {
+          title: entry.title,
+          priority: entry.priority,
+          source: entry.source,
+          isActive: entry.isActive,
+          gameId: entry.gameId ?? existing?.gameId ?? null
+        },
+        create: {
+          id: entry.id,
+          steamAppId: entry.steamAppId,
+          title: entry.title,
+          priority: entry.priority,
+          source: entry.source,
+          isActive: entry.isActive,
+          gameId: entry.gameId
+        }
+      });
+      if (existing) {
+        updated += 1;
+      } else {
+        created += 1;
+      }
+    }
+
+    return { created, updated };
+  }
+
+  async linkGame(steamAppId: number, gameId: string): Promise<void> {
+    await prisma.topTrackedGame.updateMany({
+      where: { steamAppId },
+      data: { gameId }
+    });
+  }
+
+  async status() {
+    const [topTrackedCount, activeTopTrackedCount, importedCount, latest] = await Promise.all([
+      prisma.topTrackedGame.count(),
+      prisma.topTrackedGame.count({ where: { isActive: true } }),
+      prisma.topTrackedGame.count({ where: { isActive: true, gameId: { not: null } } }),
+      prisma.topTrackedGame.findFirst({ orderBy: { updatedAt: "desc" } })
+    ]);
+
+    return {
+      topTrackedCount,
+      activeTopTrackedCount,
+      importedCount,
+      lastUpdatedAt: latest?.updatedAt ?? null
+    };
+  }
+}
+
 class PrismaGogRepository implements GogRepository {
   async searchCatalog(query: string, limit = 10): Promise<GogCatalogEntry[]> {
     const trimmed = query.trim();
@@ -1912,6 +1999,7 @@ export function createPrismaRepositories(): AppRepositories {
     provider: "prisma",
     games: new PrismaGameRepository(),
     steamCatalog: new PrismaSteamCatalogRepository(),
+    topTrackedGames: new PrismaTopTrackedGameRepository(),
     gog: new PrismaGogRepository(),
     prices: new PrismaPriceRepository(),
     catalogOffers: new PrismaCatalogStoreOfferRepository(),

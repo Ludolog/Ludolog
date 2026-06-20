@@ -101,6 +101,15 @@ describe("mobile api client", () => {
     expect(fetcher.mock.calls[0]?.[0]).toBe("https://apka-seven.vercel.app/api/games/dota-2/prices");
   });
 
+  it("calls the TOP 100 endpoint with a bounded limit", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, coverage: {} }), { status: 200 }));
+    const client = createApiClient("https://apka-seven.vercel.app", createFetchTransport(fetcher as unknown as Fetcher));
+
+    await client.getTopGames(12);
+
+    expect(fetcher.mock.calls[0]?.[0]).toBe("https://apka-seven.vercel.app/api/top-games?limit=12");
+  });
+
   it("posts catalog imports as JSON and reads the richer response", async () => {
     const fetcher = vi.fn(async () =>
       new Response(

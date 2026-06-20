@@ -43,6 +43,12 @@ PLAYER_COUNT_STALE_MINUTES=30
 STEAM_STORE_PRICE_STALE_HOURS=6
 GOG_PRICE_STALE_HOURS=12
 CATALOG_PRICE_STALE_HOURS=168
+SHOW_GOG_PUBLIC=false
+TOP_GAMES_REFRESH_ENABLED=true
+TOP_GAMES_PLAYER_REFRESH_LIMIT=100
+TOP_GAMES_PRICE_REFRESH_LIMIT=100
+TOP_GAMES_STALE_PLAYER_HOURS=6
+TOP_GAMES_STALE_PRICE_HOURS=12
 ```
 
 Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT_URL`. Replace `TWOJE_HASLO` only inside Vercel settings or local ignored env files.
@@ -110,6 +116,7 @@ GOG_CATALOG_BASE_URL=https://catalog.gog.com
 GOG_COUNTRY_CODE=PL
 GOG_CURRENCY=PLN
 GOG_REQUEST_LIMIT_PER_HOUR=200
+SHOW_GOG_PUBLIC=false
 STEAM_STORE_PRICE_ENABLED=false
 STEAM_STORE_API_BASE_URL=https://store.steampowered.com/api
 STEAM_STORE_COUNTRY=PL
@@ -129,6 +136,11 @@ PLAYER_COUNT_STALE_MINUTES=30
 STEAM_STORE_PRICE_STALE_HOURS=6
 GOG_PRICE_STALE_HOURS=12
 CATALOG_PRICE_STALE_HOURS=168
+TOP_GAMES_REFRESH_ENABLED=true
+TOP_GAMES_PLAYER_REFRESH_LIMIT=100
+TOP_GAMES_PRICE_REFRESH_LIMIT=100
+TOP_GAMES_STALE_PLAYER_HOURS=6
+TOP_GAMES_STALE_PRICE_HOURS=12
 ENABLE_LEGACY_PRICE_PROVIDERS=false
 # Legacy fallbacks:
 PRICE_API_PROVIDER=gamevalue
@@ -148,12 +160,13 @@ Notes:
   JSON endpoints in small backend-only batches and writes `sourceName=gog` official-store offers into the internal price
   tables.
 - `GOG_REQUEST_LIMIT_PER_HOUR` is capped at 200 in code. Keep manual refresh limits small and do not run mass syncs.
+- `SHOW_GOG_PUBLIC=false` keeps GOG admin/experimental data out of public deals, stats and game price responses.
 - GG.deals, ITAD and CheapShark are legacy/disabled providers in active production flow. Do not set them as active providers unless a future legal/API-safe integration is added intentionally.
 - GG.deals was disabled after Vercel received Cloudflare challenge HTML instead of API JSON. Do not bypass Cloudflare with browser sessions, cookies, Playwright/Puppeteer, proxies or scraping, and do not store raw HTML as price data.
 - Admin price writes use internal sources such as `manual-admin`, `json-import`, `csv-import`, `mock-seed` and future legal partner/store feeds.
 - `ADMIN_API_SECRET` protects manual admin POST endpoints through the `x-admin-secret` header.
-- `CRON_SECRET` protects `/api/cron/refresh-player-counts`, `/api/cron/refresh-prices` and `/api/cron/backfill-catalog-prices` in production. Do not expose it to mobile.
-- `PRICE_REFRESH_*`, `PLAYER_COUNT_*`, `STEAM_STORE_PRICE_STALE_HOURS`, `GOG_PRICE_STALE_HOURS` and `CATALOG_PRICE_STALE_HOURS` cap scheduler work and freshness checks.
+- `CRON_SECRET` protects `/api/cron/refresh-player-counts`, `/api/cron/refresh-prices`, `/api/cron/refresh-top-games` and `/api/cron/backfill-catalog-prices` in production. Do not expose it to mobile.
+- `PRICE_REFRESH_*`, `PLAYER_COUNT_*`, `TOP_GAMES_*`, `STEAM_STORE_PRICE_STALE_HOURS`, `GOG_PRICE_STALE_HOURS` and `CATALOG_PRICE_STALE_HOURS` cap scheduler work and freshness checks.
 - Mobile public config uses `VITE_API_BASE_URL`; secrets must never use the `VITE_` prefix.
 
 ## 3. Deploy to Vercel
@@ -221,6 +234,12 @@ The catalog price-check status migration is stored in:
 prisma/migrations/000008_catalog_price_check_status/migration.sql
 ```
 
+The TOP 100 tracked-game migration is stored in:
+
+```text
+prisma/migrations/000009_top_tracked_games/migration.sql
+```
+
 ## 5. Seed demo data
 
 For a demo production database:
@@ -241,6 +260,7 @@ https://apka-seven.vercel.app/api/deals/best
 https://apka-seven.vercel.app/api/games/search?q=cyberpunk
 https://apka-seven.vercel.app/api/games/dota-2/prices
 https://apka-seven.vercel.app/api/stats/overview
+https://apka-seven.vercel.app/api/top-games
 https://apka-seven.vercel.app/api/categories/overview
 https://apka-seven.vercel.app/api/categories/popularne-teraz
 https://apka-seven.vercel.app/api/admin/steam-catalog/status
@@ -363,6 +383,23 @@ Manual player-count refresh:
 $body = '{"mode":"top","limit":25}'
 
 Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
+```
+
+Manual TOP 100 bootstrap dry run:
+
+```powershell
+$body = @{ limit = 100; dryRun = $true } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/top-games/bootstrap" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
+After reviewing the dry run, run the real capped bootstrap only if the Steam catalog, player-count and Steam Store price
+status look stable:
+
+```powershell
+$body = @{ limit = 100; dryRun = $false } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/top-games/bootstrap" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Manual dry run for the price automation scheduler:
@@ -564,6 +601,7 @@ Cron readiness:
 
 - `GET|POST /api/cron/refresh-player-counts` refreshes a capped set of Steam player counts.
 - `GET|POST /api/cron/refresh-prices` refreshes capped imported Steam Store prices and mapped GOG prices.
+- `GET|POST /api/cron/refresh-top-games` refreshes the curated TOP 100 player counts and Steam Store prices.
 - `GET|POST /api/cron/backfill-catalog-prices` refreshes a capped set of catalog-only Steam Store offers in `CatalogStoreOffer`.
 - In production each cron requires `CRON_SECRET` through the `x-cron-secret` or `authorization: Bearer ...` header.
 - Do not refresh the entire Steam catalog or the entire price catalog on every user request or every build.

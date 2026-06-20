@@ -3,7 +3,8 @@ import {
   getGGDealsApiKey,
   getPlayerCountStaleMinutes,
   getPriceMode,
-  getPriceProvider
+  getPriceProvider,
+  showGogPublic
 } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
 import {
@@ -13,6 +14,7 @@ import {
   type CategoryStatsSource
 } from "@/lib/services/category-service";
 import { resolveGGDealsStatusFromLogs } from "@/lib/services/ggdeals-diagnostics";
+import { topGamesService } from "@/lib/services/top-games-service";
 import type { StatsDataMode } from "@/lib/types";
 import type { ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
 
@@ -63,6 +65,7 @@ export class StatsService {
       repositories.diagnostics.listIntegrationLogs()
     ]);
 
+    const [topGamesCoverage] = await Promise.all([topGamesService.coverage()]);
     const playerStaleBefore = new Date(Date.now() - getPlayerCountStaleMinutes() * 60 * 1000);
     const importedPlayerSnapshots = await Promise.all(
       importedGames.map((game) => repositories.snapshots.latestPlayersBySteamAppId(game.steamAppId))
@@ -72,9 +75,11 @@ export class StatsService {
       (snapshot) => snapshot !== null && snapshot.capturedAt < playerStaleBefore
     ).length;
 
-    const realInternalPriceSnapshots = manualPriceSnapshots + gogPriceSnapshots + steamStorePriceSnapshots;
+    const publicGogPriceSnapshots = showGogPublic() ? gogPriceSnapshots : 0;
+    const publicGogOffers = showGogPublic() ? gogOffers : 0;
+    const realInternalPriceSnapshots = manualPriceSnapshots + publicGogPriceSnapshots + steamStorePriceSnapshots;
     const realPriceSnapshots = realInternalPriceSnapshots + ggdealsPriceSnapshots + priceApiSnapshots;
-    const realOffers = manualOffers + gogOffers + steamStoreOffers + ggdealsOffers + priceApiOffers;
+    const realOffers = manualOffers + publicGogOffers + steamStoreOffers + ggdealsOffers + priceApiOffers;
     const gamesWithoutPrices = sources.filter((source) => !source.profile.latestPrice && !source.profile.bestOffer).length;
     const ggdealsRuntime = resolveGGDealsStatusFromLogs({
       hasApiKey: Boolean(getGGDealsApiKey()),
@@ -126,7 +131,7 @@ export class StatsService {
         mockOffers,
         realPlayerSnapshots,
         mockPlayerSnapshots,
-        gogOffers,
+        gogOffers: publicGogOffers,
         steamStoreOffers,
         catalogStoreOffers: catalogOfferStatus.catalogStoreOfferCount,
         manualOffers,
@@ -134,6 +139,7 @@ export class StatsService {
         stalePlayerSnapshots,
         gamesWithoutPlayerData
       },
+      topGamesCoverage,
       missingDataHints: buildMissingDataHints({
         catalogEntries: catalogStatus.entryCount,
         importedGames: importedGames.length,

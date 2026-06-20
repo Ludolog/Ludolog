@@ -12,10 +12,13 @@ GOG_CATALOG_BASE_URL=https://catalog.gog.com
 GOG_COUNTRY_CODE=PL
 GOG_CURRENCY=PLN
 GOG_REQUEST_LIMIT_PER_HOUR=200
+SHOW_GOG_PUBLIC=false
 ```
 
 `GOG_ENABLED=false` is the safe default. Set it to `true` only after deploy and after checking `/api/admin/gog/status`.
 The code caps `GOG_REQUEST_LIMIT_PER_HOUR` at 200 and admin refreshes are limited to small batches.
+`SHOW_GOG_PUBLIC=false` keeps GOG offers out of public deals, stats and game price responses while the connector remains
+experimental/admin-reviewed. Admin GOG endpoints and status remain available.
 
 ## Safety Rules
 
@@ -25,6 +28,7 @@ The code caps `GOG_REQUEST_LIMIT_PER_HOUR` at 200 and admin refreshes are limite
 - Do not use browser automation, cookies, sessions, Playwright/Puppeteer or proxies.
 - Reject non-JSON responses and never save HTML into `StoreOffer` or `GamePriceSnapshot`.
 - Treat uncertain title matches as suggestions, not approved mappings.
+- Keep public GOG visibility off unless the connector has been explicitly accepted for user-facing price output.
 
 ## Data Flow
 

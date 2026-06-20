@@ -55,9 +55,21 @@ export const steamCatalogSyncUntilSchema = z.object({
 });
 
 export const playerCountsRefreshSchema = z.object({
-  mode: z.enum(["watchlist", "top", "all-imported"]).default("top"),
-  limit: z.number().int().positive().max(50).default(25),
-  steamAppIds: z.array(z.number().int().positive()).max(50).optional()
+  mode: z.enum(["watchlist", "top", "all-imported", "top-100"]).default("top"),
+  limit: z.number().int().positive().max(100).default(25),
+  steamAppIds: z.array(z.number().int().positive()).max(100).optional()
+});
+
+export const topGamesActionSchema = z.object({
+  limit: z.number().int().positive().max(100).default(100),
+  dryRun: z.boolean().default(true)
+});
+
+export const topGamesQuerySchema = z.object({
+  limit: z.number().int().positive().max(100).default(100),
+  offset: z.number().int().min(0).max(1000).default(0),
+  sort: z.enum(["players", "score", "price", "discount", "freshness"]).default("players"),
+  category: z.string().trim().min(1).max(80).optional()
 });
 
 export const priceRefreshSchema = z.object({
@@ -184,10 +196,10 @@ export const steamStorePriceTestSchema = z.object({
 });
 
 export const steamStorePriceRefreshSchema = z.object({
-  mode: z.enum(["imported", "catalog-backfill"]).default("imported"),
+  mode: z.enum(["imported", "catalog-backfill", "top-100"]).default("imported"),
   steamAppIds: z.array(z.number().int().positive()).max(50).optional(),
   gameIds: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
-  limit: z.number().int().positive().max(50).optional(),
+  limit: z.number().int().positive().max(100).optional(),
   dryRun: z.boolean().default(true)
 });
 

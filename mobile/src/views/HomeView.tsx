@@ -5,11 +5,12 @@ import { apiClient, describeApiClientError } from "@/api/client";
 import { GameCard } from "@/components/GameCard";
 import { EmptyState, ErrorState, SkeletonList } from "@/components/StateViews";
 import { formatNumber, formatPrice } from "@/format";
-import type { ApiAdminStatus, ApiGameSearchResult, ApiGameSummary, ApiStatsGame, ApiStatsOverview } from "@shared/api-types";
+import type { ApiAdminStatus, ApiGameSearchResult, ApiGameSummary, ApiStatsGame, ApiStatsOverview, ApiTopGamesResponse } from "@shared/api-types";
 
 export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void }): React.ReactElement {
   const [deals, setDeals] = useState<ApiGameSummary[]>([]);
   const [overview, setOverview] = useState<ApiStatsOverview | null>(null);
+  const [topGames, setTopGames] = useState<ApiTopGamesResponse | null>(null);
   const [status, setStatus] = useState<ApiAdminStatus | null>(null);
   const [query, setQuery] = useState("");
   const [quickResults, setQuickResults] = useState<ApiGameSearchResult[]>([]);
@@ -21,14 +22,16 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
     setLoading(true);
     setError(null);
     try {
-      const [bestDeals, adminStatus, stats] = await Promise.all([
+      const [bestDeals, adminStatus, stats, top] = await Promise.all([
         apiClient.getBestDeals(4),
         apiClient.getAdminStatus(),
-        apiClient.getStatsOverview()
+        apiClient.getStatsOverview(),
+        apiClient.getTopGames(5)
       ]);
       setDeals(bestDeals.results);
       setStatus(adminStatus);
       setOverview(stats);
+      setTopGames(top);
     } catch (loadError) {
       setError(describeApiClientError(loadError));
     } finally {
@@ -101,6 +104,41 @@ export function HomeView({ onOpenGame }: { onOpenGame: (gameId: string) => void 
           </p>
         ) : null}
       </section>
+
+      {topGames ? (
+        <section className="surface rounded-lg p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-white">TOP 100 Steam</h2>
+            <span className="rounded-md border border-radar-cyan/30 bg-radar-cyan/10 px-2 py-1 text-xs font-semibold text-radar-cyan">
+              {topGames.coverage.withSteamPrice}/{topGames.coverage.topTrackedCount} cen
+            </span>
+          </div>
+          <div className="space-y-2">
+            {topGames.items.slice(0, 5).map((game) => (
+              <button
+                key={game.steamAppId}
+                type="button"
+                onClick={() => game.gameId && onOpenGame(game.gameId)}
+                disabled={!game.gameId}
+                className="flex w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-left disabled:opacity-70"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">
+                    #{game.rank} {game.title}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {formatNumber(game.currentPlayers)} online -{" "}
+                    {game.bestSteamPrice === null ? "Brak ceny" : formatPrice(game.bestSteamPrice, game.currency ?? "PLN")}
+                  </p>
+                </div>
+                <span className="rounded-md border border-radar-violet/30 bg-radar-violet/10 px-2 py-1 text-xs font-semibold text-radar-violet">
+                  {game.gameValueScore ?? "-"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="surface rounded-lg p-4">
         <h2 className="text-lg font-semibold text-white">Szybkie wyszukiwanie</h2>

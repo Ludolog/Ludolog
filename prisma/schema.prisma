@@ -63,6 +63,7 @@ model Game {
   priceSnapshots       GamePriceSnapshot[]
   playerCountSnapshots PlayerCountSnapshot[]
   externalMappings     GameExternalMapping[]
+  topTrackedEntries    TopTrackedGame[]
   watchlistItems       Watchlist[]
   priceAlerts          PriceAlert[]
   scoreSnapshots       DealScoreSnapshot[]
@@ -114,6 +115,23 @@ model SteamCatalogEntry {
   @@index([title])
   @@index([isGame, isActive])
   @@index([syncedAt])
+}
+
+model TopTrackedGame {
+  id         String   @id
+  steamAppId Int      @unique
+  title      String
+  priority   Int
+  source     String   @default("curated-top-100")
+  isActive   Boolean  @default(true)
+  gameId     String?
+  game       Game?    @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([priority])
+  @@index([isActive, priority])
+  @@index([gameId])
 }
 
 model GogCatalogEntry {

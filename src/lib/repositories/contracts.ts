@@ -22,6 +22,7 @@ import type {
   Store,
   StoreOffer,
   StoreType,
+  TopTrackedGame,
   WatchlistItem
 } from "@/lib/types";
 
@@ -179,6 +180,22 @@ export interface SteamCatalogRepository {
   status(): Promise<SteamCatalogStatus>;
 }
 
+export type TopTrackedGameUpsertInput = Omit<TopTrackedGame, "createdAt" | "updatedAt">;
+
+export type TopTrackedGameStatus = {
+  topTrackedCount: number;
+  activeTopTrackedCount: number;
+  importedCount: number;
+  lastUpdatedAt: Date | null;
+};
+
+export interface TopTrackedGameRepository {
+  listActive(limit?: number): Promise<TopTrackedGame[]>;
+  upsertMany(entries: TopTrackedGameUpsertInput[]): Promise<{ created: number; updated: number }>;
+  linkGame(steamAppId: number, gameId: string): Promise<void>;
+  status(): Promise<TopTrackedGameStatus>;
+}
+
 export type GogCatalogUpsertInput = Omit<GogCatalogEntry, "createdAt" | "updatedAt">;
 
 export type GogCatalogUpsertResult = {
@@ -240,6 +257,7 @@ export interface AppRepositories {
   provider: RepositoryProvider;
   games: GameRepository;
   steamCatalog: SteamCatalogRepository;
+  topTrackedGames: TopTrackedGameRepository;
   gog: GogRepository;
   prices: PriceRepository;
   catalogOffers: CatalogStoreOfferRepository;

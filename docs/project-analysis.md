@@ -52,6 +52,12 @@ Neon or admin secrets to Android.
 through capped one-page batches. Dry runs report `estimatedFinalCount` and do not change Neon, which makes larger search
 coverage testable before a real write.
 
+The production refresh scope is deliberately narrower than the searchable catalog. `TopTrackedGame` stores a curated
+TOP 100 Steam list. Web, Android and public API clients use `GET /api/top-games` to show ranking, coverage and
+score-readiness for this practical daily scope. Admin endpoints can import the list, refresh player counts and refresh
+Steam Store prices in capped batches. This keeps useful data fresh without turning the whole Steam catalog into tracked
+`Game` rows.
+
 ## Cel systemu
 
 GameValue Radar to aplikacja webowa wspomagająca decyzje zakupowe graczy PC. System łączy dane o cenach, ofertach sklepów, historii cen, liczbie aktywnych graczy oraz autorskim wskaźniku opłacalności zakupu. Projekt nie jest kopią SteamDB ani GG.deals i nie wykonuje scrapingu stron HTML. Integracje są zamknięte w adapterach, a tryb demonstracyjny działa na danych mockowych.
@@ -173,10 +179,13 @@ The internal price layer adds:
 - experimental `steam-store` price records from the Steam Store JSON `appdetails` endpoint.
 - `CatalogStoreOffer` for catalog-only Steam Store and GOG price backfill that does not import rows into `Game`.
 - `CatalogPriceCheckStatus` for no-price/error cooldowns during catalog price checks.
+- `TopTrackedGame` for the curated TOP 100 Steam production scope.
 
 `GameValuePriceService` validates admin inputs, creates stores and sources when needed, upserts offers and appends snapshots. `sourceConfidence` distinguishes `internal-real`, `experimental-store-api`, `internal-mock`, `external-legacy` and `no-price-data`, which lets web and Android show clear badges without exposing technical provider failures.
 
 `GogService` is the first real store connector in that layer. It is disabled by default, uses public GOG JSON endpoints only, respects small admin batches and writes official DRM-free `source=gog` offers after manual mapping approval. It rejects HTML/non-JSON responses and never stores Cloudflare or page HTML as a price record.
+Public GOG visibility is disabled by default with `SHOW_GOG_PUBLIC=false`; admin status and mapping/refresh tools remain
+available while public deals, stats and game price endpoints filter GOG out.
 
 GOG catalog discovery can search imported/top tracked games or explicit queries and store `GogCatalogEntry` rows for
 review. It returns suggested and uncertain mappings separately, but it never creates `GameExternalMapping` records on
@@ -189,6 +198,11 @@ conversion.
 `SteamStorePriceService` is the second real/experimental connector. It is disabled by default, uses Steam Store `appdetails` JSON only, keeps admin batches small and writes `source=steam-store` offers/snapshots only when explicitly invoked. It rejects non-JSON responses and never stores HTML.
 
 `PriceRefreshScheduler` coordinates capped imported Steam Store refreshes, mapped GOG refreshes and optional catalog backfill. The cron endpoints are protected by `CRON_SECRET`, while admin automation endpoints require `x-admin-secret` and default to dry-run style operation in the dashboard.
+
+`TopGamesService` coordinates the TOP 100 path. `POST /api/admin/top-games/bootstrap` can dry-run or execute import,
+player refresh and Steam Store price refresh for at most 100 entries. `GET|POST /api/cron/refresh-top-games` is the
+daily Vercel Hobby-safe cron for that scope. TOP 100 GameValue output returns a nullable score and
+`insufficient-data` recommendation when player or trusted price data is missing.
 
 Mock price cleanup is separated from general database maintenance. `GET /api/admin/prices/mock-cleanup/preview` reports affected mock offers, mock snapshots and mock price sources; `POST /api/admin/prices/mock-cleanup/run` requires `DELETE_MOCK_PRICE_DATA_ONLY` and does not delete games, catalogs, external mappings or player snapshots.
 
@@ -215,4 +229,4 @@ The stats overview exposes a data mode:
 
 This transparency is important for the thesis because the application can be demonstrated without secrets while still showing where real integrations are active.
 
-Player-count refresh is available through backend routes for a single game, explicit Steam App IDs, admin batches and a future cron endpoint. Admin bulk import can create a small starter set from the synced catalog and returns per-game success/failure results instead of treating the batch as all-or-nothing. The cron route is protected by `CRON_SECRET` in production, and batch sizes stay intentionally small to avoid unnecessary Steam API traffic.
+Player-count refresh is available through backend routes for a single game, explicit Steam App IDs, admin batches, TOP 100 batches and cron endpoints. Admin bulk import can create a small starter set from the synced catalog and returns per-game success/failure results instead of treating the batch as all-or-nothing. The cron routes are protected by `CRON_SECRET` in production, and batch sizes stay intentionally small to avoid unnecessary Steam API traffic.

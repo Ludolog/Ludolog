@@ -7,6 +7,7 @@ import {
   getCatalogPriceStaleHours,
   getPriceRefreshMaxRuntimeMs,
   getSteamStorePriceStaleHours,
+  getTopGamesPriceRefreshLimit,
   isSteamStorePriceEnabled
 } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
@@ -220,8 +221,11 @@ export class SteamStorePriceService {
 
   async refreshPrices(input: ApiSteamStorePriceRefreshRequest): Promise<ApiSteamStorePriceRefreshResponse> {
     ensureSteamStoreEnabled();
-    const limit = Math.min(input.limit ?? getSteamStorePriceMaxPerRun(), getSteamStorePriceMaxPerRun());
     const mode = input.mode ?? "imported";
+    const limit =
+      mode === "top-100"
+        ? Math.min(input.limit ?? getTopGamesPriceRefreshLimit(), getTopGamesPriceRefreshLimit())
+        : Math.min(input.limit ?? getSteamStorePriceMaxPerRun(), getSteamStorePriceMaxPerRun());
     if (mode === "catalog-backfill") {
       return this.refreshCatalogBackfill(input, limit);
     }
@@ -581,6 +585,12 @@ export class SteamStorePriceService {
       pushGame(await repositories.games.findBySteamAppId(steamAppId));
     }
     if (games.length === 0 && !input.gameIds?.length && !input.steamAppIds?.length) {
+      if (input.mode === "top-100") {
+        for (const topGame of await repositories.topTrackedGames.listActive(limit)) {
+          pushGame(await repositories.games.findBySteamAppId(topGame.steamAppId));
+        }
+        return games;
+      }
       for (const game of await repositories.games.listImported(limit)) {
         pushGame(game);
       }

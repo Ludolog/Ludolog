@@ -57,13 +57,24 @@ export function StatsView({ onOpenGame }: { onOpenGame: (gameId: string) => void
           <MiniMetric label="Katalog" value={formatNumber(overview.sourceCounts.steamCatalogEntries)} />
           <MiniMetric label="Importowane" value={formatNumber(overview.sourceCounts.importedGames)} />
           <MiniMetric label="Ceny realne" value={formatNumber(overview.sourceCounts.realInternalPriceSnapshots)} />
-          <MiniMetric label="GOG" value={formatNumber(overview.sourceCounts.gogOffers)} />
           <MiniMetric label="Steam Store" value={formatNumber(overview.sourceCounts.steamStoreOffers)} />
           <MiniMetric label="Brak cen" value={formatNumber(overview.sourceCounts.gamesWithoutPrices)} />
           <MiniMetric label="Mock ceny" value={formatNumber(overview.sourceCounts.mockPriceSnapshots)} />
           <MiniMetric label="Real snaps" value={formatNumber(overview.sourceCounts.realPlayerSnapshots)} />
         </div>
       </section>
+
+      {overview.topGamesCoverage ? (
+        <section className="surface rounded-lg p-4">
+          <h2 className="text-lg font-semibold text-white">Pokrycie TOP 100</h2>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+            <MiniMetric label="Import" value={`${overview.topGamesCoverage.importedCount}/${overview.topGamesCoverage.topTrackedCount}`} />
+            <MiniMetric label="Player count" value={`${overview.topGamesCoverage.withPlayerCount}/${overview.topGamesCoverage.topTrackedCount}`} />
+            <MiniMetric label="Cena Steam" value={`${overview.topGamesCoverage.withSteamPrice}/${overview.topGamesCoverage.topTrackedCount}`} />
+            <MiniMetric label="Świeże ceny" value={`${overview.topGamesCoverage.withFreshSteamPrice}/${overview.topGamesCoverage.topTrackedCount}`} />
+          </div>
+        </section>
+      ) : null}
 
       <StatsSection title="Popularne teraz" icon={<Activity size={17} />} games={overview.topPlayers} onOpenGame={onOpenGame} />
       <StatsSection title="Największy wzrost graczy" icon={<TrendingUp size={17} />} games={overview.trendingUp} onOpenGame={onOpenGame} />

@@ -16,6 +16,13 @@ export type StoreType = "official" | "keyshop" | "marketplace" | "unknown";
 
 export type Recommendation = "buy_now" | "wait" | "weak_deal";
 
+export type TopGameRecommendation =
+  | "excellent-value"
+  | "good-value"
+  | "neutral"
+  | "wait-for-sale"
+  | "insufficient-data";
+
 export type PriceSourceType = "manual" | "csv" | "json" | "partner" | "mock" | "store-api" | "store-api-experimental";
 
 export type PriceSourceConfidence =
@@ -265,6 +272,62 @@ export type ApiStatsGame = {
   tags: string[];
 };
 
+export type TopGameFreshness = "fresh" | "stale" | "no-data";
+
+export type ApiTopGameValueScore = {
+  score: number | null;
+  recommendation: TopGameRecommendation;
+  explanation: string[];
+};
+
+export type ApiTopGameItem = {
+  rank: number;
+  gameId: string | null;
+  steamAppId: number;
+  title: string;
+  coverUrl: string | null;
+  categories: string[];
+  tags: string[];
+  currentPlayers: number | null;
+  playerFreshness: TopGameFreshness;
+  playerLastUpdatedAt: DateString | null;
+  playerSource: DataSource | "cached" | "no-data";
+  bestSteamPrice: number | null;
+  regularSteamPrice: number | null;
+  discountPercent: number;
+  currency: string | null;
+  priceFreshness: TopGameFreshness;
+  priceLastUpdatedAt: DateString | null;
+  sourceName: "steam-store" | "manual" | "none";
+  gameValueScore: number | null;
+  scoreExplanation: string[];
+  recommendation: TopGameRecommendation;
+  noDataReasons: string[];
+};
+
+export type ApiTopGamesCoverage = {
+  topTrackedCount: number;
+  importedCount: number;
+  withPlayerCount: number;
+  withFreshPlayerCount: number;
+  withSteamPrice: number;
+  withFreshSteamPrice: number;
+  freeToPlayCount: number;
+  noPriceCount: number;
+  stalePriceCount: number;
+  failedLastRefreshCount: number;
+};
+
+export type ApiTopGamesResponse = {
+  items: ApiTopGameItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  sort: "players" | "score" | "price" | "discount" | "freshness";
+  updatedAt: DateString;
+  coverage: ApiTopGamesCoverage;
+};
+
 export type ApiCategoryType = "genre" | "trend" | "price" | "data-source" | "system";
 
 export type ApiCategorySummary = {
@@ -325,6 +388,7 @@ export type ApiStatsOverview = {
     stalePlayerSnapshots: number;
     gamesWithoutPlayerData: number;
   };
+  topGamesCoverage?: ApiTopGamesCoverage;
   missingDataHints: string[];
   updatedAt: DateString;
   mode: StatsDataMode;
@@ -750,7 +814,7 @@ export type ApiSteamStorePriceTestResponse = {
 };
 
 export type ApiSteamStorePriceRefreshRequest = {
-  mode?: "imported" | "catalog-backfill";
+  mode?: "imported" | "catalog-backfill" | "top-100";
   steamAppIds?: number[];
   gameIds?: string[];
   limit?: number;
@@ -1069,7 +1133,7 @@ export type ApiPlayerCountRefreshError = {
 };
 
 export type ApiPlayerCountRefreshResponse = {
-  mode: "watchlist" | "top" | "all-imported" | "explicit";
+  mode: "watchlist" | "top" | "all-imported" | "top-100" | "explicit";
   source?: "steam";
   dryRun?: false;
   requested: number;
@@ -1105,6 +1169,76 @@ export type ApiBulkImportResponse = {
   failed: number;
   errors: ApiBulkImportError[];
   results: ApiBulkImportResult[];
+};
+
+export type ApiTopGamesActionRequest = {
+  limit?: number;
+  dryRun?: boolean;
+};
+
+export type ApiTopGamesImportResult = {
+  steamAppId: number;
+  title: string;
+  gameId: string | null;
+  imported: boolean;
+  alreadyExisting: boolean;
+  missingFromSteamCatalog: boolean;
+  message: string | null;
+};
+
+export type ApiTopGamesImportResponse = {
+  dryRun: boolean;
+  requested: number;
+  imported: number;
+  alreadyExisting: number;
+  missingFromSteamCatalog: number;
+  failed: number;
+  errors: Array<{ steamAppId: number; title: string; message: string }>;
+  results: ApiTopGamesImportResult[];
+};
+
+export type ApiTopGamesRefreshPlayersResponse = {
+  dryRun: boolean;
+  requested: number;
+  refreshed: number;
+  skippedFreshCache: number;
+  failed: number;
+  createdSnapshots: number;
+  errors: Array<{ steamAppId: number; gameId?: string | null; message: string }>;
+  results: Array<{
+    steamAppId: number;
+    gameId: string | null;
+    refreshed: boolean;
+    skipped: boolean;
+    playersOnline: number | null;
+    snapshotId: string | null;
+    message: string | null;
+  }>;
+};
+
+export type ApiTopGamesRefreshPricesResponse = {
+  dryRun: boolean;
+  requested: number;
+  refreshed: number;
+  skippedFreshCache: number;
+  skippedNoPrice: number;
+  skippedUnsupported: number;
+  failed: number;
+  createdOffers: number;
+  updatedOffers: number;
+  createdSnapshots: number;
+  errors: Array<{ steamAppId: number; gameId?: string | null; message: string }>;
+  warnings: Array<{ steamAppId: number; gameId?: string | null; status: "no-price" | "unsupported" | "fresh-cache"; message: string }>;
+  results: ApiSteamStorePriceRefreshResult[];
+};
+
+export type ApiTopGamesBootstrapResponse = {
+  dryRun: boolean;
+  requested: number;
+  import: ApiTopGamesImportResponse;
+  players: ApiTopGamesRefreshPlayersResponse;
+  prices: ApiTopGamesRefreshPricesResponse;
+  coverage: ApiTopGamesCoverage;
 };
 
 export type SearchResponse = {

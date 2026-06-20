@@ -1,4 +1,5 @@
 import type { DataSource, PriceSourceConfidence, StoreOffer } from "@/lib/types";
+import { showGogPublic } from "@/lib/config";
 
 const realOfferSourceRank: Partial<Record<DataSource, number>> = {
   gog: 0,
@@ -14,6 +15,9 @@ export function isMockPriceSource(source: DataSource | null | undefined): boolea
 }
 
 export function isTrustedPriceSource(source: DataSource | null | undefined): boolean {
+  if (source === "gog" && !showGogPublic()) {
+    return false;
+  }
   return source !== undefined && source !== null && source !== "mock";
 }
 

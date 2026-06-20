@@ -121,6 +121,18 @@ export type SteamCatalogEntry = {
   updatedAt: Date;
 };
 
+export type TopTrackedGame = {
+  id: string;
+  steamAppId: number;
+  title: string;
+  priority: number;
+  source: "curated-top-100" | string;
+  isActive: boolean;
+  gameId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type StoreOffer = {
   id: string;
   gameId: string;

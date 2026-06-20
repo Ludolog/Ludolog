@@ -68,13 +68,16 @@ import type {
   SnapshotRepository,
   SteamCatalogRepository,
   SteamCatalogUpsertInput,
+  TopTrackedGameRepository,
+  TopTrackedGameUpsertInput,
   WatchlistRepository
 } from "@/lib/repositories/contracts";
-import type { GameImportInput, GamePriceSnapshot, PlayerCountSnapshot, StoreOffer } from "@/lib/types";
+import type { GameImportInput, GamePriceSnapshot, PlayerCountSnapshot, StoreOffer, TopTrackedGame } from "@/lib/types";
 import type { CatalogPriceCheckStatus, CatalogStoreOffer } from "@/lib/types";
 
 const catalogStoreOffers: CatalogStoreOffer[] = [];
 const catalogPriceCheckStatuses: CatalogPriceCheckStatus[] = [];
+const topTrackedGames: TopTrackedGame[] = [];
 
 function catalogOfferFreshness(fetchedAt: Date, staleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000)): CatalogStoreOffer["freshness"] {
   return fetchedAt.getTime() < staleBefore.getTime() ? "stale" : "fresh";
@@ -429,6 +432,57 @@ class MockSteamCatalogRepository implements SteamCatalogRepository {
   }
 }
 
+class MockTopTrackedGameRepository implements TopTrackedGameRepository {
+  async listActive(limit = 100) {
+    return topTrackedGames
+      .filter((entry) => entry.isActive)
+      .sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title))
+      .slice(0, Math.max(1, Math.min(100, Math.floor(limit))));
+  }
+
+  async upsertMany(entries: TopTrackedGameUpsertInput[]) {
+    let created = 0;
+    let updated = 0;
+    const now = new Date();
+    for (const entry of entries) {
+      const index = topTrackedGames.findIndex((item) => item.steamAppId === entry.steamAppId);
+      const existing = index >= 0 ? topTrackedGames[index] : null;
+      const next: TopTrackedGame = {
+        ...entry,
+        gameId: entry.gameId ?? existing?.gameId ?? null,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now
+      };
+      if (index >= 0) {
+        topTrackedGames[index] = next;
+        updated += 1;
+      } else {
+        topTrackedGames.push(next);
+        created += 1;
+      }
+    }
+    return { created, updated };
+  }
+
+  async linkGame(steamAppId: number, gameId: string) {
+    const entry = topTrackedGames.find((item) => item.steamAppId === steamAppId);
+    if (entry) {
+      entry.gameId = gameId;
+      entry.updatedAt = new Date();
+    }
+  }
+
+  async status() {
+    const latest = [...topTrackedGames].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0] ?? null;
+    return {
+      topTrackedCount: topTrackedGames.length,
+      activeTopTrackedCount: topTrackedGames.filter((entry) => entry.isActive).length,
+      importedCount: topTrackedGames.filter((entry) => entry.isActive && entry.gameId !== null).length,
+      lastUpdatedAt: latest?.updatedAt ?? null
+    };
+  }
+}
+
 class MockGogRepository implements GogRepository {
   async searchCatalog(query: string, limit?: number) {
     return searchGogCatalogEntries(query, limit);
@@ -559,6 +613,7 @@ export function createMockRepositories(): AppRepositories {
     provider: "mock",
     games: new MockGameRepository(),
     steamCatalog: new MockSteamCatalogRepository(),
+    topTrackedGames: new MockTopTrackedGameRepository(),
     gog: new MockGogRepository(),
     prices: new MockPriceRepository(),
     catalogOffers: new MockCatalogStoreOfferRepository(),

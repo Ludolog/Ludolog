@@ -12,9 +12,11 @@ export function AdminActionButton({
   endpoint,
   label,
   method = "POST",
-  requireSecret = false
+  requireSecret = false,
+  confirmBeforeRun = false
 }: {
   body?: unknown;
+  confirmBeforeRun?: boolean;
   editableBody?: boolean;
   endpoint: string;
   label: string;
@@ -44,6 +46,9 @@ export function AdminActionButton({
   }, [requireSecret]);
 
   async function run(): Promise<void> {
+    if (confirmBeforeRun && !window.confirm(`Run admin action: ${label}?`)) {
+      return;
+    }
     setLoading(true);
     setResult(null);
     try {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { jsonError, resolveRouteParams } from "@/lib/api";
 import { gameSearchService } from "@/lib/services/game-search-service";
+import { isTrustedPriceSource } from "@/lib/services/price-source-utils";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -15,5 +16,9 @@ export async function GET(_: Request, context: RouteContext): Promise<NextRespon
     return jsonError("Game not found.", 404);
   }
 
-  return NextResponse.json(profile);
+  return NextResponse.json({
+    ...profile,
+    priceHistory: profile.priceHistory.filter((snapshot) => isTrustedPriceSource(snapshot.source)),
+    offers: profile.offers.filter((offer) => isTrustedPriceSource(offer.source))
+  });
 }

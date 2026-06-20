@@ -1,10 +1,11 @@
 ﻿import Link from "next/link";
-import { BarChart3, Database, Radar, Search, Star, Wrench } from "lucide-react";
+import { BarChart3, Database, Radar, Search, Star, Trophy, Wrench } from "lucide-react";
 
 import { getDataMode } from "@/lib/config";
 
 const navItems = [
   { href: "/", label: "Radar", icon: Radar },
+  { href: "/top-games", label: "TOP 100", icon: Trophy },
   { href: "/search", label: "Search", icon: Search },
   { href: "/watchlist", label: "Watchlist", icon: Star },
   { href: "/admin", label: "Admin", icon: Wrench },

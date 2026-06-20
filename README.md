@@ -108,6 +108,12 @@ PLAYER_COUNT_STALE_MINUTES=30
 STEAM_STORE_PRICE_STALE_HOURS=6
 GOG_PRICE_STALE_HOURS=12
 CATALOG_PRICE_STALE_HOURS=168
+SHOW_GOG_PUBLIC=false
+TOP_GAMES_REFRESH_ENABLED=true
+TOP_GAMES_PLAYER_REFRESH_LIMIT=100
+TOP_GAMES_PRICE_REFRESH_LIMIT=100
+TOP_GAMES_STALE_PLAYER_HOURS=6
+TOP_GAMES_STALE_PRICE_HOURS=12
 ```
 
 ## Data modes
@@ -136,6 +142,7 @@ CATALOG_PRICE_STALE_HOURS=168
 - `GET /api/deals/best`
 - `GET /api/prices/status`
 - `GET /api/stats/overview`
+- `GET /api/top-games`
 - `GET /api/stats/steam`
 - `GET /api/stats/categories`
 - `GET /api/categories/overview`
@@ -159,6 +166,10 @@ CATALOG_PRICE_STALE_HOURS=168
 - `POST /api/admin/prices/refresh-best` (legacy disabled)
 - `POST /api/admin/prices/provider-diagnostics` (legacy disabled)
 - `POST /api/admin/player-counts/refresh`
+- `POST /api/admin/top-games/import`
+- `POST /api/admin/top-games/refresh-players`
+- `POST /api/admin/top-games/refresh-prices`
+- `POST /api/admin/top-games/bootstrap`
 - `GET /api/admin/gog/status`
 - `GET /api/admin/gog/mappings`
 - `POST /api/admin/gog/mappings`
@@ -178,6 +189,7 @@ CATALOG_PRICE_STALE_HOURS=168
 - `POST /api/games/:id/refresh-players`
 - `GET|POST /api/cron/refresh-player-counts`
 - `GET|POST /api/cron/refresh-prices`
+- `GET|POST /api/cron/refresh-top-games`
 - `GET|POST /api/cron/backfill-catalog-prices`
 - `GET /api/admin/maintenance/static-data/preview`
 - `POST /api/admin/maintenance/static-data/run`
@@ -197,6 +209,8 @@ Search now combines local database results and synced Steam catalog entries stor
 
 Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending up/down, best value, free-to-play games, tracked deals, watchlist popularity, hidden gems, genre categories, missing-data hints, data freshness and source counts. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app can use cached real snapshots; mock player snapshots are not returned as production fallback unless `ENABLE_DEV_MOCK_FALLBACK=true`.
 
+The practical production scope is `TopTrackedGame`: a curated TOP 100 Steam list that can be imported and refreshed without touching the full Steam catalog. `GET /api/top-games` returns ranking, coverage and score readiness for web and Android. A TOP 100 score is nullable and returns `insufficient-data` until the game has both player data and a trusted Steam/manual price.
+
 Game taxonomy is built server-side by `CategoryRankingService` and `GameTagNormalizer`. It uses `Game.genres`, known Steam App ID fallback mappings and data-source/price status to return production-friendly categories through `GET /api/categories/overview`, `GET /api/categories/:slug` and `GET /api/stats/categories`. Current category groups include Popularne teraz, Największy wzrost graczy, Największy spadek graczy, Najlepsza wartość, Darmowe gry, Gry premium, Ceny śledzone, Brak danych cenowych, Real player data, Dane mieszane, Dane demonstracyjne and genre categories such as Action, RPG, Strategy, Simulation, Indie, Multiplayer, Co-op, Survival, Shooter, Sports/Racing, Management, Sandbox, Horror and Adventure.
 
 Android never calls Steam directly and never receives API keys. The mobile app calls the Vercel/Next.js API, and backend services own Steam catalog sync and player-count refreshes.
@@ -213,7 +227,7 @@ GG.deals, ITAD and CheapShark are legacy/disabled providers in the active applic
 
 Price data now enters through GameValue-controlled sources: `manual-admin`, `csv-import`, `json-import`, `gog`, `steam-store`, `mock-seed` and future legal store APIs. `StoreOffer` stores current tracked offers, `Store` stores normalized store metadata, `PriceSource` stores the ingest source, and `GamePriceSnapshot` stores durable price history for charts, deals and GameValue Score. Catalog-only Steam Store and GOG backfills use `CatalogStoreOffer`, which does not create tracked `Game` rows. `CatalogPriceCheckStatus` records cooldowns for no-price and error cases so backfills do not retry the same unavailable app every run.
 
-Public summaries and scoring prefer real/internal sources in this order: GOG, Steam Store, manual/internal. Mock price rows can remain in historical storage until cleanup, but they are not treated as normal live prices in public deal summaries.
+Public summaries and scoring prefer trusted internal sources. GOG stays hidden from public price selection by default with `SHOW_GOG_PUBLIC=false`; admin status and tools still expose GOG diagnostics. Steam Store and manual/internal prices remain visible. Mock price rows can remain in historical storage until cleanup, but they are not treated as normal live prices in public deal summaries.
 
 The first store connector is GOG. It is backend-only, disabled by default and feeds the same internal price tables with
 `sourceName=gog`, `sourceType=store-api`, `storeName=GOG`, `storeType=official` and `drm=DRM-free`. It uses public GOG JSON
@@ -229,6 +243,7 @@ GOG_CATALOG_BASE_URL=https://catalog.gog.com
 GOG_COUNTRY_CODE=PL
 GOG_CURRENCY=PLN
 GOG_REQUEST_LIMIT_PER_HOUR=200
+SHOW_GOG_PUBLIC=false
 ```
 
 The experimental Steam Store connector is also backend-only and disabled by default. It uses the official Steam Store
@@ -247,6 +262,15 @@ STEAM_STORE_PRICE_MAX_PER_RUN=20
 ```
 
 Automated refresh configuration is documented in [docs/price-refresh-automation.md](docs/price-refresh-automation.md). The scheduler keeps imported Steam Store refreshes, mapped GOG refreshes, catalog backfill and Steam player-count refreshes in small capped batches. Use `dryRun=true` before any real write.
+
+TOP 100 admin operations require `x-admin-secret` and stay capped at 100 records:
+
+- `POST /api/admin/top-games/import`
+- `POST /api/admin/top-games/refresh-players`
+- `POST /api/admin/top-games/refresh-prices`
+- `POST /api/admin/top-games/bootstrap`
+
+`POST /api/admin/top-games/bootstrap` runs import, player refresh and Steam Store price refresh in sequence. Start with `dryRun=true`. The matching cron route is `GET|POST /api/cron/refresh-top-games`, protected by `CRON_SECRET`.
 
 Public price endpoints:
 

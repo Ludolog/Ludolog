@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GET as backfillCatalogPricesCron } from "@/app/api/cron/backfill-catalog-prices/route";
 import { GET as refreshPlayerCountsCron } from "@/app/api/cron/refresh-player-counts/route";
 import { GET as refreshPricesCron } from "@/app/api/cron/refresh-prices/route";
+import { GET as refreshTopGamesCron } from "@/app/api/cron/refresh-top-games/route";
 
 describe("cron endpoints", () => {
   afterEach(() => {
@@ -75,5 +76,22 @@ describe("cron endpoints", () => {
     expect(unauthorized.status).toBe(401);
     expect(authorized.status).toBe(200);
     expect(body).toMatchObject({ source: "price-refresh", mode: "catalog-backfill", dryRun: false });
+  });
+
+  it("protects the TOP 100 refresh cron endpoint", async () => {
+    vi.stubEnv("CRON_SECRET", "cron-secret");
+    vi.stubEnv("TOP_GAMES_REFRESH_ENABLED", "false");
+
+    const unauthorized = await refreshTopGamesCron(new Request("http://localhost/api/cron/refresh-top-games"));
+    const authorized = await refreshTopGamesCron(
+      new Request("http://localhost/api/cron/refresh-top-games", {
+        headers: { "x-cron-secret": "cron-secret" }
+      })
+    );
+    const body = await authorized.json();
+
+    expect(unauthorized.status).toBe(401);
+    expect(authorized.status).toBe(200);
+    expect(body).toMatchObject({ enabled: false });
   });
 });

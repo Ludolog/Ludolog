@@ -11,6 +11,7 @@ import { formatNumber, formatPrice } from "@/lib/format";
 import { GameTagNormalizer } from "@/lib/services/category-service";
 import { recommendationLabel } from "@/lib/services/deal-score-service";
 import { gameSearchService } from "@/lib/services/game-search-service";
+import { isTrustedPriceSource } from "@/lib/services/price-source-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,13 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
     notFound();
   }
 
-  const { game, latestPrice, latestPlayers, bestOffer, score } = profile;
+  const publicPriceHistory = profile.priceHistory.filter((snapshot) => isTrustedPriceSource(snapshot.source));
+  const publicOffers = profile.offers.filter((offer) => isTrustedPriceSource(offer.source));
+  const { game, latestPrice, latestPlayers, bestOffer, score } = {
+    ...profile,
+    latestPrice: profile.latestPrice && isTrustedPriceSource(profile.latestPrice.source) ? profile.latestPrice : null,
+    bestOffer: profile.bestOffer && isTrustedPriceSource(profile.bestOffer.source) ? profile.bestOffer : null
+  };
   const factors = Object.entries(score.factors);
   const priceSource = latestPrice?.sourceConfidence ?? bestOffer?.sourceConfidence ?? "no-price-data";
   const priceDataSource = latestPrice?.source ?? bestOffer?.source ?? null;
@@ -111,7 +118,7 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="surface rounded-lg p-5">
           <h2 className="text-lg font-semibold text-white">Historia ceny</h2>
-          <PriceChart data={profile.priceHistory} />
+          <PriceChart data={publicPriceHistory} />
         </div>
         <div className="surface rounded-lg p-5">
           <h2 className="text-lg font-semibold text-white">Historia popularności</h2>
@@ -122,7 +129,7 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
       <section className="grid gap-6 lg:grid-cols-[1fr_0.72fr]">
         <div className="surface rounded-lg p-5">
           <h2 className="text-lg font-semibold text-white">Ceny śledzone</h2>
-          {profile.offers.length === 0 ? (
+          {publicOffers.length === 0 ? (
             <p className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-300">
               Brak śledzonych cen. Dodaj Steam Store, GOG albo manualne źródło ceny w panelu admina.
             </p>
@@ -139,7 +146,7 @@ export default async function GamePage({ params }: GamePageProps): Promise<React
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {profile.offers.map((offer) => (
+                  {publicOffers.map((offer) => (
                     <tr key={offer.id} className="text-slate-300">
                       <td className="py-3 font-medium text-white">
                         {offer.externalUrl ?? offer.url ? (

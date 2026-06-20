@@ -3,7 +3,7 @@ import { repositories } from "@/lib/repositories";
 import { steamApiService } from "@/lib/services/steam-api-service";
 import type { PlayerCountSnapshot } from "@/lib/types";
 
-export type PlayerCountRefreshMode = "watchlist" | "top" | "all-imported";
+export type PlayerCountRefreshMode = "watchlist" | "top" | "all-imported" | "top-100";
 export type PlayerCountRefreshRuntimeMode = PlayerCountRefreshMode | "explicit";
 
 export type PlayerCountRefreshError = {
@@ -40,7 +40,7 @@ export class PlayerCountRefreshService {
   ): Promise<PlayerCountRefreshResult> {
     const started = Date.now();
     const startedAt = new Date(started);
-    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
     const refreshMode: PlayerCountRefreshRuntimeMode = explicitSteamAppIds && explicitSteamAppIds.length > 0 ? "explicit" : mode;
     const steamAppIds = explicitSteamAppIds && explicitSteamAppIds.length > 0
       ? unique(explicitSteamAppIds).slice(0, safeLimit)
@@ -123,6 +123,11 @@ export class PlayerCountRefreshService {
     if (mode === "all-imported") {
       const games = await repositories.games.listImported(limit);
       return unique(games.map((game) => game.steamAppId)).slice(0, limit);
+    }
+
+    if (mode === "top-100") {
+      const topGames = await repositories.topTrackedGames.listActive(limit);
+      return unique(topGames.map((entry) => entry.steamAppId)).slice(0, limit);
     }
 
     const summaries = await repositories.games.mostActive(limit);

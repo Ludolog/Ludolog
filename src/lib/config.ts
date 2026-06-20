@@ -79,6 +79,10 @@ export function isGogEnabled(): boolean {
   return getOptionalEnv("GOG_ENABLED") === "true";
 }
 
+export function showGogPublic(): boolean {
+  return getOptionalEnv("SHOW_GOG_PUBLIC") === "true";
+}
+
 export function getGogApiBaseUrl(): string {
   return trimTrailingSlash(getOptionalEnv("GOG_API_BASE_URL") ?? "https://api.gog.com");
 }
@@ -173,6 +177,26 @@ export function getPlayerCountRefreshMaxRuntimeMs(): number {
 
 export function getPlayerCountStaleMinutes(): number {
   return numberEnv("PLAYER_COUNT_STALE_MINUTES", 30, 1, 24 * 60);
+}
+
+export function isTopGamesRefreshEnabled(): boolean {
+  return getOptionalEnv("TOP_GAMES_REFRESH_ENABLED") !== "false";
+}
+
+export function getTopGamesPlayerRefreshLimit(): number {
+  return numberEnv("TOP_GAMES_PLAYER_REFRESH_LIMIT", 100, 1, 100);
+}
+
+export function getTopGamesPriceRefreshLimit(): number {
+  return numberEnv("TOP_GAMES_PRICE_REFRESH_LIMIT", 100, 1, 100);
+}
+
+export function getTopGamesStalePlayerHours(): number {
+  return numberEnv("TOP_GAMES_STALE_PLAYER_HOURS", 6, 1, 24 * 30);
+}
+
+export function getTopGamesStalePriceHours(): number {
+  return numberEnv("TOP_GAMES_STALE_PRICE_HOURS", 12, 1, 24 * 30);
 }
 
 export function getSteamStorePriceStaleHours(): number {

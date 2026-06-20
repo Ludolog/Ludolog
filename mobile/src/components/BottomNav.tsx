@@ -1,9 +1,10 @@
-import { Activity, Home, Info, Search, Server, Star } from "lucide-react";
+import { Activity, Home, Info, Search, Server, Star, Trophy } from "lucide-react";
 
 import type { RouteName } from "@/routes";
 
 const items: Array<{ route: RouteName; label: string; icon: React.ComponentType<{ size?: number }> }> = [
   { route: "home", label: "Home", icon: Home },
+  { route: "top", label: "Top", icon: Trophy },
   { route: "search", label: "Search", icon: Search },
   { route: "stats", label: "Stats", icon: Activity },
   { route: "watchlist", label: "Watch", icon: Star },
@@ -20,7 +21,7 @@ export function BottomNav({
 }): React.ReactElement {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-radar-bg/95 px-2 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur">
-      <div className="grid grid-cols-6 gap-1">
+      <div className="grid grid-cols-7 gap-1">
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = active === item.route;

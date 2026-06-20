@@ -23,10 +23,12 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 
 - Steam API is active for Steam catalog sync and Steam current-player counts.
 - `SteamCatalogEntry` is the large search catalog.
+- `TopTrackedGame` is the curated TOP 100 Steam production scope.
 - `Game` contains only imported/tracked games, not the whole Steam catalog.
 - `PlayerCountSnapshot` stores real and fallback player-count snapshots.
 - GameValue Price API is the first-party price module.
 - GOG connector exists.
+- GOG is admin/experimental and hidden from public price output by default unless `SHOW_GOG_PUBLIC=true`.
 - GOG catalog discovery stores review entries and suggestions, not automatic mappings.
 - GOG price refresh defaults to dry run.
 - GOG catalog price backfill reads existing `GogCatalogEntry` records first and treats missing/no-price catalog prices as skipped cooldown states, not technical failures.
@@ -51,6 +53,8 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 - Dev mock fallback is allowed only behind `ENABLE_DEV_MOCK_FALLBACK=true` or local mock mode.
 - Do not import the full Steam catalog into `Game`; keep the large catalog in `SteamCatalogEntry`.
 - Do not run mass price refreshes over the full Steam catalog.
+- Use `TopTrackedGame` for daily practical refresh scope instead of the full Steam catalog.
+- Keep TOP 100 refreshes capped at 100 entries.
 - Use `CatalogStoreOffer` for catalog price backfill instead of creating tracked `Game` records.
 - GOG mapping suggestions require manual approval before price writes.
 - GOG soundtrack, DLC, demo, tool and bundle-like catalog entries are skipped by default during catalog price backfill unless an admin explicitly enables that product type in the request.
@@ -104,6 +108,7 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `GOG_ENABLED`
 - `GOG_COUNTRY_CODE`
 - `GOG_CURRENCY`
+- `SHOW_GOG_PUBLIC`
 - `STEAM_STORE_PRICE_ENABLED`
 - `STEAM_STORE_COUNTRY`
 - `STEAM_STORE_CURRENCY`
@@ -120,6 +125,11 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `STEAM_STORE_PRICE_STALE_HOURS`
 - `GOG_PRICE_STALE_HOURS`
 - `CATALOG_PRICE_STALE_HOURS`
+- `TOP_GAMES_REFRESH_ENABLED`
+- `TOP_GAMES_PLAYER_REFRESH_LIMIT`
+- `TOP_GAMES_PRICE_REFRESH_LIMIT`
+- `TOP_GAMES_STALE_PLAYER_HOURS`
+- `TOP_GAMES_STALE_PRICE_HOURS`
 
 ## Commands
 
@@ -146,6 +156,7 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `GET /api/stats/overview`
 - `GET /api/prices/status`
 - `GET /api/deals/best`
+- `GET /api/top-games`
 - `GET /api/admin/gog/status`
 - `POST /api/admin/gog/catalog/search`
 - `POST /api/admin/gog/catalog/discover`
@@ -158,10 +169,15 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `GET /api/admin/steam-store-prices/status`
 - `POST /api/admin/steam-store-prices/test`
 - `POST /api/admin/steam-store-prices/refresh`
+- `POST /api/admin/top-games/import`
+- `POST /api/admin/top-games/refresh-players`
+- `POST /api/admin/top-games/refresh-prices`
+- `POST /api/admin/top-games/bootstrap`
 - `POST /api/admin/automation/refresh-prices`
 - `POST /api/admin/automation/backfill-catalog-prices`
 - `GET|POST /api/cron/refresh-player-counts`
 - `GET|POST /api/cron/refresh-prices`
+- `GET|POST /api/cron/refresh-top-games`
 - `GET|POST /api/cron/backfill-catalog-prices`
 - `GET /api/admin/prices/mock-cleanup/preview`
 - `POST /api/admin/prices/mock-cleanup/run`
@@ -185,6 +201,8 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `SteamCatalogEntry` is around 2000 rows.
 - `Game` is around 20 rows.
 - GOG is enabled; mappings are still manual approval only.
+- GOG public output is hidden by default; admin GOG status/tools remain visible.
+- TOP 100 Steam scope exists for practical daily tracking and scoring readiness.
 - Steam Store prices are enabled for small imported-game refreshes and catalog backfill.
 - `CatalogStoreOffer` keeps catalog price backfill separate from imported `Game` rows.
 - Steam Store no-price catalog checks count as `skippedNoPrice`, not `failed`, and retry only after cooldown.

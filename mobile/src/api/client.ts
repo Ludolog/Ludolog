@@ -6,6 +6,7 @@ import type {
   ApiGameProfile,
   ApiImportGameResponse,
   ApiStatsOverview,
+  ApiTopGamesResponse,
   BestDealsResponse,
   SearchResponse,
   WatchlistCreateResponse,
@@ -177,6 +178,7 @@ export function createApiClient(baseUrl: string, transport: ApiClientTransport =
     getGameProfile: (id: string) => request<ApiGameProfile>(`/api/games/${encodeURIComponent(id)}`),
     getGamePrices: (id: string) => request<ApiGamePricesResponse>(`/api/games/${encodeURIComponent(id)}/prices`),
     getBestDeals: (limit = 8) => request<BestDealsResponse>(`/api/deals/best?limit=${limit}`),
+    getTopGames: (limit = 100) => request<ApiTopGamesResponse>(`/api/top-games?limit=${limit}`),
     getStatsOverview: () => request<ApiStatsOverview>("/api/stats/overview"),
     getWatchlist: () => request<WatchlistResponse>("/api/watchlist"),
     addToWatchlist: (gameId: string) =>

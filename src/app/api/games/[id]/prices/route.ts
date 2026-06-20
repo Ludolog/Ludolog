@@ -4,6 +4,7 @@ import { jsonError, resolveRouteParams } from "@/lib/api";
 import { getSteamStorePriceStaleHours } from "@/lib/config";
 import { priceApiService } from "@/lib/services/price-api-service";
 import { gameSearchService } from "@/lib/services/game-search-service";
+import { isTrustedPriceSource } from "@/lib/services/price-source-utils";
 import type { PriceFreshness } from "@shared/api-types";
 
 type RouteContext = {
@@ -22,15 +23,17 @@ export async function GET(_: Request, context: RouteContext): Promise<NextRespon
     priceApiService.getPriceHistory(game.id),
     priceApiService.listOffers(game.id)
   ]);
-  const latestPriceRefresh = [...history].sort(
+  const publicHistory = history.filter((snapshot) => isTrustedPriceSource(snapshot.source));
+  const publicOffers = offers.filter((offer) => isTrustedPriceSource(offer.source));
+  const latestPriceRefresh = [...publicHistory].sort(
     (a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime()
   )[0]?.capturedAt ?? null;
   const freshness = priceFreshness(latestPriceRefresh);
 
   return NextResponse.json({
     gameId: game.id,
-    history,
-    offers,
+    history: publicHistory,
+    offers: publicOffers,
     freshness: {
       latestPriceRefresh,
       freshness,
