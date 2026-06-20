@@ -52,6 +52,13 @@ export function areLegacyPriceProvidersEnabled(): boolean {
   return getOptionalEnv("ENABLE_LEGACY_PRICE_PROVIDERS") === "true";
 }
 
+export function isDevMockFallbackEnabled(): boolean {
+  if (getDataMode() === "api") {
+    return getOptionalEnv("ENABLE_DEV_MOCK_FALLBACK") === "true";
+  }
+  return true;
+}
+
 export function getGGDealsApiKey(): string | undefined {
   return getOptionalEnv("GGDEALS_API_KEY") ?? getOptionalEnv("GG_DEALS_API_KEY");
 }

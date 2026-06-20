@@ -579,6 +579,7 @@ export type ApiGogMappingSuggestResponse = {
   exactMatches: ApiGogCatalogSuggestedMapping[];
   reviewRequired: ApiGogCatalogSuggestedMapping[];
   uncertain: ApiGogCatalogSuggestedMapping[];
+  rejectedBadCandidates: ApiGogCatalogSuggestedMapping[];
   skipped: Array<{
     gameId: string;
     steamAppId: number;
@@ -709,6 +710,25 @@ export type ApiSteamStorePricePreview = {
   isFreeToPlay: boolean;
 };
 
+export type ApiSteamStoreBackfillCandidatePreview = {
+  steamAppId: number;
+  title: string;
+  appType: string;
+  gameId: string | null;
+  priority: number;
+  reasons: string[];
+  lastStatus: "available" | "no-price" | "unsupported" | "error" | null;
+  nextCheckAt: DateString | null;
+};
+
+export type ApiSteamStoreNoPriceMarker = {
+  steamAppId: number;
+  title: string | null;
+  status: "no-price" | "unsupported";
+  nextCheckAt: DateString;
+  message: string;
+};
+
 export type ApiSteamStorePriceTestResponse = {
   configured: boolean;
   result: ApiSteamStorePricePreview | null;
@@ -747,6 +767,10 @@ export type ApiSteamStorePriceRefreshResponse = {
   createdSnapshots?: number;
   skippedFreshCache?: number;
   skippedNoPrice?: number;
+  skippedUnsupported?: number;
+  nextCandidatesPreview?: ApiSteamStoreBackfillCandidatePreview[];
+  noPriceMarked?: ApiSteamStoreNoPriceMarker[];
+  realErrors?: Array<{ steamAppId: number; gameId?: string | null; message: string }>;
   startedAt?: DateString;
   finishedAt?: DateString;
   durationMs?: number;
@@ -835,6 +859,40 @@ export type ApiGogPriceRefreshResponse = {
   durationMs?: number;
   errors: Array<{ gameId: string; gogProductId?: string; message: string }>;
   results: ApiGogPriceRefreshResult[];
+};
+
+export type ApiGogCatalogPriceBackfillRequest = {
+  gogProductIds?: string[];
+  limit?: number;
+  dryRun?: boolean;
+};
+
+export type ApiGogCatalogPriceBackfillResult = {
+  gogProductId: string;
+  title: string | null;
+  refreshed: boolean;
+  skipped: boolean;
+  preview: ApiGogPricePreview | null;
+  offerId: string | null;
+  message: string | null;
+};
+
+export type ApiGogCatalogPriceBackfillResponse = {
+  provider: "gamevalue";
+  sourceName: "gog";
+  dryRun: boolean;
+  requested: number;
+  refreshed: number;
+  skipped: number;
+  failed: number;
+  createdOffers: number;
+  updatedOffers: number;
+  skippedNoPrice: number;
+  startedAt: DateString;
+  finishedAt: DateString;
+  durationMs: number;
+  errors: Array<{ gogProductId: string; message: string }>;
+  results: ApiGogCatalogPriceBackfillResult[];
 };
 
 export type ApiManualOfferRequest = {

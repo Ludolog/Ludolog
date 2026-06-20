@@ -19,6 +19,9 @@ import { prisma } from "@/lib/repositories/prisma-client";
 import type {
   AlertRepository,
   AppRepositories,
+  CatalogBackfillCandidate,
+  CatalogPriceCheckStatusInput,
+  CatalogPriceCheckStatusRepository,
   CatalogStoreOfferInput,
   CatalogStoreOfferRepository,
   DiagnosticsRepository,
@@ -43,6 +46,7 @@ import {
 } from "@/lib/services/price-source-utils";
 import type {
   AdminStatus,
+  CatalogPriceCheckStatus,
   CatalogStoreOffer,
   DataSource,
   Game,
@@ -77,6 +81,7 @@ type PrismaLog = Prisma.IntegrationLogGetPayload<Record<string, never>>;
 type PrismaStore = Prisma.StoreGetPayload<Record<string, never>>;
 type PrismaPriceSource = Prisma.PriceSourceGetPayload<Record<string, never>>;
 type PrismaCatalogStoreOffer = Prisma.CatalogStoreOfferGetPayload<Record<string, never>>;
+type PrismaCatalogPriceCheckStatus = Prisma.CatalogPriceCheckStatusGetPayload<Record<string, never>>;
 
 function sourceFromPrisma(source: string): DataSource {
   if (source === "steam_api") {
@@ -312,6 +317,86 @@ function mapCatalogStoreOffer(offer: PrismaCatalogStoreOffer, staleBefore = new 
     sourceName: offer.provider,
     freshness: offer.fetchedAt < staleBefore ? "stale" : "fresh"
   };
+}
+
+function mapCatalogPriceCheckStatus(status: PrismaCatalogPriceCheckStatus): CatalogPriceCheckStatus {
+  return {
+    id: status.id,
+    sourceName: status.sourceName,
+    steamAppId: status.steamAppId,
+    gogProductId: status.gogProductId,
+    status: status.status as CatalogPriceCheckStatus["status"],
+    lastCheckedAt: status.lastCheckedAt,
+    nextCheckAt: status.nextCheckAt,
+    lastError: status.lastError,
+    attempts: status.attempts,
+    createdAt: status.createdAt,
+    updatedAt: status.updatedAt
+  };
+}
+
+function catalogPriceCheckStatusId(sourceName: string, steamAppId: number | null, gogProductId: string | null): string {
+  if (steamAppId !== null) {
+    return `catalog-price-check-${sourceName}-steam-${steamAppId}`;
+  }
+  return `catalog-price-check-${sourceName}-gog-${gogProductId ?? "unknown"}`;
+}
+
+function isWeakSteamStoreCandidateTitle(title: string): boolean {
+  const normalized = title.toLowerCase();
+  return [
+    "demo",
+    "dedicated server",
+    "server",
+    "soundtrack",
+    " dlc",
+    "sdk",
+    " tool",
+    "beta",
+    "test",
+    "trailer",
+    "episode",
+    "expansion pack",
+    " pack",
+    "bundle"
+  ].some((term) => normalized.includes(term));
+}
+
+function steamBackfillCandidate(input: {
+  steamAppId: number;
+  title: string;
+  appType: string;
+  gameId: string | null;
+  isImported: boolean;
+  status: CatalogPriceCheckStatus | null;
+  hasFreshOffer: boolean;
+}): CatalogBackfillCandidate {
+  const reasons = input.isImported ? ["imported-game"] : ["steam-catalog"];
+  if (input.status?.status === "error") {
+    reasons.push("retry-after-error");
+  }
+  if (!input.hasFreshOffer) {
+    reasons.push("missing-or-stale-catalog-offer");
+  }
+  return {
+    steamAppId: input.steamAppId,
+    title: input.title,
+    appType: input.appType,
+    isImported: input.isImported,
+    gameId: input.gameId,
+    priority: (input.isImported ? 100 : 10) + (input.status?.status === "error" ? 5 : 0),
+    reasons,
+    lastCheckedAt: input.status?.lastCheckedAt ?? null,
+    nextCheckAt: input.status?.nextCheckAt ?? null,
+    lastStatus: input.status?.status ?? null
+  };
+}
+
+function compareSteamBackfillCandidates(a: CatalogBackfillCandidate, b: CatalogBackfillCandidate): number {
+  if (b.priority !== a.priority) {
+    return b.priority - a.priority;
+  }
+  return a.steamAppId - b.steamAppId;
 }
 
 function sourceConfidence(source: DataSource): StoreOffer["sourceConfidence"] {
@@ -1005,6 +1090,25 @@ class PrismaGogRepository implements GogRepository {
     return entries.map(mapGogCatalogEntry);
   }
 
+  async listCatalogEntries(limit = 50): Promise<GogCatalogEntry[]> {
+    const entries = await prisma.gogCatalogEntry.findMany({
+      where: { isActive: true },
+      orderBy: { syncedAt: "desc" },
+      take: Math.max(1, Math.min(50, Math.floor(limit)))
+    });
+    return entries.map(mapGogCatalogEntry);
+  }
+
+  async findCatalogByProductIds(gogProductIds: string[]): Promise<GogCatalogEntry[]> {
+    if (gogProductIds.length === 0) {
+      return [];
+    }
+    const entries = await prisma.gogCatalogEntry.findMany({
+      where: { gogProductId: { in: gogProductIds } }
+    });
+    return entries.map(mapGogCatalogEntry);
+  }
+
   async findCatalogByProductId(gogProductId: string): Promise<GogCatalogEntry | null> {
     const entry = await prisma.gogCatalogEntry.findUnique({ where: { gogProductId } });
     return entry ? mapGogCatalogEntry(entry) : null;
@@ -1487,10 +1591,11 @@ class PrismaCatalogStoreOfferRepository implements CatalogStoreOfferRepository {
     return offers.map((offer) => mapCatalogStoreOffer(offer));
   }
 
-  async listSteamBackfillCandidates(limit: number, staleBefore: Date): Promise<SteamCatalogEntry[]> {
+  async listSteamBackfillCandidates(limit: number, staleBefore: Date): Promise<CatalogBackfillCandidate[]> {
     const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
-    const [importedGames, freshOffers] = await Promise.all([
-      prisma.game.findMany({ select: { steamAppId: true } }),
+    const now = new Date();
+    const [importedGames, freshOffers, blockedStatuses, latestStatuses] = await Promise.all([
+      prisma.game.findMany({ orderBy: { updatedAt: "desc" }, take: 100 }),
       prisma.catalogStoreOffer.findMany({
         where: {
           provider: "steam-store",
@@ -1498,22 +1603,94 @@ class PrismaCatalogStoreOfferRepository implements CatalogStoreOfferRepository {
           fetchedAt: { gte: staleBefore }
         },
         select: { steamAppId: true }
+      }),
+      prisma.catalogPriceCheckStatus.findMany({
+        where: {
+          sourceName: "steam-store",
+          steamAppId: { not: null },
+          nextCheckAt: { gt: now }
+        }
+      }),
+      prisma.catalogPriceCheckStatus.findMany({
+        where: {
+          sourceName: "steam-store",
+          steamAppId: { not: null }
+        }
       })
     ]);
-    const excluded = [
-      ...importedGames.map((game) => game.steamAppId),
-      ...freshOffers.map((offer) => offer.steamAppId).filter((steamAppId): steamAppId is number => steamAppId !== null)
-    ];
+
+    const fresh = new Set(freshOffers.map((offer) => offer.steamAppId).filter((steamAppId): steamAppId is number => steamAppId !== null));
+    const blocked = new Set(
+      blockedStatuses.map((status) => status.steamAppId).filter((steamAppId): steamAppId is number => steamAppId !== null)
+    );
+    const statuses = new Map(
+      latestStatuses
+        .map(mapCatalogPriceCheckStatus)
+        .filter((status) => status.steamAppId !== null)
+        .map((status) => [status.steamAppId as number, status])
+    );
+    const importedBySteamAppId = new Map(importedGames.map((game) => [game.steamAppId, mapGame(game)]));
+    const importedEntries = await prisma.steamCatalogEntry.findMany({
+      where: { steamAppId: { in: importedGames.map((game) => game.steamAppId) } }
+    });
+    const importedEntryBySteamAppId = new Map(importedEntries.map((entry) => [entry.steamAppId, mapSteamCatalogEntry(entry)]));
+    const candidates = new Map<number, CatalogBackfillCandidate>();
+
+    for (const game of importedBySteamAppId.values()) {
+      if (fresh.has(game.steamAppId) || blocked.has(game.steamAppId) || isWeakSteamStoreCandidateTitle(game.title)) {
+        continue;
+      }
+      const entry = importedEntryBySteamAppId.get(game.steamAppId);
+      const status = statuses.get(game.steamAppId) ?? null;
+      candidates.set(
+        game.steamAppId,
+        steamBackfillCandidate({
+          steamAppId: game.steamAppId,
+          title: entry?.title ?? game.title,
+          appType: entry?.appType ?? "game",
+          gameId: game.id,
+          isImported: true,
+          status,
+          hasFreshOffer: false
+        })
+      );
+    }
+
     const entries = await prisma.steamCatalogEntry.findMany({
       where: {
         isGame: true,
         isActive: true,
-        ...(excluded.length > 0 ? { steamAppId: { notIn: excluded } } : {})
+        ...(fresh.size > 0 || blocked.size > 0
+          ? { steamAppId: { notIn: [...fresh, ...blocked] } }
+          : {})
       },
       orderBy: { steamAppId: "asc" },
-      take: safeLimit
+      take: Math.max(safeLimit * 5, safeLimit)
     });
-    return entries.map(mapSteamCatalogEntry);
+    for (const entry of entries.map(mapSteamCatalogEntry)) {
+      if (candidates.size >= safeLimit * 4) {
+        break;
+      }
+      if (isWeakSteamStoreCandidateTitle(entry.title)) {
+        continue;
+      }
+      const importedGame = importedBySteamAppId.get(entry.steamAppId) ?? null;
+      const status = statuses.get(entry.steamAppId) ?? null;
+      candidates.set(
+        entry.steamAppId,
+        steamBackfillCandidate({
+          steamAppId: entry.steamAppId,
+          title: entry.title,
+          appType: entry.appType,
+          gameId: importedGame?.id ?? null,
+          isImported: importedGame !== null,
+          status,
+          hasFreshOffer: false
+        })
+      );
+    }
+
+    return [...candidates.values()].sort(compareSteamBackfillCandidates).slice(0, safeLimit);
   }
 
   async status(staleBefore: Date) {
@@ -1527,6 +1704,54 @@ class PrismaCatalogStoreOfferRepository implements CatalogStoreOfferRepository {
       staleCatalogStoreOfferCount,
       lastCatalogStoreOfferRefresh: latest?.fetchedAt ?? null
     };
+  }
+}
+
+class PrismaCatalogPriceCheckStatusRepository implements CatalogPriceCheckStatusRepository {
+  async upsert(input: CatalogPriceCheckStatusInput): Promise<CatalogPriceCheckStatus> {
+    const id = catalogPriceCheckStatusId(input.sourceName, input.steamAppId ?? null, input.gogProductId ?? null);
+    const now = new Date();
+    const status = await prisma.catalogPriceCheckStatus.upsert({
+      where: { id },
+      update: {
+        sourceName: input.sourceName,
+        steamAppId: input.steamAppId ?? null,
+        gogProductId: input.gogProductId ?? null,
+        status: input.status,
+        lastCheckedAt: input.lastCheckedAt,
+        nextCheckAt: input.nextCheckAt,
+        lastError: input.lastError ?? null,
+        attempts: { increment: 1 },
+        updatedAt: now
+      },
+      create: {
+        id,
+        sourceName: input.sourceName,
+        steamAppId: input.steamAppId ?? null,
+        gogProductId: input.gogProductId ?? null,
+        status: input.status,
+        lastCheckedAt: input.lastCheckedAt,
+        nextCheckAt: input.nextCheckAt,
+        lastError: input.lastError ?? null,
+        attempts: 1,
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+    return mapCatalogPriceCheckStatus(status);
+  }
+
+  async findSteamStatuses(sourceName: string, steamAppIds: number[]): Promise<CatalogPriceCheckStatus[]> {
+    if (steamAppIds.length === 0) {
+      return [];
+    }
+    const statuses = await prisma.catalogPriceCheckStatus.findMany({
+      where: {
+        sourceName,
+        steamAppId: { in: steamAppIds }
+      }
+    });
+    return statuses.map(mapCatalogPriceCheckStatus);
   }
 }
 
@@ -1671,6 +1896,7 @@ export function createPrismaRepositories(): AppRepositories {
     gog: new PrismaGogRepository(),
     prices: new PrismaPriceRepository(),
     catalogOffers: new PrismaCatalogStoreOfferRepository(),
+    catalogPriceChecks: new PrismaCatalogPriceCheckStatusRepository(),
     watchlist: new PrismaWatchlistRepository(),
     alerts: new PrismaAlertRepository(),
     snapshots: new PrismaSnapshotRepository(),

@@ -45,7 +45,7 @@ The repository layer introduces contracts for games, watchlist, alerts, snapshot
 
 Steam catalog sync is an admin-controlled backend operation. It is intentionally batched with `maxResults`,
 `maxPages` and optional `startAfterAppId`, and it writes `SteamCatalogEntry` rows by unique `steamAppId`. Search can
-then combine imported library games, synced catalog entries and mock fallback catalog results without exposing Steam,
+then combine imported library games and synced catalog entries without exposing Steam,
 Neon or admin secrets to Android.
 
 `POST /api/admin/steam-catalog/sync-until` is a safer operational wrapper for growing the catalog toward a target count
@@ -151,9 +151,9 @@ Rekomendacje:
 
 ## Expanded catalog search and Steam Stats
 
-Search now goes beyond the records already stored in the active repository. `GameSearchService` first asks the `Game` repository, then checks synced `SteamCatalogEntry` records stored in PostgreSQL, and finally falls back to `SteamAppCatalogService`, a local catalog of popular Steam titles used when external access is not configured. Catalog results are marked as importable. `POST /api/games/import` accepts `steamAppId`, `query` or legacy `slug`, turns an importable catalog game into a normal observable game and attempts a backend player-count refresh.
+Search now goes beyond the records already stored in the active repository. `GameSearchService` first asks the `Game` repository, then checks synced `SteamCatalogEntry` records stored in PostgreSQL. `SteamAppCatalogService` remains a local/dev mock fallback only and is disabled in production API mode unless `ENABLE_DEV_MOCK_FALLBACK=true` is set intentionally. Catalog results are marked as importable. `POST /api/games/import` accepts `steamAppId`, `query` or legacy `slug`, turns an importable catalog game into a normal observable game and attempts a backend player-count refresh.
 
-Search responses include pagination metadata (`limit`, `offset`, `total`, `nextOffset`) and keep ordering stable: library games first, synced Steam catalog entries second and mock fallback last.
+Search responses include pagination metadata (`limit`, `offset`, `total`, `nextOffset`) and keep ordering stable: library games first, synced Steam catalog entries second, with mock fallback only in local/dev mode.
 
 `SteamCatalogEntry` stores the synced Steam application catalog separately from imported games. This prevents the app from creating thousands of full `Game` records before a title is actually observed by the user. Catalog sync is manual/admin-only and uses capped pagination through `IStoreService/GetAppList`; it must not run during Next.js build or on every page visit.
 
@@ -171,7 +171,8 @@ The internal price layer adds:
 - extended `GamePriceSnapshot` rows for durable price history.
 - `GogCatalogEntry` and `GameExternalMapping` for manual Steam/GameValue-to-GOG product mapping.
 - experimental `steam-store` price records from the Steam Store JSON `appdetails` endpoint.
-- `CatalogStoreOffer` for catalog-only Steam Store price backfill that does not import rows into `Game`.
+- `CatalogStoreOffer` for catalog-only Steam Store and GOG price backfill that does not import rows into `Game`.
+- `CatalogPriceCheckStatus` for no-price/error cooldowns during catalog price checks.
 
 `GameValuePriceService` validates admin inputs, creates stores and sources when needed, upserts offers and appends snapshots. `sourceConfidence` distinguishes `internal-real`, `experimental-store-api`, `internal-mock`, `external-legacy` and `no-price-data`, which lets web and Android show clear badges without exposing technical provider failures.
 

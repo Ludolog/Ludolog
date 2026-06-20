@@ -10,7 +10,7 @@ import {
   isSteamStorePriceEnabled
 } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
-import type { CatalogStoreOfferInput } from "@/lib/repositories/contracts";
+import type { CatalogBackfillCandidate, CatalogStoreOfferInput } from "@/lib/repositories/contracts";
 import { sourceConfidenceForDataSource } from "@/lib/services/price-source-utils";
 import type { Game, GamePriceSnapshot, IntegrationLog, PriceSource, Store, StoreOffer } from "@/lib/types";
 import type {
@@ -310,10 +310,22 @@ export class SteamStorePriceService {
         });
       } catch (error) {
         const message = sanitizeSteamStoreError(error);
-        response.failed += 1;
         if (error instanceof SteamStoreConnectorError && error.errorType === "no_price_data") {
+          response.skipped += 1;
           response.skippedNoPrice = (response.skippedNoPrice ?? 0) + 1;
+          response.results.push({
+            gameId: game.id,
+            steamAppId: game.steamAppId,
+            refreshed: false,
+            skipped: true,
+            preview: null,
+            offerId: null,
+            snapshotId: null,
+            message
+          });
+          continue;
         }
+        response.failed += 1;
         response.errors.push({ gameId: game.id, steamAppId: game.steamAppId, message });
         response.results.push({
           gameId: game.id,
@@ -334,7 +346,7 @@ export class SteamStorePriceService {
     await repositories.diagnostics.recordIntegrationLog({
       service: "steam-store",
       level: response.failed > 0 ? "warning" : "info",
-      message: `Steam Store price refresh finished. mode=${mode}, dryRun=${response.dryRun}, requested=${response.requested}, refreshed=${response.refreshed}, skipped=${response.skipped}, failed=${response.failed}, durationMs=${response.durationMs}.`
+      message: `Steam Store price refresh finished. mode=${mode}, dryRun=${response.dryRun}, requested=${response.requested}, refreshed=${response.refreshed}, skipped=${response.skipped}, skippedNoPrice=${response.skippedNoPrice ?? 0}, failed=${response.failed}, durationMs=${response.durationMs}.`
     });
 
     return response;
@@ -343,7 +355,10 @@ export class SteamStorePriceService {
   private async refreshCatalogBackfill(input: ApiSteamStorePriceRefreshRequest, limit: number): Promise<ApiSteamStorePriceRefreshResponse> {
     const startedAt = new Date();
     const staleBefore = new Date(Date.now() - getCatalogPriceStaleHours() * 60 * 60 * 1000);
-    const entries = await repositories.catalogOffers.listSteamBackfillCandidates(limit, staleBefore);
+    const entries =
+      input.steamAppIds && input.steamAppIds.length > 0
+        ? await this.resolveExplicitCatalogBackfillCandidates(input.steamAppIds.slice(0, limit), staleBefore)
+        : await repositories.catalogOffers.listSteamBackfillCandidates(limit, staleBefore);
     const response: ApiSteamStorePriceRefreshResponse = {
       provider: "gamevalue",
       sourceName: "steam-store",
@@ -357,6 +372,10 @@ export class SteamStorePriceService {
       createdSnapshots: 0,
       skippedFreshCache: 0,
       skippedNoPrice: 0,
+      skippedUnsupported: 0,
+      nextCandidatesPreview: entries.slice(0, 10).map(toBackfillCandidatePreview),
+      noPriceMarked: [],
+      realErrors: [],
       startedAt: startedAt.toISOString(),
       finishedAt: startedAt.toISOString(),
       durationMs: 0,
@@ -367,7 +386,9 @@ export class SteamStorePriceService {
     for (const entry of entries) {
       if (Date.now() - startedAt.getTime() > getPriceRefreshMaxRuntimeMs()) {
         response.failed += 1;
-        response.errors.push({ steamAppId: entry.steamAppId, message: "Steam Store catalog backfill stopped at max runtime." });
+        const message = "Steam Store catalog backfill stopped at max runtime.";
+        response.errors.push({ steamAppId: entry.steamAppId, gameId: entry.gameId ?? undefined, message });
+        response.realErrors?.push({ steamAppId: entry.steamAppId, gameId: entry.gameId, message });
         break;
       }
       try {
@@ -388,8 +409,14 @@ export class SteamStorePriceService {
           });
           continue;
         }
-        const game = await repositories.games.findBySteamAppId(entry.steamAppId);
+        const game = entry.gameId ? await repositories.games.findById(entry.gameId) : await repositories.games.findBySteamAppId(entry.steamAppId);
         const written = await repositories.catalogOffers.upsert(buildCatalogSteamStoreOffer(entry.steamAppId, game?.id ?? null, normalized));
+        await this.markCatalogPriceCheck({
+          steamAppId: entry.steamAppId,
+          status: "available",
+          checkedAt: new Date(),
+          message: null
+        });
         response.refreshed += 1;
         response.createdOffers = (response.createdOffers ?? 0) + (written.created ? 1 : 0);
         response.updatedOffers = (response.updatedOffers ?? 0) + (written.created ? 0 : 1);
@@ -405,13 +432,51 @@ export class SteamStorePriceService {
         });
       } catch (error) {
         const message = sanitizeSteamStoreError(error);
-        response.failed += 1;
         if (error instanceof SteamStoreConnectorError && error.errorType === "no_price_data") {
+          const nextCheckAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          response.skipped += 1;
           response.skippedNoPrice = (response.skippedNoPrice ?? 0) + 1;
+          if (!response.dryRun) {
+            await this.markCatalogPriceCheck({
+              steamAppId: entry.steamAppId,
+              status: "no-price",
+              checkedAt: new Date(),
+              nextCheckAt,
+              message
+            });
+            response.noPriceMarked?.push({
+              steamAppId: entry.steamAppId,
+              title: entry.title,
+              status: "no-price",
+              nextCheckAt: nextCheckAt.toISOString(),
+              message
+            });
+          }
+          response.results.push({
+            gameId: entry.gameId,
+            steamAppId: entry.steamAppId,
+            refreshed: false,
+            skipped: true,
+            preview: null,
+            offerId: null,
+            snapshotId: null,
+            message
+          });
+          continue;
         }
-        response.errors.push({ steamAppId: entry.steamAppId, message });
+        if (!response.dryRun) {
+          await this.markCatalogPriceCheck({
+            steamAppId: entry.steamAppId,
+            status: "error",
+            checkedAt: new Date(),
+            message
+          });
+        }
+        response.failed += 1;
+        response.errors.push({ steamAppId: entry.steamAppId, gameId: entry.gameId ?? undefined, message });
+        response.realErrors?.push({ steamAppId: entry.steamAppId, gameId: entry.gameId, message });
         response.results.push({
-          gameId: null,
+          gameId: entry.gameId,
           steamAppId: entry.steamAppId,
           refreshed: false,
           skipped: false,
@@ -430,10 +495,73 @@ export class SteamStorePriceService {
     await repositories.diagnostics.recordIntegrationLog({
       service: "steam-store",
       level: response.failed > 0 ? "warning" : "info",
-      message: `Steam Store catalog backfill finished. dryRun=${response.dryRun}, requested=${response.requested}, refreshed=${response.refreshed}, skipped=${response.skipped}, failed=${response.failed}, durationMs=${response.durationMs}.`
+      message: `Steam Store catalog backfill finished. dryRun=${response.dryRun}, requested=${response.requested}, refreshed=${response.refreshed}, skipped=${response.skipped}, skippedNoPrice=${response.skippedNoPrice ?? 0}, failed=${response.failed}, durationMs=${response.durationMs}.`
     });
 
     return response;
+  }
+
+  private async markCatalogPriceCheck(input: {
+    steamAppId: number;
+    status: "available" | "no-price" | "error";
+    checkedAt: Date;
+    nextCheckAt?: Date;
+    message: string | null;
+  }): Promise<void> {
+    const nextCheckAt =
+      input.nextCheckAt ??
+      new Date(
+        input.checkedAt.getTime() +
+          (input.status === "available" ? getCatalogPriceStaleHours() * 60 * 60 * 1000 : 6 * 60 * 60 * 1000)
+      );
+    await repositories.catalogPriceChecks.upsert({
+      sourceName: "steam-store",
+      steamAppId: input.steamAppId,
+      gogProductId: null,
+      status: input.status,
+      lastCheckedAt: input.checkedAt,
+      nextCheckAt,
+      lastError: input.message
+    });
+  }
+
+  private async resolveExplicitCatalogBackfillCandidates(steamAppIds: number[], staleBefore: Date): Promise<CatalogBackfillCandidate[]> {
+    const uniqueSteamAppIds = [...new Set(steamAppIds)].slice(0, 50);
+    const [offers, statuses] = await Promise.all([
+      repositories.catalogOffers.findBySteamAppIds(uniqueSteamAppIds),
+      repositories.catalogPriceChecks.findSteamStatuses("steam-store", uniqueSteamAppIds)
+    ]);
+    const fresh = new Set(
+      offers
+        .filter((offer) => offer.provider === "steam-store" && offer.fetchedAt >= staleBefore && offer.steamAppId !== null)
+        .map((offer) => offer.steamAppId as number)
+    );
+    const statusBySteamAppId = new Map(
+      statuses.filter((status) => status.steamAppId !== null).map((status) => [status.steamAppId as number, status])
+    );
+    const candidates: CatalogBackfillCandidate[] = [];
+
+    for (const steamAppId of uniqueSteamAppIds) {
+      const [game, entry] = await Promise.all([
+        repositories.games.findBySteamAppId(steamAppId),
+        repositories.steamCatalog.findBySteamAppId(steamAppId)
+      ]);
+      const status = statusBySteamAppId.get(steamAppId) ?? null;
+      candidates.push({
+        steamAppId,
+        title: entry?.title ?? game?.title ?? `Steam app ${steamAppId}`,
+        appType: entry?.appType ?? "game",
+        isImported: game !== null,
+        gameId: game?.id ?? null,
+        priority: 1000,
+        reasons: ["explicit-request", fresh.has(steamAppId) ? "fresh-catalog-offer-present" : "missing-or-stale-catalog-offer"],
+        lastCheckedAt: status?.lastCheckedAt ?? null,
+        nextCheckAt: status?.nextCheckAt ?? null,
+        lastStatus: status?.status ?? null
+      });
+    }
+
+    return candidates;
   }
 
   private async resolveRefreshGames(input: ApiSteamStorePriceRefreshRequest, limit: number): Promise<Game[]> {
@@ -584,6 +712,19 @@ function buildSteamStoreSnapshot(
 function previewOnly(normalized: NormalizedSteamStorePrice): ApiSteamStorePricePreview {
   const { rawData: _, ...preview } = normalized;
   return preview;
+}
+
+function toBackfillCandidatePreview(candidate: CatalogBackfillCandidate) {
+  return {
+    steamAppId: candidate.steamAppId,
+    title: candidate.title,
+    appType: candidate.appType,
+    gameId: candidate.gameId,
+    priority: candidate.priority,
+    reasons: candidate.reasons,
+    lastStatus: candidate.lastStatus,
+    nextCheckAt: candidate.nextCheckAt?.toISOString() ?? null
+  };
 }
 
 function buildCatalogSteamStoreOffer(

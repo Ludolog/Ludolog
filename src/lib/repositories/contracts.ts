@@ -1,5 +1,7 @@
 import type {
   AdminStatus,
+  CatalogPriceCheckStatus,
+  CatalogPriceCheckStatusValue,
   CatalogStoreOffer,
   GameExternalMapping,
   Game,
@@ -124,11 +126,39 @@ export type CatalogStoreOfferStatus = {
   lastCatalogStoreOfferRefresh: Date | null;
 };
 
+export type CatalogBackfillCandidate = {
+  steamAppId: number;
+  title: string;
+  appType: string;
+  isImported: boolean;
+  gameId: string | null;
+  priority: number;
+  reasons: string[];
+  lastCheckedAt: Date | null;
+  nextCheckAt: Date | null;
+  lastStatus: CatalogPriceCheckStatusValue | null;
+};
+
 export interface CatalogStoreOfferRepository {
   upsert(input: CatalogStoreOfferInput): Promise<{ offer: CatalogStoreOffer; created: boolean }>;
   findBySteamAppIds(steamAppIds: number[]): Promise<CatalogStoreOffer[]>;
-  listSteamBackfillCandidates(limit: number, staleBefore: Date): Promise<SteamCatalogEntry[]>;
+  listSteamBackfillCandidates(limit: number, staleBefore: Date): Promise<CatalogBackfillCandidate[]>;
   status(staleBefore: Date): Promise<CatalogStoreOfferStatus>;
+}
+
+export type CatalogPriceCheckStatusInput = {
+  sourceName: string;
+  steamAppId?: number | null;
+  gogProductId?: string | null;
+  status: CatalogPriceCheckStatusValue;
+  lastCheckedAt: Date;
+  nextCheckAt: Date;
+  lastError?: string | null;
+};
+
+export interface CatalogPriceCheckStatusRepository {
+  upsert(input: CatalogPriceCheckStatusInput): Promise<CatalogPriceCheckStatus>;
+  findSteamStatuses(sourceName: string, steamAppIds: number[]): Promise<CatalogPriceCheckStatus[]>;
 }
 
 export type SteamCatalogUpsertInput = Omit<SteamCatalogEntry, "createdAt" | "updatedAt">;
@@ -161,6 +191,8 @@ export type GogMappingInput = {
 
 export interface GogRepository {
   searchCatalog(query: string, limit?: number): Promise<GogCatalogEntry[]>;
+  listCatalogEntries(limit?: number): Promise<GogCatalogEntry[]>;
+  findCatalogByProductIds(gogProductIds: string[]): Promise<GogCatalogEntry[]>;
   findCatalogByProductId(gogProductId: string): Promise<GogCatalogEntry | null>;
   upsertCatalogEntries(entries: GogCatalogUpsertInput[]): Promise<GogCatalogUpsertResult>;
   listMappings(limit?: number): Promise<GameExternalMapping[]>;
@@ -207,6 +239,7 @@ export interface AppRepositories {
   gog: GogRepository;
   prices: PriceRepository;
   catalogOffers: CatalogStoreOfferRepository;
+  catalogPriceChecks: CatalogPriceCheckStatusRepository;
   watchlist: WatchlistRepository;
   alerts: AlertRepository;
   snapshots: SnapshotRepository;

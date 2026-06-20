@@ -29,9 +29,11 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 - GOG connector exists.
 - GOG catalog discovery stores review entries and suggestions, not automatic mappings.
 - GOG price refresh defaults to dry run.
+- GOG catalog price backfill stores catalog-only offers in `CatalogStoreOffer`, not `Game`.
 - Steam Store price connector exists and is experimental.
 - Price refresh automation exists for small Steam Store, GOG and catalog backfill batches.
 - `CatalogStoreOffer` stores catalog-only Steam Store backfill prices without importing rows into `Game`.
+- `CatalogPriceCheckStatus` stores no-price and error cooldowns for catalog price backfills.
 - GG.deals, ITAD, and CheapShark are legacy/disabled and are not active price providers.
 
 ## Technical Decisions
@@ -43,6 +45,8 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 - Do not work on Firebase now.
 - Do not work on Google Play release or release signing now.
 - Mock/demo prices must never be treated as trusted or real prices.
+- Production API mode must not silently substitute mock catalog, mock price, fake deal, fake chart, or mock player data.
+- Dev mock fallback is allowed only behind `ENABLE_DEV_MOCK_FALLBACK=true` or local mock mode.
 - Do not import the full Steam catalog into `Game`; keep the large catalog in `SteamCatalogEntry`.
 - Do not run mass price refreshes over the full Steam catalog.
 - Use `CatalogStoreOffer` for catalog price backfill instead of creating tracked `Game` records.
@@ -88,6 +92,7 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `DATA_MODE`
 - `PRICE_PROVIDER`
 - `PRICE_MODE`
+- `ENABLE_DEV_MOCK_FALLBACK`
 - `NEXT_PUBLIC_APP_URL`
 - `MOBILE_ALLOWED_ORIGINS`
 - `STEAM_WEB_API_KEY`
@@ -146,6 +151,7 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `POST /api/admin/gog/mappings/approve`
 - `POST /api/admin/gog/prices/test`
 - `POST /api/admin/gog/prices/refresh`
+- `POST /api/admin/gog/prices/backfill-catalog`
 - `GET /api/admin/steam-store-prices/status`
 - `POST /api/admin/steam-store-prices/test`
 - `POST /api/admin/steam-store-prices/refresh`
@@ -156,6 +162,8 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `GET|POST /api/cron/backfill-catalog-prices`
 - `GET /api/admin/prices/mock-cleanup/preview`
 - `POST /api/admin/prices/mock-cleanup/run`
+- `GET /api/admin/maintenance/static-data/preview`
+- `POST /api/admin/maintenance/static-data/run`
 
 ## How To Work On This Repo
 
@@ -176,6 +184,7 @@ Names only; never write real values in docs, commits, logs, or chat.
 - GOG is enabled; mappings are still manual approval only.
 - Steam Store prices are enabled for small imported-game refreshes and catalog backfill.
 - `CatalogStoreOffer` keeps catalog price backfill separate from imported `Game` rows.
+- Steam Store no-price catalog checks count as `skippedNoPrice`, not `failed`, and retry only after cooldown.
 - Stats mode is `mixed`.
 - Search/import/details works.
 - Categories work.

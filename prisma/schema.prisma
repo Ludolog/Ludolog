@@ -168,6 +168,24 @@ model CatalogStoreOffer {
   @@index([fetchedAt])
 }
 
+model CatalogPriceCheckStatus {
+  id           String   @id
+  sourceName   String
+  steamAppId   Int?
+  gogProductId String?
+  status       String
+  lastCheckedAt DateTime
+  nextCheckAt  DateTime
+  lastError    String?
+  attempts     Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([sourceName, status, nextCheckAt])
+  @@index([steamAppId])
+  @@index([gogProductId])
+}
+
 model GameExternalMapping {
   id           String   @id
   gameId       String

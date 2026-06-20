@@ -167,6 +167,19 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             editableBody
             requireSecret
           />
+          <AdminActionButton
+            endpoint="/api/admin/maintenance/static-data/preview"
+            method="GET"
+            label="Preview static data cleanup"
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/maintenance/static-data/run"
+            label="Run static data cleanup"
+            body={{ confirm: "REMOVE_STATIC_MOCK_DATA_ONLY" }}
+            editableBody
+            requireSecret
+          />
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <AdminActionButton
@@ -435,6 +448,13 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             editableBody
             requireSecret
           />
+          <AdminActionButton
+            endpoint="/api/admin/gog/prices/backfill-catalog"
+            label="Dry run GOG catalog prices"
+            body={{ gogProductIds: ["1207658924"], limit: 1, dryRun: true }}
+            editableBody
+            requireSecret
+          />
         </div>
         <div className="mt-4 rounded-md border border-white/10 bg-black/20 p-4 text-sm leading-6 text-slate-400">
           Set `GOG_ENABLED=true` only after `GOG_API_BASE_URL`, `GOG_CATALOG_BASE_URL`, `GOG_COUNTRY_CODE`,
@@ -512,7 +532,7 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           <AdminActionButton
             endpoint="/api/admin/steam-store-prices/refresh"
             label="Dry run catalog Steam prices"
-            body={{ mode: "catalog-backfill", limit: 10, dryRun: true }}
+            body={{ mode: "catalog-backfill", steamAppIds: [292030], limit: 1, dryRun: true }}
             editableBody
             requireSecret
           />

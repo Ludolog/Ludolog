@@ -6,7 +6,7 @@ This document describes the production-safe refresh pipeline for GameValue Radar
 
 - Refresh Steam Store prices for imported games in small batches.
 - Refresh GOG prices only for approved mapped games.
-- Backfill Steam catalog prices without importing the full catalog into `Game`.
+- Backfill Steam and GOG catalog prices without importing the full catalog into `Game`.
 - Refresh Steam player counts from backend-only cron/admin routes.
 - Expose freshness and source counts through public API responses.
 
@@ -21,11 +21,12 @@ Tracked games use the existing price tables:
 - `Store`
 - `PriceSource`
 
-Catalog-only Steam prices use:
+Catalog-only Steam and GOG prices use:
 
 - `CatalogStoreOffer`
+- `CatalogPriceCheckStatus`
 
-`CatalogStoreOffer` is intentionally separate from `Game`. It lets the backend store a small price backfill for synced `SteamCatalogEntry` rows without creating thousands of tracked games. Public search can show catalog prices when present, while import still remains an intentional user/admin action.
+`CatalogStoreOffer` is intentionally separate from `Game`. It lets the backend store a small price backfill for synced catalog rows without creating thousands of tracked games. `CatalogPriceCheckStatus` records available/no-price/error cooldowns so the same no-price app is not retried on every run. Public search can show catalog prices when present, while import still remains an intentional user/admin action.
 
 ## Environment variables
 
@@ -74,6 +75,7 @@ All admin endpoints below require `x-admin-secret`.
 - `POST /api/admin/gog/mappings/suggest`
 - `POST /api/admin/gog/mappings/approve`
 - `POST /api/admin/gog/prices/refresh`
+- `POST /api/admin/gog/prices/backfill-catalog`
 - `POST /api/admin/player-counts/refresh`
 
 Safe dry run examples:
@@ -108,6 +110,7 @@ Public search results can include `catalogOffer`, `freshness`, `nextRefreshAt`, 
 
 - Do not run mass refreshes across all 2000 catalog entries.
 - Do not store HTML or provider challenge pages as offers or snapshots.
+- Count no-price catalog checks as skipped/no-price, not failed; failed is for technical errors.
 - Do not delete `Game`, `SteamCatalogEntry`, `GogCatalogEntry`, `GameExternalMapping`, `PlayerCountSnapshot` or real price data during cleanup.
 - Keep secrets in Vercel or local terminal sessions only.
 - Use dry runs before `dryRun=false`.

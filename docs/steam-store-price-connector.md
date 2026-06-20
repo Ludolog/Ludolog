@@ -23,7 +23,7 @@ Stored records use:
 - `storeType=official`
 - `drm=Steam`
 
-Catalog-only backfill writes to `CatalogStoreOffer`, not to `StoreOffer` or `GamePriceSnapshot`, unless the game is already imported and refreshed through normal imported-game mode. Backfill must not create `Game` rows.
+Catalog-only backfill writes to `CatalogStoreOffer`, not to `StoreOffer` or `GamePriceSnapshot`, unless the game is already imported and refreshed through normal imported-game mode. Backfill must not create `Game` rows. `CatalogPriceCheckStatus` records no-price and technical-error cooldowns; no-price results count as `skippedNoPrice`, not `failed`.
 
 Status:
 
@@ -54,7 +54,7 @@ Do not run with `dryRun=false` until `STEAM_STORE_PRICE_ENABLED=true` has been d
 Safe catalog backfill dry run:
 
 ```powershell
-$body = @{ mode = "catalog-backfill"; limit = 10; dryRun = $true } | ConvertTo-Json -Compress
+$body = @{ mode = "catalog-backfill"; steamAppIds = @(292030); limit = 1; dryRun = $true } | ConvertTo-Json -Compress
 
 Invoke-RestMethod `
   -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/refresh" `

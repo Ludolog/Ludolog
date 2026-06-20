@@ -184,6 +184,22 @@ export type CatalogStoreOffer = {
   freshness: "fresh" | "stale" | "no-data";
 };
 
+export type CatalogPriceCheckStatusValue = "available" | "no-price" | "unsupported" | "error";
+
+export type CatalogPriceCheckStatus = {
+  id: string;
+  sourceName: string;
+  steamAppId: number | null;
+  gogProductId: string | null;
+  status: CatalogPriceCheckStatusValue;
+  lastCheckedAt: Date;
+  nextCheckAt: Date;
+  lastError: string | null;
+  attempts: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type GamePriceSnapshot = {
   id: string;
   gameId: string;

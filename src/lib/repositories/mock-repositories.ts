@@ -23,6 +23,7 @@ import {
   getLatestPlayerRefresh,
   getLatestPriceRefresh,
   getMostActiveGames,
+  listGogCatalogEntries,
   getOffersForGame,
   listPriceSources,
   listStores,
@@ -54,6 +55,9 @@ import {
 import type {
   AlertRepository,
   AppRepositories,
+  CatalogBackfillCandidate,
+  CatalogPriceCheckStatusInput,
+  CatalogPriceCheckStatusRepository,
   CatalogStoreOfferInput,
   CatalogStoreOfferRepository,
   DiagnosticsRepository,
@@ -67,12 +71,77 @@ import type {
   WatchlistRepository
 } from "@/lib/repositories/contracts";
 import type { GameImportInput, GamePriceSnapshot, PlayerCountSnapshot, StoreOffer } from "@/lib/types";
-import type { CatalogStoreOffer } from "@/lib/types";
+import type { CatalogPriceCheckStatus, CatalogStoreOffer } from "@/lib/types";
 
 const catalogStoreOffers: CatalogStoreOffer[] = [];
+const catalogPriceCheckStatuses: CatalogPriceCheckStatus[] = [];
 
 function catalogOfferFreshness(fetchedAt: Date, staleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000)): CatalogStoreOffer["freshness"] {
   return fetchedAt.getTime() < staleBefore.getTime() ? "stale" : "fresh";
+}
+
+function catalogPriceCheckStatusId(sourceName: string, steamAppId: number | null, gogProductId: string | null): string {
+  if (steamAppId !== null) {
+    return `catalog-price-check-${sourceName}-steam-${steamAppId}`;
+  }
+  return `catalog-price-check-${sourceName}-gog-${gogProductId ?? "unknown"}`;
+}
+
+function isWeakSteamStoreCandidateTitle(title: string): boolean {
+  const normalized = title.toLowerCase();
+  return [
+    "demo",
+    "dedicated server",
+    "server",
+    "soundtrack",
+    " dlc",
+    "sdk",
+    " tool",
+    "beta",
+    "test",
+    "trailer",
+    "episode",
+    "expansion pack",
+    " pack",
+    "bundle"
+  ].some((term) => normalized.includes(term));
+}
+
+function steamBackfillCandidate(input: {
+  steamAppId: number;
+  title: string;
+  appType: string;
+  gameId: string | null;
+  isImported: boolean;
+  status: CatalogPriceCheckStatus | null;
+  hasFreshOffer: boolean;
+}): CatalogBackfillCandidate {
+  const reasons = input.isImported ? ["imported-game"] : ["steam-catalog"];
+  if (input.status?.status === "error") {
+    reasons.push("retry-after-error");
+  }
+  if (!input.hasFreshOffer) {
+    reasons.push("missing-or-stale-catalog-offer");
+  }
+  return {
+    steamAppId: input.steamAppId,
+    title: input.title,
+    appType: input.appType,
+    isImported: input.isImported,
+    gameId: input.gameId,
+    priority: (input.isImported ? 100 : 10) + (input.status?.status === "error" ? 5 : 0),
+    reasons,
+    lastCheckedAt: input.status?.lastCheckedAt ?? null,
+    nextCheckAt: input.status?.nextCheckAt ?? null,
+    lastStatus: input.status?.status ?? null
+  };
+}
+
+function compareSteamBackfillCandidates(a: CatalogBackfillCandidate, b: CatalogBackfillCandidate): number {
+  if (b.priority !== a.priority) {
+    return b.priority - a.priority;
+  }
+  return a.steamAppId - b.steamAppId;
 }
 
 class MockGameRepository implements GameRepository {
@@ -216,16 +285,69 @@ class MockCatalogStoreOfferRepository implements CatalogStoreOfferRepository {
       .map((offer) => ({ ...offer, freshness: catalogOfferFreshness(offer.fetchedAt) }));
   }
 
-  async listSteamBackfillCandidates(limit: number, staleBefore: Date) {
-    const games = new Set(listGames().map((game) => game.steamAppId));
+  async listSteamBackfillCandidates(limit: number, staleBefore: Date): Promise<CatalogBackfillCandidate[]> {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    const importedBySteamAppId = new Map(listImportedGames(100).map((game) => [game.steamAppId, game]));
     const fresh = new Set(
       catalogStoreOffers
         .filter((offer) => offer.provider === "steam-store" && offer.fetchedAt >= staleBefore && offer.steamAppId !== null)
         .map((offer) => offer.steamAppId as number)
     );
-    return listSteamCatalogEntries(Math.max(limit * 3, limit))
-      .filter((entry) => !games.has(entry.steamAppId) && !fresh.has(entry.steamAppId))
-      .slice(0, limit);
+    const blocked = new Set(
+      catalogPriceCheckStatuses
+        .filter((status) => status.sourceName === "steam-store" && status.steamAppId !== null && status.nextCheckAt > new Date())
+        .map((status) => status.steamAppId as number)
+    );
+    const statuses = new Map(
+      catalogPriceCheckStatuses
+        .filter((status) => status.sourceName === "steam-store" && status.steamAppId !== null)
+        .map((status) => [status.steamAppId as number, status])
+    );
+    const candidates = new Map<number, CatalogBackfillCandidate>();
+
+    for (const game of importedBySteamAppId.values()) {
+      if (fresh.has(game.steamAppId) || blocked.has(game.steamAppId) || isWeakSteamStoreCandidateTitle(game.title)) {
+        continue;
+      }
+      const status = statuses.get(game.steamAppId) ?? null;
+      candidates.set(
+        game.steamAppId,
+        steamBackfillCandidate({
+          steamAppId: game.steamAppId,
+          title: game.title,
+          appType: "game",
+          gameId: game.id,
+          isImported: true,
+          status,
+          hasFreshOffer: false
+        })
+      );
+    }
+
+    for (const entry of listSteamCatalogEntries(Math.max(safeLimit * 5, safeLimit))) {
+      if (candidates.size >= safeLimit * 4) {
+        break;
+      }
+      if (fresh.has(entry.steamAppId) || blocked.has(entry.steamAppId) || isWeakSteamStoreCandidateTitle(entry.title)) {
+        continue;
+      }
+      const importedGame = importedBySteamAppId.get(entry.steamAppId) ?? null;
+      const status = statuses.get(entry.steamAppId) ?? null;
+      candidates.set(
+        entry.steamAppId,
+        steamBackfillCandidate({
+          steamAppId: entry.steamAppId,
+          title: entry.title,
+          appType: entry.appType,
+          gameId: importedGame?.id ?? null,
+          isImported: importedGame !== null,
+          status,
+          hasFreshOffer: false
+        })
+      );
+    }
+
+    return [...candidates.values()].sort(compareSteamBackfillCandidates).slice(0, safeLimit);
   }
 
   async status(staleBefore: Date) {
@@ -236,6 +358,41 @@ class MockCatalogStoreOfferRepository implements CatalogStoreOfferRepository {
       lastCatalogStoreOfferRefresh:
         steamCatalogOffers.sort((a, b) => b.fetchedAt.getTime() - a.fetchedAt.getTime())[0]?.fetchedAt ?? null
     };
+  }
+}
+
+class MockCatalogPriceCheckStatusRepository implements CatalogPriceCheckStatusRepository {
+  async upsert(input: CatalogPriceCheckStatusInput): Promise<CatalogPriceCheckStatus> {
+    const id = catalogPriceCheckStatusId(input.sourceName, input.steamAppId ?? null, input.gogProductId ?? null);
+    const now = new Date();
+    const existingIndex = catalogPriceCheckStatuses.findIndex((status) => status.id === id);
+    const existing = existingIndex >= 0 ? catalogPriceCheckStatuses[existingIndex] : null;
+    const status: CatalogPriceCheckStatus = {
+      id,
+      sourceName: input.sourceName,
+      steamAppId: input.steamAppId ?? null,
+      gogProductId: input.gogProductId ?? null,
+      status: input.status,
+      lastCheckedAt: input.lastCheckedAt,
+      nextCheckAt: input.nextCheckAt,
+      lastError: input.lastError ?? null,
+      attempts: (existing?.attempts ?? 0) + 1,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    if (existingIndex >= 0) {
+      catalogPriceCheckStatuses[existingIndex] = status;
+    } else {
+      catalogPriceCheckStatuses.push(status);
+    }
+    return status;
+  }
+
+  async findSteamStatuses(sourceName: string, steamAppIds: number[]): Promise<CatalogPriceCheckStatus[]> {
+    const ids = new Set(steamAppIds);
+    return catalogPriceCheckStatuses.filter(
+      (status) => status.sourceName === sourceName && status.steamAppId !== null && ids.has(status.steamAppId)
+    );
   }
 }
 
@@ -260,6 +417,17 @@ class MockSteamCatalogRepository implements SteamCatalogRepository {
 class MockGogRepository implements GogRepository {
   async searchCatalog(query: string, limit?: number) {
     return searchGogCatalogEntries(query, limit);
+  }
+
+  async listCatalogEntries(limit = 50) {
+    return listGogCatalogEntries(limit);
+  }
+
+  async findCatalogByProductIds(gogProductIds: string[]) {
+    const ids = new Set(gogProductIds);
+    return gogProductIds
+      .map((id) => findGogCatalogEntryByProductId(id))
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null && ids.has(entry.gogProductId));
   }
 
   async findCatalogByProductId(gogProductId: string) {
@@ -379,6 +547,7 @@ export function createMockRepositories(): AppRepositories {
     gog: new MockGogRepository(),
     prices: new MockPriceRepository(),
     catalogOffers: new MockCatalogStoreOfferRepository(),
+    catalogPriceChecks: new MockCatalogPriceCheckStatusRepository(),
     watchlist: new MockWatchlistRepository(),
     alerts: new MockAlertRepository(),
     snapshots: new MockSnapshotRepository(),

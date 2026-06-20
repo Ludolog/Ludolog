@@ -160,8 +160,18 @@ export const gogPriceRefreshSchema = z.object({
   dryRun: z.boolean().default(true)
 });
 
+export const gogCatalogPriceBackfillSchema = z.object({
+  gogProductIds: z.array(z.string().trim().min(1).max(80)).max(25).optional(),
+  limit: z.number().int().positive().max(25).default(10),
+  dryRun: z.boolean().default(true)
+});
+
 export const mockPriceCleanupRunSchema = z.object({
   confirm: z.literal("DELETE_MOCK_PRICE_DATA_ONLY")
+});
+
+export const staticDataMaintenanceRunSchema = z.object({
+  confirm: z.literal("REMOVE_STATIC_MOCK_DATA_ONLY")
 });
 
 export const steamStorePriceTestSchema = z.object({

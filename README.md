@@ -77,6 +77,7 @@ Important environment variables:
 ```env
 DATA_MODE=mock
 REPOSITORY_PROVIDER=mock
+ENABLE_DEV_MOCK_FALLBACK=false
 DATABASE_URL="postgresql://gamevalue:gamevalue@localhost:5432/gamevalue_radar?schema=public"
 DIRECT_URL="postgresql://gamevalue:gamevalue@localhost:5432/gamevalue_radar?schema=public"
 # Backend-only Steam Web API key. Never expose this to mobile.
@@ -121,7 +122,7 @@ CATALOG_PRICE_STALE_HOURS=168
 
 - adapters try API-oriented behavior where possible,
 - missing keys or provider errors are logged in the admin dashboard,
-- the app falls back to mock data instead of crashing.
+- public API responses do not silently substitute mock catalog, price or player data unless `ENABLE_DEV_MOCK_FALLBACK=true` is set for local/dev work.
 
 ## API endpoints
 
@@ -168,6 +169,7 @@ CATALOG_PRICE_STALE_HOURS=168
 - `POST /api/admin/gog/resolve-game`
 - `POST /api/admin/gog/prices/test`
 - `POST /api/admin/gog/prices/refresh`
+- `POST /api/admin/gog/prices/backfill-catalog`
 - `GET /api/admin/steam-store-prices/status`
 - `POST /api/admin/steam-store-prices/test`
 - `POST /api/admin/steam-store-prices/refresh`
@@ -177,6 +179,8 @@ CATALOG_PRICE_STALE_HOURS=168
 - `GET|POST /api/cron/refresh-player-counts`
 - `GET|POST /api/cron/refresh-prices`
 - `GET|POST /api/cron/backfill-catalog-prices`
+- `GET /api/admin/maintenance/static-data/preview`
+- `POST /api/admin/maintenance/static-data/run`
 - `GET /api/watchlist`
 - `POST /api/watchlist`
 - `DELETE /api/watchlist/:id`
@@ -189,9 +193,9 @@ The scoring algorithm is implemented in `src/lib/services/deal-score-service.ts`
 
 ## Expanded search and Steam Stats
 
-Search now combines local database results, synced Steam catalog entries stored in PostgreSQL and the larger mock fallback catalog. Results are ordered as library, Steam catalog, then mock fallback, and `GET /api/games/search?q=&limit=&offset=` returns pagination metadata (`total`, `nextOffset`). If a result is already stored, clients can open its profile immediately. If it only exists in the catalog, the client can call `POST /api/games/import` with a `steamAppId`, `query` or legacy `slug`; the backend creates the game, attempts a current-player refresh and keeps the import working even when Steam is unavailable. The response includes `created`, `source`, `steamAppId`, `gameId`, `summary` and the backwards-compatible `imported` flag. UI components never hardcode the catalog.
+Search now combines local database results and synced Steam catalog entries stored in PostgreSQL. In local mock mode the larger mock fallback catalog can still be used for development; in `DATA_MODE=api` it is disabled unless `ENABLE_DEV_MOCK_FALLBACK=true` is set intentionally. Results are ordered as library then Steam catalog, and `GET /api/games/search?q=&limit=&offset=` returns pagination metadata (`total`, `nextOffset`). If a result is already stored, clients can open its profile immediately. If it only exists in the catalog, the client can call `POST /api/games/import` with a `steamAppId`, `query` or legacy `slug`; the backend creates the game and attempts a current-player refresh. The response includes `created`, `source`, `steamAppId`, `gameId`, `summary` and the backwards-compatible `imported` flag. UI components never hardcode the catalog.
 
-Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending up/down, best value, free-to-play games, tracked deals, watchlist popularity, hidden gems, genre categories, missing-data hints, data freshness and source counts. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app uses mock snapshots and logs the fallback.
+Steam Stats are exposed through `GET /api/stats/overview`. The overview includes top current players, trending up/down, best value, free-to-play games, tracked deals, watchlist popularity, hidden gems, genre categories, missing-data hints, data freshness and source counts. Trends are calculated from the latest two `PlayerCountSnapshot` records. If live Steam data is unavailable, the app can use cached real snapshots; mock player snapshots are not returned as production fallback unless `ENABLE_DEV_MOCK_FALLBACK=true`.
 
 Game taxonomy is built server-side by `CategoryRankingService` and `GameTagNormalizer`. It uses `Game.genres`, known Steam App ID fallback mappings and data-source/price status to return production-friendly categories through `GET /api/categories/overview`, `GET /api/categories/:slug` and `GET /api/stats/categories`. Current category groups include Popularne teraz, Największy wzrost graczy, Największy spadek graczy, Najlepsza wartość, Darmowe gry, Gry premium, Ceny śledzone, Brak danych cenowych, Real player data, Dane mieszane, Dane demonstracyjne and genre categories such as Action, RPG, Strategy, Simulation, Indie, Multiplayer, Co-op, Survival, Shooter, Sports/Racing, Management, Sandbox, Horror and Adventure.
 
@@ -207,7 +211,7 @@ The active price module is internal:
 
 GG.deals, ITAD and CheapShark are legacy/disabled providers in the active application flow. GG.deals was disabled because Vercel received Cloudflare challenge HTML instead of API JSON. The project does not bypass Cloudflare, scrape protected pages, use Playwright/Puppeteer, cookies, proxies or browser sessions.
 
-Price data now enters through GameValue-controlled sources: `manual-admin`, `csv-import`, `json-import`, `gog`, `steam-store`, `mock-seed` and future legal store APIs. `StoreOffer` stores current tracked offers, `Store` stores normalized store metadata, `PriceSource` stores the ingest source, and `GamePriceSnapshot` stores durable price history for charts, deals and GameValue Score. Catalog-only Steam Store backfill uses `CatalogStoreOffer`, which does not create tracked `Game` rows.
+Price data now enters through GameValue-controlled sources: `manual-admin`, `csv-import`, `json-import`, `gog`, `steam-store`, `mock-seed` and future legal store APIs. `StoreOffer` stores current tracked offers, `Store` stores normalized store metadata, `PriceSource` stores the ingest source, and `GamePriceSnapshot` stores durable price history for charts, deals and GameValue Score. Catalog-only Steam Store and GOG backfills use `CatalogStoreOffer`, which does not create tracked `Game` rows. `CatalogPriceCheckStatus` records cooldowns for no-price and error cases so backfills do not retry the same unavailable app every run.
 
 Public summaries and scoring prefer real/internal sources in this order: GOG, Steam Store, manual/internal. Mock price rows can remain in historical storage until cleanup, but they are not treated as normal live prices in public deal summaries.
 
@@ -302,11 +306,17 @@ GOG admin operations:
 - `POST /api/admin/gog/catalog/discover` with `x-admin-secret`
 - `POST /api/admin/gog/prices/test` with `x-admin-secret`
 - `POST /api/admin/gog/prices/refresh` with `x-admin-secret`
+- `POST /api/admin/gog/prices/backfill-catalog` with `x-admin-secret`
 
 Keep GOG discovery and refreshes small. Discovery stores `GogCatalogEntry` review data and returns suggested mappings,
 but it does not create mappings automatically. GOG price refresh defaults to `dryRun=true`; use `dryRun=false` only for
 approved mappings after a dry run shows valid JSON-derived price previews. Unknown-confidence mappings are skipped by
-refresh.
+refresh. GOG catalog price backfill writes parsed JSON prices to `CatalogStoreOffer` only and defaults to `dryRun=true`.
+
+Static/mock maintenance aliases:
+
+- `GET /api/admin/maintenance/static-data/preview` with `x-admin-secret`
+- `POST /api/admin/maintenance/static-data/run` with `x-admin-secret` and `confirm=REMOVE_STATIC_MOCK_DATA_ONLY`
 
 Steam Store admin operations:
 

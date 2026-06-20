@@ -630,6 +630,13 @@ export function searchGogCatalogEntries(query: string, limit = 10): GogCatalogEn
     .slice(0, limit);
 }
 
+export function listGogCatalogEntries(limit = 50): GogCatalogEntry[] {
+  return gogCatalogEntries
+    .filter((entry) => entry.isActive)
+    .sort((a, b) => b.syncedAt.getTime() - a.syncedAt.getTime())
+    .slice(0, limit);
+}
+
 export function findGogCatalogEntryByProductId(gogProductId: string): GogCatalogEntry | null {
   return gogCatalogEntries.find((entry) => entry.gogProductId === gogProductId) ?? null;
 }

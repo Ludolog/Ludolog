@@ -65,7 +65,7 @@ export default function AboutPage(): React.ReactElement {
         </div>
         <p className="mt-4 text-sm text-slate-400">
           Aktualny tryb danych: <span className="font-semibold text-radar-green">{getDataMode().toUpperCase()}</span>.
-          Tryb `api` zachowuje fallback do mocków, aby awaria integracji nie blokowała działania aplikacji.
+          Tryb `api` pokazuje dane z backendu; mock fallback jest dostepny tylko w trybie dev.
         </p>
       </section>
     </div>

@@ -9,6 +9,7 @@ import {
   isGogEnabled
 } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
+import type { CatalogStoreOfferInput } from "@/lib/repositories/contracts";
 import type {
   Game,
   GameExternalMapping,
@@ -24,6 +25,8 @@ import type {
   ApiGogCatalogDiscoverRequest,
   ApiGogCatalogDiscoverResponse,
   ApiGogCatalogSuggestedMapping,
+  ApiGogCatalogPriceBackfillRequest,
+  ApiGogCatalogPriceBackfillResponse,
   ApiGogMappingSuggestResponse,
   ApiGogPricePreview,
   ApiGogPriceRefreshRequest,
@@ -88,7 +91,7 @@ type NormalizedGogPrice = {
   rawData: GogCatalogProduct;
 };
 
-type GogSuggestion = GogCatalogEntry & { confidence: GogMappingConfidence; reason: string };
+type GogSuggestion = GogCatalogEntry & { confidence: GogMappingConfidence; reason: string; rejected?: boolean };
 type GogDiscoveryTarget = { query: string; game: Game | null };
 
 const requestTimestamps: number[] = [];
@@ -283,6 +286,7 @@ export class GogProductMapper {
   suggest(game: Game, entries: GogCatalogEntry[]): GogSuggestion[] {
     const gameTitle = normalizeTitle(game.title);
     const gameSlug = normalizeSlug(game.slug);
+    const gameTokens = meaningfulTitleTokens(gameTitle);
 
     return entries.map((entry) => {
       const entryTitle = normalizeTitle(entry.title);
@@ -290,10 +294,29 @@ export class GogProductMapper {
       if (entrySlug === gameSlug || entryTitle === gameTitle) {
         return { ...entry, confidence: "exact", reason: "Normalized title or slug is an exact match." };
       }
-      if (entryTitle.includes(gameTitle) || gameTitle.includes(entryTitle)) {
-        return { ...entry, confidence: "title-match", reason: "Title is a close containment match." };
+
+      const entryTokens = meaningfulTitleTokens(entryTitle);
+      const overlap = tokenOverlap(gameTokens, entryTokens);
+      const weakProduct = isWeakGogProduct(entry);
+      const containsWholeGameTitle = containsTitlePhrase(entryTitle, gameTitle);
+
+      if (!weakProduct && containsWholeGameTitle && overlap >= 0.75) {
+        return { ...entry, confidence: "title-match", reason: "Candidate title contains the full game title with strong token overlap." };
       }
-      return { ...entry, confidence: "unknown", reason: "Potential fuzzy match. Manual approval required." };
+      if (!weakProduct && overlap >= 0.85) {
+        return { ...entry, confidence: "title-match", reason: "Candidate title has strong token overlap with the game title." };
+      }
+      if (!weakProduct && overlap >= 0.6 && gameTokens.length >= 2) {
+        return { ...entry, confidence: "unknown", reason: "Plausible but incomplete title overlap. Manual review required." };
+      }
+      return {
+        ...entry,
+        confidence: "unknown",
+        rejected: true,
+        reason: weakProduct
+          ? "Rejected weak GOG candidate because it looks like DLC, soundtrack, demo, bonus content or a tool."
+          : "Rejected weak fuzzy match because title tokens do not overlap enough."
+      };
     });
   }
 }
@@ -379,6 +402,7 @@ export class GogService {
     const exactMatches: ApiGogCatalogSuggestedMapping[] = [];
     const reviewRequired: ApiGogCatalogSuggestedMapping[] = [];
     const uncertain: ApiGogCatalogSuggestedMapping[] = [];
+    const rejectedBadCandidates: ApiGogCatalogSuggestedMapping[] = [];
     const skipped: ApiGogMappingSuggestResponse["skipped"] = [];
 
     for (const game of games) {
@@ -407,7 +431,9 @@ export class GogService {
 
       for (const suggestion of suggestions) {
         const apiSuggestion = suggestionToApi(game, suggestion);
-        if (apiSuggestion.confidence === "exact") {
+        if (suggestion.rejected) {
+          rejectedBadCandidates.push(apiSuggestion);
+        } else if (apiSuggestion.confidence === "exact") {
           exactMatches.push(apiSuggestion);
         } else if (apiSuggestion.confidence === "title-match") {
           reviewRequired.push(apiSuggestion);
@@ -419,7 +445,7 @@ export class GogService {
 
     await logGog(
       "info",
-      `GOG mapping suggestions finished. mode=imported-games, games=${games.length}, exact=${exactMatches.length}, review=${reviewRequired.length}, uncertain=${uncertain.length}, skipped=${skipped.length}.`
+      `GOG mapping suggestions finished. mode=imported-games, games=${games.length}, exact=${exactMatches.length}, review=${reviewRequired.length}, uncertain=${uncertain.length}, rejected=${rejectedBadCandidates.length}, skipped=${skipped.length}.`
     );
 
     return {
@@ -427,6 +453,7 @@ export class GogService {
       exactMatches,
       reviewRequired,
       uncertain,
+      rejectedBadCandidates,
       skipped
     };
   }
@@ -474,6 +501,9 @@ export class GogService {
       }
 
       for (const suggestion of this.mapper.suggest(target.game, search.results)) {
+        if (suggestion.rejected) {
+          continue;
+        }
         const apiSuggestion = suggestionToApi(target.game, suggestion);
         const suggestionKey = `${apiSuggestion.gameId}:${apiSuggestion.gogProductId}`;
         if (seenSuggestions.has(suggestionKey)) {
@@ -517,7 +547,7 @@ export class GogService {
 
     ensureEnabled();
     const search = await this.searchCatalog({ query: game.title, limit: input.limit ?? 10 });
-    const suggestions = this.mapper.suggest(game, search.results);
+    const suggestions = this.mapper.suggest(game, search.results).filter((suggestion) => !suggestion.rejected);
     return { gameId: game.id, existingMapping: null, suggestions };
   }
 
@@ -683,6 +713,164 @@ export class GogService {
     return result;
   }
 
+  async backfillCatalogPrices(input: ApiGogCatalogPriceBackfillRequest): Promise<ApiGogCatalogPriceBackfillResponse> {
+    ensureEnabled();
+    const started = Date.now();
+    const startedAt = new Date(started);
+    const limit = clampPositive(input.limit ?? 10, 1, 25);
+    const entries =
+      input.gogProductIds && input.gogProductIds.length > 0
+        ? await repositories.gog.findCatalogByProductIds(input.gogProductIds.slice(0, limit))
+        : await repositories.gog.listCatalogEntries(limit);
+    const result: ApiGogCatalogPriceBackfillResponse = {
+      provider: "gamevalue",
+      sourceName: "gog",
+      dryRun: input.dryRun ?? true,
+      requested: entries.length,
+      refreshed: 0,
+      skipped: 0,
+      failed: 0,
+      createdOffers: 0,
+      updatedOffers: 0,
+      skippedNoPrice: 0,
+      startedAt: startedAt.toISOString(),
+      finishedAt: startedAt.toISOString(),
+      durationMs: 0,
+      errors: [],
+      results: []
+    };
+
+    for (const entry of entries) {
+      if (Date.now() - started > getPriceRefreshMaxRuntimeMs()) {
+        const message = "GOG catalog price backfill stopped at max runtime.";
+        result.failed += 1;
+        result.errors.push({ gogProductId: entry.gogProductId, message });
+        break;
+      }
+      try {
+        const product = await this.priceConnector.getCatalogProduct({
+          gogProductId: entry.gogProductId,
+          externalSlug: entry.slug,
+          title: entry.title
+        });
+        const normalized = this.normalizer.normalize(product);
+        const preview = normalizedToPreview(normalized);
+        if (result.dryRun) {
+          result.skipped += 1;
+          result.results.push({
+            gogProductId: entry.gogProductId,
+            title: entry.title,
+            refreshed: false,
+            skipped: true,
+            preview,
+            offerId: null,
+            message: "Dry run only; no catalog GOG price data was written."
+          });
+          continue;
+        }
+
+        const written = await repositories.catalogOffers.upsert(buildCatalogGogStoreOffer(entry, normalized));
+        await this.markCatalogPriceCheck({
+          gogProductId: entry.gogProductId,
+          status: "available",
+          checkedAt: new Date(),
+          message: null
+        });
+        result.refreshed += 1;
+        result.createdOffers += written.created ? 1 : 0;
+        result.updatedOffers += written.created ? 0 : 1;
+        result.results.push({
+          gogProductId: entry.gogProductId,
+          title: entry.title,
+          refreshed: true,
+          skipped: false,
+          preview,
+          offerId: written.offer.id,
+          message: null
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown GOG catalog price backfill error.";
+        if (error instanceof GogConnectorError && error.errorType === "no_price_data") {
+          result.skipped += 1;
+          result.skippedNoPrice += 1;
+          if (!result.dryRun) {
+            await this.markCatalogPriceCheck({
+              gogProductId: entry.gogProductId,
+              status: "no-price",
+              checkedAt: new Date(),
+              nextCheckAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              message
+            });
+          }
+          result.results.push({
+            gogProductId: entry.gogProductId,
+            title: entry.title,
+            refreshed: false,
+            skipped: true,
+            preview: null,
+            offerId: null,
+            message
+          });
+          continue;
+        }
+        result.failed += 1;
+        result.errors.push({ gogProductId: entry.gogProductId, message });
+        if (!result.dryRun) {
+          await this.markCatalogPriceCheck({
+            gogProductId: entry.gogProductId,
+            status: "error",
+            checkedAt: new Date(),
+            message
+          });
+        }
+        result.results.push({
+          gogProductId: entry.gogProductId,
+          title: entry.title,
+          refreshed: false,
+          skipped: false,
+          preview: null,
+          offerId: null,
+          message
+        });
+        await logGog("warning", `GOG catalog price backfill failed. gogProductId=${entry.gogProductId}, message=${safeLogText(message)}.`);
+      }
+    }
+
+    const finishedAt = new Date();
+    result.finishedAt = finishedAt.toISOString();
+    result.durationMs = finishedAt.getTime() - startedAt.getTime();
+
+    await logGog(
+      result.failed > 0 ? "warning" : "info",
+      `GOG catalog price backfill finished. dryRun=${result.dryRun}, requested=${result.requested}, refreshed=${result.refreshed}, skipped=${result.skipped}, skippedNoPrice=${result.skippedNoPrice}, failed=${result.failed}, durationMs=${result.durationMs}.`
+    );
+
+    return result;
+  }
+
+  private async markCatalogPriceCheck(input: {
+    gogProductId: string;
+    status: "available" | "no-price" | "error";
+    checkedAt: Date;
+    nextCheckAt?: Date;
+    message: string | null;
+  }): Promise<void> {
+    const nextCheckAt =
+      input.nextCheckAt ??
+      new Date(
+        input.checkedAt.getTime() + (input.status === "available" ? getGogPriceStaleHours() * 60 * 60 * 1000 : 6 * 60 * 60 * 1000)
+      );
+    await repositories.catalogPriceChecks.upsert({
+      sourceName: "gog",
+      steamAppId: null,
+      gogProductId: input.gogProductId,
+      status: input.status,
+      lastCheckedAt: input.checkedAt,
+      nextCheckAt,
+      lastError: input.message
+    });
+  }
+
   private async discoveryTargets(
     input: ApiGogCatalogDiscoverRequest,
     mode: ApiGogCatalogDiscoverResponse["mode"],
@@ -818,6 +1006,37 @@ function buildGogSnapshot(
     sourceConfidence: "internal-real",
     sourceName: "gog",
     sourceType: "store-api"
+  };
+}
+
+function buildCatalogGogStoreOffer(entry: GogCatalogEntry, normalized: NormalizedGogPrice): CatalogStoreOfferInput {
+  const now = new Date();
+  return {
+    id: `catalog-offer-gog-${normalized.gogProductId}`,
+    steamAppId: null,
+    gogProductId: normalized.gogProductId,
+    catalogSource: "gog",
+    gameId: null,
+    provider: "gog",
+    storeName: "GOG",
+    storeType: "official",
+    title: normalized.title || entry.title,
+    price: normalized.price,
+    regularPrice: normalized.regularPrice,
+    currency: normalized.currency,
+    discountPercent: normalized.discountPercent,
+    externalUrl: normalized.externalUrl,
+    countryCode: normalized.countryCode,
+    available: normalized.available,
+    drm: "DRM-free",
+    sourceRawId: normalized.gogProductId,
+    rawProviderData: {
+      gogProductId: normalized.gogProductId,
+      fetchedAt: now.toISOString(),
+      productType: entry.productType,
+      slug: normalized.slug
+    },
+    fetchedAt: now
   };
 }
 
@@ -1014,7 +1233,7 @@ function roundMoney(value: number): number {
 }
 
 function normalizeTitle(value: string | null | undefined): string {
-  return (value ?? "")
+  return cleanText(value ?? "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -1023,10 +1242,61 @@ function normalizeTitle(value: string | null | undefined): string {
 }
 
 function normalizeSlug(value: string | null | undefined): string {
-  return (value ?? "")
+  return cleanText(value ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function cleanText(value: string): string {
+  return value
+    .replace(/\u00c3\u0082\u00c2\u00ae|\u00c2\u00ae|\u00ae/g, "")
+    .replace(/\u00c3\u00a2\u00e2\u0082\u00ac\u00c5\u00be\u00c2\u00a2|\u00e2\u0084\u00a2|\u00c2\u2122|\u2122/g, "")
+    .replace(/\u00c3\u0082\u00c2\u00a9|\u00c2\u00a9|\u00a9/g, "")
+    .replace(/\u00c3\u00a2\u00e2\u0082\u00ac\u00e2\u0084\u00a2|\u00e2\u0080\u0099|\u00c2\u00b4|`/g, "'")
+    .replace(/\u00c3\u00a2\u00e2\u0082\u00ac\u00c5\u0093|\u00c3\u00a2\u00e2\u0082\u00ac\u00c2\u009d|\u00e2\u0080\u009c|\u00e2\u0080\u009d/g, '"')
+    .replace(/\u00c2/g, "");
+}
+
+function meaningfulTitleTokens(normalizedTitle: string): string[] {
+  const stopWords = new Set(["the", "a", "an", "and", "of", "edition", "complete", "game", "goty"]);
+  return normalizedTitle
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0 && !stopWords.has(token));
+}
+
+function tokenOverlap(gameTokens: string[], entryTokens: string[]): number {
+  if (gameTokens.length === 0 || entryTokens.length === 0) {
+    return 0;
+  }
+  const entrySet = new Set(entryTokens);
+  const matches = gameTokens.filter((token) => entrySet.has(token)).length;
+  return matches / gameTokens.length;
+}
+
+function containsTitlePhrase(entryTitle: string, gameTitle: string): boolean {
+  if (!gameTitle) {
+    return false;
+  }
+  return ` ${entryTitle} `.includes(` ${gameTitle} `);
+}
+
+function isWeakGogProduct(entry: GogCatalogEntry): boolean {
+  const text = `${normalizeTitle(entry.title)} ${normalizeSlug(entry.slug).replace(/-/g, " ")} ${entry.productType ?? ""}`.toLowerCase();
+  return [
+    "demo",
+    "dlc",
+    "soundtrack",
+    "ost",
+    "artbook",
+    "wallpaper",
+    "bonus",
+    "trailer",
+    "server",
+    "tool",
+    "sdk"
+  ].some((term) => text.includes(term));
 }
 
 function bodyLooksLikeHtml(body: string): boolean {

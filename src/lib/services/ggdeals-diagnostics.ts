@@ -136,7 +136,7 @@ export function ggDealsStatusFromErrorType(errorType: GGDealsErrorType): GGDeals
 
 export function ggDealsMessageForErrorType(errorType: GGDealsErrorType): string {
   if (errorType === "blocked_by_cloudflare") {
-    return "GG.deals blocked the server request with a Cloudflare challenge. The app is using mock/fallback prices until GG.deals allows this hosting origin or provides an API-safe endpoint.";
+    return "GG.deals blocked the server request with a Cloudflare challenge. Keep GG.deals disabled and use GameValue-controlled price sources until GG.deals provides an API-safe endpoint for this hosting origin.";
   }
   if (errorType === "invalid_api_key") {
     return "GG.deals rejected the API key or account permissions.";
@@ -178,7 +178,7 @@ export function ggDealsRecommendation(status: GGDealsProviderStatus): string {
   if (status === "no_price_data") {
     return "Try a different Steam App ID or confirm whether this app has price data in GG.deals.";
   }
-  return "Keep using mock/fallback prices and inspect the latest sanitized diagnostic log before enabling real writes.";
+  return "Keep legacy provider writes disabled and inspect the latest sanitized diagnostic log before considering any future provider change.";
 }
 
 export function maskSensitiveUrl(value: string): string {

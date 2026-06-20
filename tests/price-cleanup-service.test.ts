@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GET as previewMockCleanup } from "@/app/api/admin/prices/mock-cleanup/preview/route";
 import { POST as runMockCleanup } from "@/app/api/admin/prices/mock-cleanup/run/route";
+import { GET as previewStaticDataMaintenance } from "@/app/api/admin/maintenance/static-data/preview/route";
+import { POST as runStaticDataMaintenance } from "@/app/api/admin/maintenance/static-data/run/route";
 
 describe("Mock price cleanup", () => {
   afterEach(() => {
@@ -47,6 +49,42 @@ describe("Mock price cleanup", () => {
           "x-admin-secret": "test-admin-secret"
         },
         body: JSON.stringify({ confirm: "NOPE" })
+      })
+    );
+
+    expect(response.status).toBe(422);
+  });
+
+  it("shows static-data maintenance preview with the new confirmation phrase", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+
+    const response = await previewStaticDataMaintenance(
+      new Request("http://localhost/api/admin/maintenance/static-data/preview", {
+        headers: { "x-admin-secret": "test-admin-secret" }
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      mode: "preview",
+      destructive: true,
+      requiresConfirmation: "REMOVE_STATIC_MOCK_DATA_ONLY"
+    });
+    expect(body.whatWillBeKept.join(" ")).toContain("ENABLE_DEV_MOCK_FALLBACK");
+  });
+
+  it("rejects static-data maintenance run without its exact confirmation phrase", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+
+    const response = await runStaticDataMaintenance(
+      new Request("http://localhost/api/admin/maintenance/static-data/run", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ confirm: "DELETE_MOCK_PRICE_DATA_ONLY" })
       })
     );
 

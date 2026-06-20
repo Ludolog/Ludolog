@@ -37,14 +37,14 @@ The Android app is a client only. It never talks to Steam, Neon or Prisma direct
 1. Mobile/web calls `GET /api/games/search?q=...&limit=...&offset=...`.
 2. `GameSearchService.searchCatalog()` searches imported/library games first.
 3. It searches `SteamCatalogEntry` in Neon through `repositories.steamCatalog.search()`.
-4. If the synced catalog has no matches, it falls back to the local mock catalog.
+4. In local mock/dev mode only, if the synced catalog has no matches, it can fall back to the local mock catalog.
 5. Results are returned as `kind: "library"` or `kind: "catalog"` with `source: "database"`, `"steam-catalog"` or `"mock-catalog"`, plus pagination metadata.
 6. Library results can open details immediately. Catalog results are importable.
 
 ## Import game flow
 
 1. UI posts `POST /api/games/import` with a simple body such as `{ "steamAppId": 570 }` or `{ "query": "Dota 2" }`.
-2. `GameSearchService.importGame()` resolves the app from `SteamCatalogEntry` first, then mock fallback.
+2. `GameSearchService.importGame()` resolves the app from `SteamCatalogEntry` first; mock fallback is local/dev only.
 3. If the game already exists, the endpoint returns the existing summary with `created: false`, `source: "library"` and `imported: false`.
 4. If missing, the repository creates `Game`, a Steam offer, initial price snapshot and initial player snapshots.
 5. For `source: "steam-api"` imports, the backend attempts a current-player refresh after import.
@@ -98,11 +98,12 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 11. GOG price refresh defaults to `dryRun=true`; dry runs return parsed price previews and do not write `StoreOffer` or
     `GamePriceSnapshot` rows.
 12. The Steam Store price connector is admin/backend-only, disabled by default and writes official Steam offers only from JSON `appdetails` responses.
-13. `CatalogStoreOffer` stores Steam Store backfill for `SteamCatalogEntry` rows without creating `Game` records.
-14. `POST /api/admin/automation/refresh-prices` runs a capped scheduler for imported Steam Store prices and mapped GOG prices.
-15. `POST /api/admin/automation/backfill-catalog-prices` runs a capped catalog-only backfill scheduler.
-16. `GET|POST /api/cron/refresh-prices`, `GET|POST /api/cron/backfill-catalog-prices` and `GET|POST /api/cron/refresh-player-counts` are protected by `CRON_SECRET`.
-17. `GET /api/admin/prices/mock-cleanup/preview` reports old mock/demo price rows. `POST /api/admin/prices/mock-cleanup/run` requires `confirm=DELETE_MOCK_PRICE_DATA_ONLY` and deletes only mock price offers, mock price snapshots and mock price sources.
+13. `CatalogStoreOffer` stores Steam Store and GOG catalog price backfill without creating `Game` records.
+14. `CatalogPriceCheckStatus` stores available/no-price/error cooldowns for catalog price checks.
+15. `POST /api/admin/automation/refresh-prices` runs a capped scheduler for imported Steam Store prices and mapped GOG prices.
+16. `POST /api/admin/automation/backfill-catalog-prices` runs a capped catalog-only backfill scheduler.
+17. `GET|POST /api/cron/refresh-prices`, `GET|POST /api/cron/backfill-catalog-prices` and `GET|POST /api/cron/refresh-player-counts` are protected by `CRON_SECRET`.
+18. `GET /api/admin/prices/mock-cleanup/preview` reports old mock/demo price rows. `POST /api/admin/prices/mock-cleanup/run` requires `confirm=DELETE_MOCK_PRICE_DATA_ONLY` and deletes only mock price offers, mock price snapshots and mock price sources.
 
 ## Stats overview flow
 
@@ -149,4 +150,5 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 - Keep GOG discovery and price refresh limits small; discovery suggestions are not approved mappings.
 - Keep Steam Store price refreshes as `dryRun=true` until status/test output confirms valid JSON-derived prices.
 - Keep catalog price backfill capped and stored in `CatalogStoreOffer`; do not import catalog entries into `Game` during backfill.
+- Treat no-price catalog checks as skipped/no-price with cooldown, not as failed technical errors.
 - Keep admin secrets in local form state or terminal environment only; do not commit them.

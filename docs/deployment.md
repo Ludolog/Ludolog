@@ -21,6 +21,7 @@ DATABASE_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r-poole
 DIRECT_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
 REPOSITORY_PROVIDER=prisma
 DATA_MODE=api
+ENABLE_DEV_MOCK_FALLBACK=false
 NEXT_PUBLIC_APP_URL=https://apka-seven.vercel.app
 MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
 STEAM_WEB_API_KEY=
@@ -93,6 +94,7 @@ DATA_MODE=api
 REPOSITORY_PROVIDER=prisma
 DATABASE_URL=...
 DIRECT_URL=...
+ENABLE_DEV_MOCK_FALLBACK=false
 NEXT_PUBLIC_APP_URL=https://apka-seven.vercel.app
 MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
 STEAM_WEB_API_KEY=
@@ -138,7 +140,7 @@ GG_DEALS_API_KEY=
 Notes:
 
 - `REPOSITORY_PROVIDER=prisma` makes API routes use PostgreSQL through Prisma repositories.
-- `DATA_MODE=api` enables API-oriented adapters. If Steam is missing or fails, backend services still fall back to cached/mock data.
+- `DATA_MODE=api` enables API-oriented adapters. Backend services can use cached real data, but mock catalog/player fallback stays disabled unless `ENABLE_DEV_MOCK_FALLBACK=true` is set intentionally for development.
 - `MOBILE_ALLOWED_ORIGINS` should be explicit in production. Do not use `*`.
 - `STEAM_WEB_API_KEY` is backend-only. It enables real Steam catalog sync and real current-player refreshes.
 - `PRICE_PROVIDER=gamevalue` and `PRICE_MODE=internal` enable the internal GameValue Price API.
@@ -213,6 +215,12 @@ The catalog Store Offer backfill migration is stored in:
 prisma/migrations/000007_catalog_store_offers/migration.sql
 ```
 
+The catalog price-check status migration is stored in:
+
+```text
+prisma/migrations/000008_catalog_price_check_status/migration.sql
+```
+
 ## 5. Seed demo data
 
 For a demo production database:
@@ -278,7 +286,7 @@ https://apka-seven.vercel.app/api/stats/best-value
 https://apka-seven.vercel.app/api/admin/steam-catalog/status
 ```
 
-If `STEAM_WEB_API_KEY`, legacy `STEAM_API_KEY` or provider-specific API keys are not configured, the app continues in mock/fallback mode and records integration logs. Never add those secrets to `mobile/.env.production` or any committed file.
+If `STEAM_WEB_API_KEY`, legacy `STEAM_API_KEY` or provider-specific API keys are not configured, the app records integration logs and uses cached real data when available. Mock fallback is only for local/dev use behind `ENABLE_DEV_MOCK_FALLBACK=true`. Never add those secrets to `mobile/.env.production` or any committed file.
 
 Before real Steam sync, confirm this endpoint:
 
@@ -393,6 +401,20 @@ $body = @{ confirm = "DELETE_MOCK_PRICE_DATA_ONLY" } | ConvertTo-Json -Compress
 Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/run" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
+Static/mock maintenance preview uses the newer guarded alias:
+
+```powershell
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/maintenance/static-data/preview" -Headers $headers | ConvertFrom-Json
+```
+
+The run endpoint requires a different exact confirmation phrase:
+
+```powershell
+$body = @{ confirm = "REMOVE_STATIC_MOCK_DATA_ONLY" } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/maintenance/static-data/run" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
 Manual offer for Dota 2:
 
 ```powershell
@@ -497,6 +519,14 @@ GOG mapped price refresh defaults to dry run. Keep it that way until approved ma
 $body = @{ mode = "mapped-games"; limit = 5; dryRun = $true } | ConvertTo-Json -Compress
 
 Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
+GOG catalog price backfill stores catalog-only offers in `CatalogStoreOffer` and does not create `Game` rows. Keep it dry-run first:
+
+```powershell
+$body = @{ gogProductIds = @("1207658924"); limit = 1; dryRun = $true } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/prices/backfill-catalog" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Starter import from the already synced Steam catalog. Keep this as a small, intentional batch; it does not run a full catalog import:

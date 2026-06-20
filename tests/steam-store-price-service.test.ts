@@ -208,7 +208,7 @@ describe("Steam Store price connector", () => {
           "content-type": "application/json",
           "x-admin-secret": "test-admin-secret"
         },
-        body: JSON.stringify({ mode: "catalog-backfill", limit: 1, dryRun: true })
+        body: JSON.stringify({ mode: "catalog-backfill", steamAppIds: [123456], limit: 1, dryRun: true })
       })
     );
     const body = await response.json();
@@ -220,5 +220,73 @@ describe("Steam Store price connector", () => {
     expect(body.results[0]).toMatchObject({ gameId: null, steamAppId: 123456, offerId: null, snapshotId: null });
     expect(importedGame).toBeNull();
     expect(afterStatus.catalogStoreOfferCount).toBe(beforeStatus.catalogStoreOfferCount);
+  });
+
+  it("marks catalog apps without Steam Store prices as skipped no-price instead of failed", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    vi.stubEnv("STEAM_STORE_PRICE_ENABLED", "true");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(
+          JSON.stringify({
+            "999999": {
+              success: true,
+              data: {
+                name: "No Price Catalog Fixture",
+                type: "game",
+                is_free: false
+              }
+            }
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      })
+    );
+    await repositories.steamCatalog.upsertMany([
+      {
+        id: "steam-catalog-999999",
+        steamAppId: 999999,
+        title: "No Price Catalog Fixture",
+        appType: "game",
+        lastModified: null,
+        priceChangeNumber: null,
+        isGame: true,
+        isActive: true,
+        source: "steam-api",
+        syncedAt: new Date("2026-06-20T00:00:00.000Z")
+      }
+    ]);
+
+    const response = await refreshSteamStorePrices(
+      new Request("http://localhost/api/admin/steam-store-prices/refresh", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ mode: "catalog-backfill", steamAppIds: [999999], limit: 1, dryRun: false })
+      })
+    );
+    const body = await response.json();
+    const nextCandidates = await repositories.catalogOffers.listSteamBackfillCandidates(20, new Date(0));
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      sourceName: "steam-store",
+      dryRun: false,
+      requested: 1,
+      refreshed: 0,
+      skipped: 1,
+      skippedNoPrice: 1,
+      failed: 0
+    });
+    expect(body.errors).toHaveLength(0);
+    expect(body.realErrors).toHaveLength(0);
+    expect(body.noPriceMarked[0]).toMatchObject({ steamAppId: 999999, status: "no-price" });
+    expect(nextCandidates.some((candidate: { steamAppId: number }) => candidate.steamAppId === 999999)).toBe(false);
   });
 });

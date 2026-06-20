@@ -173,7 +173,7 @@ The Android app now uses backend endpoints for expanded search and Steam/player 
 - `GET /api/categories/:slug`
 - `GET /api/admin/status`
 
-Search results can come from the local database, the backend-synced Steam catalog or the backend mock fallback catalog. The API returns pagination metadata so mobile can request more results without importing the whole Steam catalog into `Game`. Mobile search shows source badges:
+Search results can come from the local database or the backend-synced Steam catalog. In local mock mode the backend can still expose the mock fallback catalog for development, but production `DATA_MODE=api` does not silently substitute mock catalog rows unless `ENABLE_DEV_MOCK_FALLBACK=true` is set intentionally. The API returns pagination metadata so mobile can request more results without importing the whole Steam catalog into `Game`. Mobile search shows source badges:
 
 - `In library` for games already imported into `Game`,
 - `Steam catalog` for synced `SteamCatalogEntry` rows from Neon,
@@ -181,7 +181,7 @@ Search results can come from the local database, the backend-synced Steam catalo
 
 Importing a catalog result is also a backend operation. The mobile response uses backend fields such as `created`, `source`, `steamAppId`, `gameId`, `summary` and `imported`, then shows whether the game was newly imported or already in the library. The APK never calls Steam directly and must never contain `STEAM_WEB_API_KEY`, `STEAM_API_KEY`, `ADMIN_API_SECRET`, database URLs, Neon credentials or signing secrets.
 
-Steam Stats in the mobile UI are based on backend `PlayerCountSnapshot` records. Trends use the latest two player snapshots. If live Steam access is unavailable, the backend returns mock/fallback values and records an integration log; the Android app simply displays the API response.
+Steam Stats in the mobile UI are based on backend `PlayerCountSnapshot` records. Trends use the latest two player snapshots. If live Steam access is unavailable, the backend can use cached real snapshots when available; mock player fallback is local/dev only behind `ENABLE_DEV_MOCK_FALLBACK=true`. The Android app simply displays the API response.
 
 The Stats screen shows a data mode badge:
 

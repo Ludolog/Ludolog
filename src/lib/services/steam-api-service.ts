@@ -1,4 +1,4 @@
-import { getDataMode, getSteamWebApiKey } from "@/lib/config";
+import { getDataMode, getSteamWebApiKey, isDevMockFallbackEnabled } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
 import type { PlayerCountSnapshot } from "@/lib/types";
 
@@ -20,11 +20,15 @@ export class SteamApiService {
       await repositories.diagnostics.recordIntegrationLog({
         service: "steam",
         level: "warning",
-        message: `STEAM_WEB_API_KEY is not configured. Player count for app ${steamAppId} used cached/mock fallback.`
+        message: `STEAM_WEB_API_KEY is not configured. Player count for app ${steamAppId} used cached fallback.`
       });
     }
 
-    return repositories.snapshots.latestPlayersBySteamAppId(steamAppId);
+    const cached = await repositories.snapshots.latestPlayersBySteamAppId(steamAppId);
+    if (cached?.source === "mock" && !isDevMockFallbackEnabled()) {
+      return null;
+    }
+    return cached;
   }
 
   async refreshPlayerCount(steamAppId: number): Promise<PlayerCountSnapshot | null> {
@@ -107,7 +111,7 @@ export class SteamApiService {
             level: "warning",
             message: `Steam player endpoint failed for app ${steamAppId}: ${
               error instanceof Error ? error.message : "unknown error"
-            }. Cached/mock fallback was used.`
+            }. Cached fallback was used when available.`
           });
           return null;
         }

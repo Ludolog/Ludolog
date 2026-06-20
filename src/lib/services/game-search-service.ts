@@ -1,4 +1,5 @@
 import { repositories } from "@/lib/repositories";
+import { isDevMockFallbackEnabled } from "@/lib/config";
 import { steamApiService } from "@/lib/services/steam-api-service";
 import { steamAppCatalogService } from "@/lib/services/steam-app-catalog-service";
 import type { CatalogStoreOffer, Game, GameImportInput, GameProfile, GameSummary, SteamCatalogEntry } from "@/lib/types";
@@ -27,7 +28,7 @@ type SearchCatalogOptions = {
 };
 
 export class GameImportNotFoundError extends Error {
-  constructor(message = "Game is not available in the Steam catalog or mock fallback catalog.") {
+  constructor(message = "Game is not available in the Steam catalog.") {
     super(message);
     this.name = "GameImportNotFoundError";
   }
@@ -46,9 +47,10 @@ export class GameSearchService {
     const limit = Math.min(Math.max(options.limit ?? 16, 1), 50);
     const offset = Math.max(options.offset ?? 0, 0);
     const fetchLimit = Math.min(offset + limit + 25, 150);
+    const allowMockFallback = isDevMockFallbackEnabled();
     const localResults = await repositories.games.search(query);
     const databaseCatalogResults = await this.searchDatabaseCatalog(query, fetchLimit);
-    const fallbackCatalogResults = databaseCatalogResults.length > 0 ? [] : steamAppCatalogService.search(query, fetchLimit);
+    const fallbackCatalogResults = allowMockFallback && databaseCatalogResults.length === 0 ? steamAppCatalogService.search(query, fetchLimit) : [];
     const catalogOffers = await repositories.catalogOffers.findBySteamAppIds([
       ...databaseCatalogResults.map((entry) => entry.steamAppId),
       ...fallbackCatalogResults.map((entry) => entry.steamAppId)
@@ -193,16 +195,23 @@ export class GameSearchService {
   }
 
   private async resolveCatalogGame(request: ApiImportGameRequest): Promise<ResolvedCatalogGame | null> {
+    const allowMockFallback = isDevMockFallbackEnabled();
     if (typeof request.steamAppId === "number") {
       const realEntry = await this.findDatabaseCatalogEntry(request.steamAppId);
       if (realEntry) {
         return { input: gameImportInputFromSteamCatalogEntry(realEntry), source: "steam-catalog" };
+      }
+      if (!allowMockFallback) {
+        return null;
       }
       const fallback = steamAppCatalogService.findBySteamAppId(request.steamAppId);
       return fallback ? { input: fallback, source: "mock-catalog" } : null;
     }
 
     if (request.slug) {
+      if (!allowMockFallback) {
+        return null;
+      }
       const fallback = steamAppCatalogService.findBySlug(request.slug);
       return fallback ? { input: fallback, source: "mock-catalog" } : null;
     }
@@ -214,6 +223,9 @@ export class GameSearchService {
         return { input: gameImportInputFromSteamCatalogEntry(bestCatalogMatch), source: "steam-catalog" };
       }
 
+      if (!allowMockFallback) {
+        return null;
+      }
       const fallback = steamAppCatalogService.search(request.query, 1)[0];
       return fallback ? { input: fallback, source: "mock-catalog" } : null;
     }

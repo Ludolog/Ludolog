@@ -5,12 +5,14 @@ import { POST as discoverGogCatalog } from "@/app/api/admin/gog/catalog/discover
 import { POST as approveGogMapping } from "@/app/api/admin/gog/mappings/approve/route";
 import { POST as createGogMapping } from "@/app/api/admin/gog/mappings/route";
 import { POST as suggestGogMappings } from "@/app/api/admin/gog/mappings/suggest/route";
+import { POST as backfillGogCatalogPrices } from "@/app/api/admin/gog/prices/backfill-catalog/route";
 import { POST as refreshGogPrices } from "@/app/api/admin/gog/prices/refresh/route";
 import { repositories } from "@/lib/repositories";
 import {
   GogCatalogConnector,
   GogConnectorError,
   GogPriceConnector,
+  GogProductMapper,
   GogPriceNormalizer,
   gogService
 } from "@/lib/services/gog-service";
@@ -209,7 +211,53 @@ describe("GOG connector", () => {
     expect(body.mode).toBe("top-steam-catalog");
     expect(body.foundProducts).toBe(1);
     expect(body.createdCatalogEntries + body.updatedCatalogEntries).toBeGreaterThan(0);
-    expect(body.suggestedMappings.length + body.uncertainMatches.length).toBeGreaterThan(0);
+    expect(Array.isArray(body.suggestedMappings)).toBe(true);
+    expect(Array.isArray(body.uncertainMatches)).toBe(true);
+  });
+
+  it("rejects weak GOG fuzzy matches instead of marking them uncertain", () => {
+    const mapper = new GogProductMapper();
+    const [suggestion] = mapper.suggest(
+      {
+        id: "dota-2",
+        steamAppId: 570,
+        title: "Dota 2",
+        slug: "dota-2",
+        platform: "PC",
+        description: "",
+        coverUrl: "",
+        genres: [],
+        developer: "",
+        publisher: "",
+        releaseDate: "2013-07-09",
+        reviewScore: 90,
+        source: "steam-api",
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      [
+        {
+          id: "gog-catalog-dotage",
+          gogProductId: "dotage",
+          title: "dotAGE",
+          slug: "dotage",
+          url: "https://www.gog.com/game/dotage",
+          imageUrl: null,
+          isActive: true,
+          productType: "game",
+          rawData: null,
+          syncedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ]
+    );
+
+    expect(suggestion).toMatchObject({
+      confidence: "unknown",
+      rejected: true,
+      reason: expect.stringContaining("Rejected weak fuzzy match")
+    });
   });
 
   it("suggests GOG mappings for manual review without writing mappings", async () => {
@@ -242,7 +290,55 @@ describe("GOG connector", () => {
     expect(Array.isArray(body.exactMatches)).toBe(true);
     expect(Array.isArray(body.reviewRequired)).toBe(true);
     expect(Array.isArray(body.uncertain)).toBe(true);
+    expect(Array.isArray(body.rejectedBadCandidates)).toBe(true);
     expect(Array.isArray(body.skipped)).toBe(true);
+  });
+
+  it("dry-runs GOG catalog price backfill into CatalogStoreOffer without writing", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    vi.stubEnv("GOG_ENABLED", "true");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(JSON.stringify({ products: [sampleWitcherProduct] }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      })
+    );
+    await repositories.gog.upsertCatalogEntries([
+      {
+        id: "gog-catalog-1207658924",
+        gogProductId: "1207658924",
+        title: "The Witcher 3: Wild Hunt",
+        slug: "the_witcher_3_wild_hunt",
+        url: "https://www.gog.com/en/game/the_witcher_3_wild_hunt",
+        imageUrl: null,
+        isActive: true,
+        productType: "game",
+        rawData: sampleWitcherProduct,
+        syncedAt: new Date("2026-06-20T00:00:00.000Z")
+      }
+    ]);
+    const beforeStatus = await repositories.catalogOffers.status(new Date());
+
+    const response = await backfillGogCatalogPrices(
+      new Request("http://localhost/api/admin/gog/prices/backfill-catalog", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ gogProductIds: ["1207658924"], limit: 1, dryRun: true })
+      })
+    );
+    const body = await response.json();
+    const afterStatus = await repositories.catalogOffers.status(new Date());
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ sourceName: "gog", dryRun: true, requested: 1, refreshed: 0, skipped: 1, failed: 0 });
+    expect(body.results[0].preview).toMatchObject({ gogProductId: "1207658924", storeName: "GOG" });
+    expect(afterStatus.catalogStoreOfferCount).toBe(beforeStatus.catalogStoreOfferCount);
   });
 
   it("approves a GOG mapping and fills the slug from a stored catalog entry", async () => {
