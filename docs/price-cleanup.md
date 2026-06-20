@@ -25,7 +25,7 @@ if ([string]::IsNullOrWhiteSpace($env:ADMIN_API_SECRET)) {
 }
 
 $headers = @{ "x-admin-secret" = $env:ADMIN_API_SECRET.Trim() }
-Invoke-RestMethod "https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/preview" -Headers $headers
+Invoke-RestMethod "https://ludolog.vercel.app/api/admin/prices/mock-cleanup/preview" -Headers $headers
 ```
 
 Only run after reviewing the preview:
@@ -33,7 +33,7 @@ Only run after reviewing the preview:
 ```powershell
 $body = @{ confirm = "DELETE_MOCK_PRICE_DATA_ONLY" } | ConvertTo-Json -Compress
 Invoke-RestMethod `
-  -Uri "https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/run" `
+  -Uri "https://ludolog.vercel.app/api/admin/prices/mock-cleanup/run" `
   -Method POST `
   -Headers $headers `
   -ContentType "application/json" `

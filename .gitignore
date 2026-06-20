@@ -40,6 +40,7 @@ temp
 
 .vercel
 .env*
+env.txt
 !.env.example
 !.env.local.example
 !mobile/.env.example

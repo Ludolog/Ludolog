@@ -75,7 +75,7 @@ type RequestOptions = RequestInit & {
 };
 
 export const DEFAULT_ANDROID_EMULATOR_API_URL = "http://10.0.2.2:3000";
-export const DEFAULT_PRODUCTION_API_URL = "https://apka-seven.vercel.app";
+export const DEFAULT_PRODUCTION_API_URL = "https://ludolog.vercel.app";
 
 export function getConfiguredApiBaseUrl(): string {
   const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;

@@ -302,7 +302,7 @@ function buildStoreOffer(
     historicalLow: roundMoney(input.price),
     currency: input.currency ?? "PLN",
     discountPercent,
-    url: externalUrl ?? "https://apka-seven.vercel.app",
+    url: externalUrl ?? "https://ludolog.vercel.app",
     externalUrl,
     region: input.region ?? "PL",
     isOfficial: input.isOfficialStore ?? store.storeType === "official",

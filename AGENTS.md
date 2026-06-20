@@ -17,7 +17,12 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 
 ## Production URL
 
-- `https://apka-seven.vercel.app`
+- `https://ludolog.vercel.app`
+- Legacy URL `https://apka-seven.vercel.app` is no longer the production target and must not be used for new production config.
+
+## Repository
+
+- GitHub: `https://github.com/Ludolog/Ludolog`
 
 ## Data Sources
 
@@ -201,8 +206,14 @@ Names only; never write real values in docs, commits, logs, or chat.
 
 ## Current Known State
 
+- Production has been handed off to Ludolog on Vercel and Neon.
+- `STEAM_WEB_API_KEY` is currently missing in the Ludolog environment and must be added before real Steam refresh jobs can run.
+- Until `STEAM_WEB_API_KEY` is added, Steam refresh attempts should be treated as blocked/missing-key, not as a full project outage.
+- Production smoke on 2026-06-20 showed public TOP 100 working with 100 tracked games, 100 real player counts and 95 Steam Store prices.
+- Production smoke on 2026-06-20 showed Ludolog admin status still reporting `DATA_MODE=mock`; Vercel env must be corrected to `DATA_MODE=api`.
+- One legacy `Game.source=mock` metadata row can still appear in `/api/deals/best`; it is not a mock price/player source, but should be cleaned or hidden before calling public mock output fully clean.
 - `SteamCatalogEntry` is around 2000 rows.
-- `Game` is around 20 rows.
+- `Game` is around 100 rows.
 - GOG is enabled; mappings are still manual approval only.
 - GOG public output is hidden by default; admin GOG status/tools remain visible.
 - TOP 100 Steam scope exists for practical daily tracking and scoring readiness.

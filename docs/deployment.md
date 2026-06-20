@@ -22,8 +22,8 @@ DIRECT_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r.c-4.eu-
 REPOSITORY_PROVIDER=prisma
 DATA_MODE=api
 ENABLE_DEV_MOCK_FALLBACK=false
-NEXT_PUBLIC_APP_URL=https://apka-seven.vercel.app
-MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
+NEXT_PUBLIC_APP_URL=https://ludolog.vercel.app
+MOBILE_ALLOWED_ORIGINS=https://ludolog.vercel.app,capacitor://localhost
 STEAM_WEB_API_KEY=
 ADMIN_API_SECRET=
 CRON_SECRET=
@@ -60,10 +60,10 @@ Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT
 7. After deployment, check:
 
 ```text
-https://apka-seven.vercel.app
-https://apka-seven.vercel.app/api/admin/status
-https://apka-seven.vercel.app/api/games/search?q=cyberpunk&limit=16&offset=0
-https://apka-seven.vercel.app/api/deals/best
+https://ludolog.vercel.app
+https://ludolog.vercel.app/api/admin/status
+https://ludolog.vercel.app/api/games/search?q=cyberpunk&limit=16&offset=0
+https://ludolog.vercel.app/api/deals/best
 ```
 
 If Prisma migrations were not executed yet, run them locally against Neon with the ignored `.env.local` file configured:
@@ -101,8 +101,8 @@ REPOSITORY_PROVIDER=prisma
 DATABASE_URL=...
 DIRECT_URL=...
 ENABLE_DEV_MOCK_FALLBACK=false
-NEXT_PUBLIC_APP_URL=https://apka-seven.vercel.app
-MOBILE_ALLOWED_ORIGINS=https://apka-seven.vercel.app,capacitor://localhost
+NEXT_PUBLIC_APP_URL=https://ludolog.vercel.app
+MOBILE_ALLOWED_ORIGINS=https://ludolog.vercel.app,capacitor://localhost
 STEAM_WEB_API_KEY=
 # Legacy fallback name is still accepted, but new environments should use STEAM_WEB_API_KEY.
 STEAM_API_KEY=
@@ -255,18 +255,18 @@ Use seed only when you intentionally want demo games/offers/watchlist data in th
 After Vercel deployment and migration:
 
 ```text
-https://apka-seven.vercel.app/api/admin/status
-https://apka-seven.vercel.app/api/deals/best
-https://apka-seven.vercel.app/api/games/search?q=cyberpunk
-https://apka-seven.vercel.app/api/games/dota-2/prices
-https://apka-seven.vercel.app/api/stats/overview
-https://apka-seven.vercel.app/api/top-games
-https://apka-seven.vercel.app/api/categories/overview
-https://apka-seven.vercel.app/api/categories/popularne-teraz
-https://apka-seven.vercel.app/api/admin/steam-catalog/status
-https://apka-seven.vercel.app/api/admin/gog/status
-https://apka-seven.vercel.app/api/admin/steam-store-prices/status
-https://apka-seven.vercel.app/api/prices/status
+https://ludolog.vercel.app/api/admin/status
+https://ludolog.vercel.app/api/deals/best
+https://ludolog.vercel.app/api/games/search?q=cyberpunk
+https://ludolog.vercel.app/api/games/dota-2/prices
+https://ludolog.vercel.app/api/stats/overview
+https://ludolog.vercel.app/api/top-games
+https://ludolog.vercel.app/api/categories/overview
+https://ludolog.vercel.app/api/categories/popularne-teraz
+https://ludolog.vercel.app/api/admin/steam-catalog/status
+https://ludolog.vercel.app/api/admin/gog/status
+https://ludolog.vercel.app/api/admin/steam-store-prices/status
+https://ludolog.vercel.app/api/prices/status
 ```
 
 `/api/admin/status` should show non-zero game and snapshot counts after seed.
@@ -276,7 +276,7 @@ https://apka-seven.vercel.app/api/prices/status
 Production Android builds should call Vercel:
 
 ```env
-VITE_API_BASE_URL=https://apka-seven.vercel.app
+VITE_API_BASE_URL=https://ludolog.vercel.app
 ```
 
 Create `mobile/.env.production` from `mobile/.env.production.example`, then build:
@@ -289,7 +289,7 @@ npm run android:build
 
 `mobile/.env.production` is ignored by Git and must not be committed. It may contain only public mobile values such as `VITE_API_BASE_URL`. Do not add `DATABASE_URL`, `DIRECT_URL`, Neon credentials, API keys, signing secrets or Firebase secrets to the mobile app.
 
-The production fallback in code is also `https://apka-seven.vercel.app`, so production builds do not fall back to `10.0.2.2`, `localhost` or `127.0.0.1`.
+The production fallback in code is also `https://ludolog.vercel.app`, so production builds do not fall back to `10.0.2.2`, `localhost` or `127.0.0.1`.
 
 ## Expanded search and Steam Stats deployment notes
 
@@ -298,12 +298,12 @@ The Vercel backend owns Steam catalog sync, search fallback, game taxonomy, play
 Useful production checks after deploy:
 
 ```text
-https://apka-seven.vercel.app/api/games/search?q=palworld&limit=16&offset=0
-https://apka-seven.vercel.app/api/stats/overview
-https://apka-seven.vercel.app/api/categories/overview
-https://apka-seven.vercel.app/api/stats/top-players
-https://apka-seven.vercel.app/api/stats/best-value
-https://apka-seven.vercel.app/api/admin/steam-catalog/status
+https://ludolog.vercel.app/api/games/search?q=palworld&limit=16&offset=0
+https://ludolog.vercel.app/api/stats/overview
+https://ludolog.vercel.app/api/categories/overview
+https://ludolog.vercel.app/api/stats/top-players
+https://ludolog.vercel.app/api/stats/best-value
+https://ludolog.vercel.app/api/admin/steam-catalog/status
 ```
 
 If `STEAM_WEB_API_KEY`, legacy `STEAM_API_KEY` or provider-specific API keys are not configured, the app records integration logs and uses cached real data when available. Mock fallback is only for local/dev use behind `ENABLE_DEV_MOCK_FALLBACK=true`. Never add those secrets to `mobile/.env.production` or any committed file.
@@ -311,7 +311,7 @@ If `STEAM_WEB_API_KEY`, legacy `STEAM_API_KEY` or provider-specific API keys are
 Before real Steam sync, confirm this endpoint:
 
 ```text
-https://apka-seven.vercel.app/api/admin/steam-catalog/status
+https://ludolog.vercel.app/api/admin/steam-catalog/status
 ```
 
 It should expose only booleans and counts, for example `hasSteamApiKey`, `dataMode`, `canUseRealSteamApi`,
@@ -332,7 +332,7 @@ $headers = @{
 
 $body = '{"dryRun":true,"maxPages":1,"maxResults":100}'
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-catalog/sync" -Method POST -Headers $headers -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/steam-catalog/sync" -Method POST -Headers $headers -Body $body
 ```
 
 After verifying the dry run, run a small real write sync:
@@ -340,7 +340,7 @@ After verifying the dry run, run a small real write sync:
 ```powershell
 $body = '{"dryRun":false,"maxPages":1,"maxResults":100}'
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-catalog/sync" -Method POST -Headers $headers -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/steam-catalog/sync" -Method POST -Headers $headers -Body $body
 ```
 
 Start with `maxResults=100`. If Vercel and Neon stay stable, increase cautiously to 500 and then 1000 in later manual runs.
@@ -349,7 +349,7 @@ Start with `maxResults=100`. If Vercel and Neon stay stable, increase cautiously
 `startAfterAppId`:
 
 ```powershell
-$status = Invoke-RestMethod -Uri "https://apka-seven.vercel.app/api/admin/steam-catalog/status"
+$status = Invoke-RestMethod -Uri "https://ludolog.vercel.app/api/admin/steam-catalog/status"
 $payload = @{
   dryRun = $true
   maxPages = 1
@@ -374,7 +374,7 @@ $body = @{
   maxBatches = 4
 } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-catalog/sync-until" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/steam-catalog/sync-until" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Manual player-count refresh:
@@ -382,7 +382,7 @@ Manual player-count refresh:
 ```powershell
 $body = '{"mode":"top","limit":25}'
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
 ```
 
 Manual TOP 100 bootstrap dry run:
@@ -390,7 +390,7 @@ Manual TOP 100 bootstrap dry run:
 ```powershell
 $body = @{ limit = 100; dryRun = $true } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/top-games/bootstrap" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/top-games/bootstrap" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 After reviewing the dry run, run the real capped bootstrap only if the Steam catalog, player-count and Steam Store price
@@ -399,7 +399,7 @@ status look stable:
 ```powershell
 $body = @{ limit = 100; dryRun = $false } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/top-games/bootstrap" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/top-games/bootstrap" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Manual dry run for the price automation scheduler:
@@ -407,7 +407,7 @@ Manual dry run for the price automation scheduler:
 ```powershell
 $body = @{ dryRun = $true; includeCatalogBackfill = $false } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/automation/refresh-prices" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/automation/refresh-prices" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Manual dry run for catalog price backfill:
@@ -415,19 +415,19 @@ Manual dry run for catalog price backfill:
 ```powershell
 $body = @{ dryRun = $true } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/automation/backfill-catalog-prices" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/automation/backfill-catalog-prices" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 GameValue Price API status:
 
 ```powershell
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/prices/status" | ConvertFrom-Json
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/prices/status" | ConvertFrom-Json
 ```
 
 Mock price cleanup preview. Run this before any destructive cleanup and review the counts/examples:
 
 ```powershell
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/preview" -Headers $headers | ConvertFrom-Json
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/prices/mock-cleanup/preview" -Headers $headers | ConvertFrom-Json
 ```
 
 The destructive cleanup endpoint requires the exact confirmation phrase. Do not run it until the preview report is approved:
@@ -435,13 +435,13 @@ The destructive cleanup endpoint requires the exact confirmation phrase. Do not 
 ```powershell
 $body = @{ confirm = "DELETE_MOCK_PRICE_DATA_ONLY" } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/run" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/prices/mock-cleanup/run" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Static/mock maintenance preview uses the newer guarded alias:
 
 ```powershell
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/maintenance/static-data/preview" -Headers $headers | ConvertFrom-Json
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/maintenance/static-data/preview" -Headers $headers | ConvertFrom-Json
 ```
 
 The run endpoint requires a different exact confirmation phrase:
@@ -449,7 +449,7 @@ The run endpoint requires a different exact confirmation phrase:
 ```powershell
 $body = @{ confirm = "REMOVE_STATIC_MOCK_DATA_ONLY" } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/maintenance/static-data/run" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/maintenance/static-data/run" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Manual offer for Dota 2:
@@ -469,7 +469,7 @@ $body = @{
   available = $true
 } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/manual-offer" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/prices/manual-offer" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 JSON price import:
@@ -494,7 +494,7 @@ $body = @{
   )
 } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/prices/import-json" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/prices/import-json" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Use `POST /api/admin/prices/snapshot` to append a snapshot from current tracked offers and `POST /api/admin/prices/recalculate` to rebuild snapshots for imported games. Legacy `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/admin/prices/provider-diagnostics` return disabled responses and do not call external aggregators.
@@ -513,11 +513,11 @@ STEAM_STORE_PRICE_MAX_PER_RUN=20
 Steam Store status and Dota 2 dry run:
 
 ```powershell
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/status" | ConvertFrom-Json
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/steam-store-prices/status" | ConvertFrom-Json
 
 $body = @{ steamAppIds = @(570); limit = 1; dryRun = $true } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/steam-store-prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Steam Store catalog backfill dry run. This writes nothing and does not import catalog rows into `Game`:
@@ -525,7 +525,7 @@ Steam Store catalog backfill dry run. This writes nothing and does not import ca
 ```powershell
 $body = @{ mode = "catalog-backfill"; limit = 10; dryRun = $true } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/steam-store-prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Do not set `dryRun=false` until `STEAM_STORE_PRICE_ENABLED=true` is deployed and the dry run shows valid JSON-derived price data.
@@ -535,7 +535,7 @@ GOG catalog discovery stores only small review entries and suggested matches. It
 ```powershell
 $body = @{ mode = "imported-games"; limit = 10 } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/catalog/discover" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/gog/catalog/discover" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 GOG mapping suggestions and manual approval:
@@ -543,11 +543,11 @@ GOG mapping suggestions and manual approval:
 ```powershell
 $body = @{ mode = "imported-games"; limit = 20 } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/mappings/suggest" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/gog/mappings/suggest" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 
 $body = @{ gameId = "the-witcher-3"; gogProductId = "1207658924"; confidence = "manual" } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/mappings/approve" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/gog/mappings/approve" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 GOG mapped price refresh defaults to dry run. Keep it that way until approved mappings exist and the preview looks right:
@@ -555,7 +555,7 @@ GOG mapped price refresh defaults to dry run. Keep it that way until approved ma
 ```powershell
 $body = @{ mode = "mapped-games"; limit = 5; dryRun = $true } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/gog/prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 GOG catalog price backfill stores catalog-only offers in `CatalogStoreOffer` and does not create `Game` rows. Keep it dry-run first:
@@ -563,7 +563,7 @@ GOG catalog price backfill stores catalog-only offers in `CatalogStoreOffer` and
 ```powershell
 $body = @{ gogProductIds = @("1207658924"); limit = 1; dryRun = $true } | ConvertTo-Json -Compress
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/prices/backfill-catalog" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/gog/prices/backfill-catalog" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 Starter import from the already synced Steam catalog. Keep this as a small, intentional batch; it does not run a full catalog import:
@@ -576,7 +576,7 @@ $body = @{
   limit = 20
 } | ConvertTo-Json
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/games/bulk-import" -Method POST -Headers $headers -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/games/bulk-import" -Method POST -Headers $headers -Body $body
 ```
 
 Refresh only imported games:
@@ -584,7 +584,7 @@ Refresh only imported games:
 ```powershell
 $body = '{"mode":"all-imported","limit":20}'
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
 ```
 
 Refresh explicit Steam App IDs:
@@ -592,7 +592,7 @@ Refresh explicit Steam App IDs:
 ```powershell
 $body = '{"steamAppIds":[570,730],"limit":2}'
 
-Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
+Invoke-WebRequest -Uri "https://ludolog.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
 ```
 
 `POST /api/admin/games/bulk-import` reports each imported, skipped and failed game independently. A failed Steam App ID does not roll back the rest of the batch.
@@ -622,7 +622,7 @@ Do not use `npm run android:build:debug` when you are intentionally preparing an
 
 Release signing is not configured in this repository. To prepare a Play Store-ready release later:
 
-1. Set `mobile/.env.production` to `https://apka-seven.vercel.app`.
+1. Set `mobile/.env.production` to `https://ludolog.vercel.app`.
 2. Run `npm run mobile:sync:prod`.
 3. Configure signing keys in Android Studio or Gradle.
 4. Build a signed AAB from Android Studio.

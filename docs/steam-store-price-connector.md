@@ -28,7 +28,7 @@ Catalog-only backfill writes to `CatalogStoreOffer`, not to `StoreOffer` or `Gam
 Status:
 
 ```powershell
-Invoke-RestMethod "https://apka-seven.vercel.app/api/admin/steam-store-prices/status"
+Invoke-RestMethod "https://ludolog.vercel.app/api/admin/steam-store-prices/status"
 ```
 
 Safe Dota 2 dry run:
@@ -42,7 +42,7 @@ $headers = @{ "x-admin-secret" = $env:ADMIN_API_SECRET.Trim() }
 $body = @{ steamAppIds = @(570); limit = 1; dryRun = $true } | ConvertTo-Json -Compress
 
 Invoke-RestMethod `
-  -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/refresh" `
+  -Uri "https://ludolog.vercel.app/api/admin/steam-store-prices/refresh" `
   -Method POST `
   -Headers $headers `
   -ContentType "application/json" `
@@ -57,7 +57,7 @@ Safe catalog backfill dry run:
 $body = @{ mode = "catalog-backfill"; steamAppIds = @(292030); limit = 1; dryRun = $true } | ConvertTo-Json -Compress
 
 Invoke-RestMethod `
-  -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/refresh" `
+  -Uri "https://ludolog.vercel.app/api/admin/steam-store-prices/refresh" `
   -Method POST `
   -Headers $headers `
   -ContentType "application/json" `

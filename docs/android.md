@@ -90,7 +90,7 @@ npm run mobile:sync:prod
 Production Android builds use the public API URL from `mobile/.env.production`:
 
 ```env
-VITE_API_BASE_URL=https://apka-seven.vercel.app
+VITE_API_BASE_URL=https://ludolog.vercel.app
 ```
 
 `mobile/.env.production` is local-only and must not be committed. It may contain public `VITE_` values only. Do not put `DATABASE_URL`, `DIRECT_URL`, Neon credentials, external provider keys, `STEAM_WEB_API_KEY`, admin/cron secrets, signing secrets or Firebase secrets into any mobile env file.
@@ -158,7 +158,7 @@ Debug Android builds allow cleartext HTTP so the emulator can call `http://10.0.
 Production releases should use HTTPS and a deployed backend URL:
 
 ```env
-VITE_API_BASE_URL=https://apka-seven.vercel.app
+VITE_API_BASE_URL=https://ludolog.vercel.app
 ```
 
 ## Search, Steam Stats and backend ownership
@@ -223,7 +223,7 @@ VITE_API_BASE_URL=http://10.0.2.2:3000
 Production Android build:
 
 ```env
-VITE_API_BASE_URL=https://apka-seven.vercel.app
+VITE_API_BASE_URL=https://ludolog.vercel.app
 ```
 
 For a production API debug APK, build in this order:
@@ -236,7 +236,7 @@ npm run android:build
 
 After installation on the emulator, open Diagnostics and confirm:
 
-- API base URL is `https://apka-seven.vercel.app`,
+- API base URL is `https://ludolog.vercel.app`,
 - backend status is OK,
 - Home, Search, Deals, Game Details and Stats load through the Vercel API,
 - no screen reports `10.0.2.2`, `localhost` or `127.0.0.1` in the production bundle.

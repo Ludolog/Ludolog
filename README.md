@@ -284,22 +284,22 @@ Public price endpoints:
 Admin price operations require `x-admin-secret`:
 
 ```bash
-curl -X POST https://apka-seven.vercel.app/api/admin/prices/manual-offer \
+curl -X POST https://ludolog.vercel.app/api/admin/prices/manual-offer \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"steamAppId\":570,\"storeName\":\"Steam\",\"storeType\":\"official\",\"price\":0,\"regularPrice\":0,\"currency\":\"PLN\",\"externalUrl\":\"https://store.steampowered.com/app/570\",\"region\":\"PL\",\"drm\":\"Steam\",\"isOfficialStore\":true,\"available\":true}"
 
-curl -X POST https://apka-seven.vercel.app/api/admin/prices/import-json \
+curl -X POST https://ludolog.vercel.app/api/admin/prices/import-json \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"sourceName\":\"manual-json-import\",\"offers\":[{\"steamAppId\":570,\"storeName\":\"Steam\",\"price\":0,\"regularPrice\":0,\"currency\":\"PLN\",\"externalUrl\":\"https://store.steampowered.com/app/570\"}]}"
 
-curl -X POST https://apka-seven.vercel.app/api/admin/prices/snapshot \
+curl -X POST https://ludolog.vercel.app/api/admin/prices/snapshot \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"steamAppId\":570,\"sourceName\":\"manual-admin\"}"
 
-curl -X POST https://apka-seven.vercel.app/api/admin/prices/recalculate \
+curl -X POST https://ludolog.vercel.app/api/admin/prices/recalculate \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE"
 ```
@@ -309,10 +309,10 @@ Legacy `/api/admin/prices/refresh`, `/api/admin/prices/refresh-best` and `/api/a
 Mock price cleanup is guarded and should always start with preview:
 
 ```bash
-curl https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/preview \
+curl https://ludolog.vercel.app/api/admin/prices/mock-cleanup/preview \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE"
 
-curl -X POST https://apka-seven.vercel.app/api/admin/prices/mock-cleanup/run \
+curl -X POST https://ludolog.vercel.app/api/admin/prices/mock-cleanup/run \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"confirm\":\"DELETE_MOCK_PRICE_DATA_ONLY\"}"
@@ -354,22 +354,22 @@ Keep `dryRun=true` while testing. Do not run `dryRun=false` until the status and
 Admin/dev Steam operations:
 
 ```bash
-curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync \
+curl -X POST https://ludolog.vercel.app/api/admin/steam-catalog/sync \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"dryRun\":true,\"maxPages\":1,\"maxResults\":100}"
 
-curl -X POST https://apka-seven.vercel.app/api/admin/steam-catalog/sync-until \
+curl -X POST https://ludolog.vercel.app/api/admin/steam-catalog/sync-until \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"dryRun\":true,\"targetCount\":2000,\"batchSize\":500,\"maxBatches\":4}"
 
-curl -X POST https://apka-seven.vercel.app/api/admin/games/bulk-import \
+curl -X POST https://ludolog.vercel.app/api/admin/games/bulk-import \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"steamAppIds\":[570,730],\"refreshPlayers\":true,\"limit\":2}"
 
-curl -X POST https://apka-seven.vercel.app/api/admin/player-counts/refresh \
+curl -X POST https://ludolog.vercel.app/api/admin/player-counts/refresh \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: TU_WKLEJ_ADMIN_API_SECRET_LOKALNIE" \
   -d "{\"steamAppIds\":[570,730],\"limit\":2}"

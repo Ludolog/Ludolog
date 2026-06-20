@@ -13,7 +13,7 @@ const mobileRuntimeOrigins = [
   "capacitor://localhost",
   "http://localhost",
   "https://localhost",
-  "https://apka-seven.vercel.app"
+  "https://ludolog.vercel.app"
 ];
 
 function configuredOrigins(): string[] {
