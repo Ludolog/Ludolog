@@ -12,13 +12,13 @@ The Android app stays a client. The backend, Prisma and PostgreSQL are not packa
 
 1. Open Vercel.
 2. Choose `Add New -> Project`.
-3. Import the GitHub repository `gamevalue-radar`.
+3. Import the GitHub repository `Ludolog/Ludolog`.
 4. Keep framework preset as `Next.js`.
 5. Add environment variables in Vercel Project Settings:
 
 ```env
-DATABASE_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r-pooler.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
-DIRECT_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL="postgresql://USER:PASSWORD@NEON-LUDOLOG-POOLER-HOST/neondb?sslmode=require"
+DIRECT_URL="postgresql://USER:PASSWORD@NEON-LUDOLOG-DIRECT-HOST/neondb?sslmode=require"
 REPOSITORY_PROVIDER=prisma
 DATA_MODE=api
 ENABLE_DEV_MOCK_FALLBACK=false
@@ -51,7 +51,7 @@ TOP_GAMES_STALE_PLAYER_HOURS=6
 TOP_GAMES_STALE_PRICE_HOURS=12
 ```
 
-Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT_URL`. Replace `TWOJE_HASLO` only inside Vercel settings or local ignored env files.
+Use the pooled Neon Ludolog host for `DATABASE_URL` and the direct Neon Ludolog host for `DIRECT_URL`. Fill real values only inside Vercel settings or local ignored env files.
 
 6. Start the deployment.
    After changing `STEAM_WEB_API_KEY`, `PRICE_PROVIDER`, `PRICE_MODE`, `ADMIN_API_SECRET`, `CRON_SECRET` or `DATA_MODE`, trigger a new deployment from

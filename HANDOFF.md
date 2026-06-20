@@ -5,7 +5,6 @@
 - Production URL: `https://ludolog.vercel.app`
 - GitHub repo: `https://github.com/Ludolog/Ludolog`
 - Production database: Neon project Ludolog
-- Legacy URL `https://apka-seven.vercel.app` is no longer the production target.
 
 ## Safety
 
@@ -23,7 +22,7 @@
 - `.env*` files are ignored.
 - `env.txt` is ignored because it may contain copied secret fragments.
 - Local `.env` was not present during the handoff verification, so local Prisma DB checks were blocked by missing `DIRECT_URL`.
-- Vercel CLI on this machine is logged into `kacper-ops` and sees the old `apka` project, not the Ludolog project.
+- Vercel CLI on this machine was not linked to the Ludolog Vercel project during the handoff check.
 - Ludolog public smoke tests returned HTTP 200 for TOP games, prices status, stats overview, deals, categories and Dota 2 prices.
 - Cron guard without a secret returned 401 for top-games, prices and player-count refresh routes.
 - Ludolog `/api/admin/steam-catalog/status` reports `hasSteamApiKey=false` and `dataMode=mock`.

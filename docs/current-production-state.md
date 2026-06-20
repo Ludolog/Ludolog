@@ -55,7 +55,7 @@ Unauthenticated POST requests returned 401:
 - `/api/admin/steam-catalog/status` reports `hasSteamApiKey=false`; `STEAM_WEB_API_KEY` still needs to be added.
 - Admin status reports `DATA_MODE=mock`; Vercel Ludolog should be set to `DATA_MODE=api`.
 - `/api/deals/best` can expose one legacy `game.source=mock` metadata field for Cyberpunk 2077. This is not a mock price or player source, but should be cleaned or hidden.
-- Local Vercel CLI is logged into `kacper-ops` and not the Ludolog Vercel project.
+- Local Vercel CLI was not linked to the Ludolog Vercel project during verification.
 - Local `.env` was missing during verification, so Prisma migration status and DB row counts could not be checked locally.
 
 ## After STEAM_WEB_API_KEY Is Added

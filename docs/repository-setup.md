@@ -75,7 +75,7 @@ git commit -m "Initial GameValue Radar MVP with Android client and cloud deploym
 
 1. Open Vercel.
 2. Choose `Add New -> Project`.
-3. Import the GitHub repository `gamevalue-radar`.
+3. Import the GitHub repository `Ludolog/Ludolog`.
 4. Keep framework preset as `Next.js`.
 5. Add the required environment variables before deploying.
 
@@ -84,8 +84,8 @@ git commit -m "Initial GameValue Radar MVP with Android client and cloud deploym
 Set these in Vercel Project Settings -> Environment Variables:
 
 ```env
-DATABASE_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r-pooler.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
-DIRECT_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL="postgresql://USER:PASSWORD@NEON-LUDOLOG-POOLER-HOST/neondb?sslmode=require"
+DIRECT_URL="postgresql://USER:PASSWORD@NEON-LUDOLOG-DIRECT-HOST/neondb?sslmode=require"
 REPOSITORY_PROVIDER=prisma
 DATA_MODE=mock
 NEXT_PUBLIC_APP_URL=https://ADRES-Z-VERCEL
@@ -99,15 +99,15 @@ Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT
 Create `.env.local` in the project root:
 
 ```env
-DATABASE_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r-pooler.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
-DIRECT_URL="postgresql://neondb_owner:TWOJE_HASLO@ep-muddy-dust-as4vb87r.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL="postgresql://USER:PASSWORD@NEON-LUDOLOG-POOLER-HOST/neondb?sslmode=require"
+DIRECT_URL="postgresql://USER:PASSWORD@NEON-LUDOLOG-DIRECT-HOST/neondb?sslmode=require"
 REPOSITORY_PROVIDER=prisma
 DATA_MODE=mock
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 MOBILE_ALLOWED_ORIGINS=http://localhost:3000,capacitor://localhost
 ```
 
-Replace only `TWOJE_HASLO` locally or in Vercel settings. Do not commit the filled connection strings.
+Fill real Neon Ludolog values only locally or in Vercel settings. Do not commit the filled connection strings.
 
 For Android emulator local development, create `mobile/.env.local`:
 

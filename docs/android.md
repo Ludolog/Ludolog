@@ -124,19 +124,19 @@ mobile/android/app/build/outputs/apk/debug/
 Nie otwieramy głównego folderu repozytorium jako projektu Android:
 
 ```text
-C:\Users\kacpe\Documents\Apka Pawełek
+<repo>
 ```
 
 Projekt Android wygenerowany przez Capacitor znajduje się w osobnym katalogu:
 
 ```text
-C:\Users\kacpe\Documents\Apka Pawełek\mobile\android
+<repo>\mobile\android
 ```
 
 W Android Studio wybierz `File -> Open`, wskaż folder:
 
 ```text
-C:\Users\kacpe\Documents\Apka Pawełek\mobile\android
+<repo>\mobile\android
 ```
 
 Następnie poczekaj na `Gradle Sync`. Po synchronizacji Android Studio powinno widzieć moduł aplikacji `app` / `:app`, a w konfiguracji `Run/Debug Configurations` dla typu `Android App` należy wybrać moduł `app`.

@@ -18,7 +18,6 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 ## Production URL
 
 - `https://ludolog.vercel.app`
-- Legacy URL `https://apka-seven.vercel.app` is no longer the production target and must not be used for new production config.
 
 ## Repository
 
