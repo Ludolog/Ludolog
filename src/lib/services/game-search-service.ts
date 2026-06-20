@@ -1,8 +1,9 @@
 import { repositories } from "@/lib/repositories";
 import { steamApiService } from "@/lib/services/steam-api-service";
 import { steamAppCatalogService } from "@/lib/services/steam-app-catalog-service";
-import type { Game, GameImportInput, GameProfile, GameSummary, SteamCatalogEntry } from "@/lib/types";
+import type { CatalogStoreOffer, Game, GameImportInput, GameProfile, GameSummary, SteamCatalogEntry } from "@/lib/types";
 import type {
+  ApiCatalogStoreOffer,
   ApiGame,
   ApiGameSearchResult,
   ApiImportGameSource,
@@ -48,6 +49,11 @@ export class GameSearchService {
     const localResults = await repositories.games.search(query);
     const databaseCatalogResults = await this.searchDatabaseCatalog(query, fetchLimit);
     const fallbackCatalogResults = databaseCatalogResults.length > 0 ? [] : steamAppCatalogService.search(query, fetchLimit);
+    const catalogOffers = await repositories.catalogOffers.findBySteamAppIds([
+      ...databaseCatalogResults.map((entry) => entry.steamAppId),
+      ...fallbackCatalogResults.map((entry) => entry.steamAppId)
+    ]);
+    const catalogOfferBySteamAppId = new Map(catalogOffers.map((offer) => [offer.steamAppId, offer]));
     const seenSteamIds = new Set<number>();
     const allResults: ApiGameSearchResult[] = [];
 
@@ -72,7 +78,7 @@ export class GameSearchService {
       }
 
       seenSteamIds.add(entry.steamAppId);
-      allResults.push(catalogResult(gameImportInputFromSteamCatalogEntry(entry), "steam-catalog"));
+      allResults.push(catalogResult(gameImportInputFromSteamCatalogEntry(entry), "steam-catalog", catalogOfferBySteamAppId.get(entry.steamAppId) ?? null));
     }
 
     for (const catalogGame of fallbackCatalogResults) {
@@ -91,7 +97,7 @@ export class GameSearchService {
       }
 
       seenSteamIds.add(catalogGame.steamAppId);
-      allResults.push(catalogResult(catalogGame, "mock-catalog"));
+      allResults.push(catalogResult(catalogGame, "mock-catalog", catalogOfferBySteamAppId.get(catalogGame.steamAppId) ?? null));
     }
 
     const results = allResults.slice(offset, offset + limit);
@@ -247,6 +253,7 @@ function importResponse(
 }
 
 function libraryResult(summary: GameSummary): ApiGameSearchResult {
+  const lastUpdatedAt = summary.latestPrice?.capturedAt ?? summary.bestOffer?.fetchedAt ?? null;
   return {
     kind: "library",
     importable: false,
@@ -256,11 +263,17 @@ function libraryResult(summary: GameSummary): ApiGameSearchResult {
     currentPlayers: summary.latestPlayers?.playersOnline ?? 0,
     currentPrice: summary.latestPrice?.price ?? summary.bestOffer?.price ?? 0,
     historicalLow: summary.latestPrice?.historicalLow ?? 0,
+    catalogOffer: null,
+    lastUpdatedAt: lastUpdatedAt?.toISOString() ?? null,
+    freshness: lastUpdatedAt ? freshness(lastUpdatedAt) : "no-data",
+    nextRefreshAt: lastUpdatedAt ? new Date(lastUpdatedAt.getTime() + 6 * 60 * 60 * 1000).toISOString() : null,
+    dataSource: summary.latestPrice?.source ?? summary.bestOffer?.source ?? "none",
+    confidence: summary.latestPrice?.sourceConfidence ?? summary.bestOffer?.sourceConfidence ?? "no-price-data",
     tags: summary.game.genres
   };
 }
 
-function catalogResult(input: GameImportInput, source: ApiGameSearchResult["source"]): ApiGameSearchResult {
+function catalogResult(input: GameImportInput, source: ApiGameSearchResult["source"], catalogOffer: CatalogStoreOffer | null): ApiGameSearchResult {
   return {
     kind: "catalog",
     importable: true,
@@ -272,10 +285,48 @@ function catalogResult(input: GameImportInput, source: ApiGameSearchResult["sour
     }),
     summary: null,
     currentPlayers: input.currentPlayers,
-    currentPrice: input.currentPrice,
-    historicalLow: input.historicalLow,
+    currentPrice: catalogOffer?.price ?? input.currentPrice,
+    historicalLow: catalogOffer?.price ?? input.historicalLow,
+    catalogOffer: catalogOffer ? toApiCatalogStoreOffer(catalogOffer) : null,
+    lastUpdatedAt: catalogOffer?.fetchedAt.toISOString() ?? null,
+    freshness: catalogOffer?.freshness ?? "no-data",
+    nextRefreshAt: catalogOffer ? new Date(catalogOffer.fetchedAt.getTime() + 24 * 60 * 60 * 1000).toISOString() : null,
+    dataSource: catalogOffer?.provider === "steam-store" ? "steam-store" : "none",
+    confidence: catalogOffer?.sourceConfidence ?? "no-price-data",
     tags: input.genres
   };
+}
+
+function toApiCatalogStoreOffer(offer: CatalogStoreOffer): ApiCatalogStoreOffer {
+  return {
+    id: offer.id,
+    steamAppId: offer.steamAppId,
+    gogProductId: offer.gogProductId,
+    catalogSource: offer.catalogSource,
+    gameId: offer.gameId,
+    provider: offer.provider,
+    storeName: offer.storeName,
+    storeType: offer.storeType,
+    title: offer.title,
+    price: offer.price,
+    regularPrice: offer.regularPrice,
+    currency: offer.currency,
+    discountPercent: offer.discountPercent,
+    externalUrl: offer.externalUrl,
+    countryCode: offer.countryCode,
+    available: offer.available,
+    drm: offer.drm,
+    sourceRawId: offer.sourceRawId,
+    fetchedAt: offer.fetchedAt.toISOString(),
+    updatedAt: offer.updatedAt.toISOString(),
+    sourceConfidence: offer.sourceConfidence,
+    sourceName: offer.sourceName,
+    freshness: offer.freshness
+  };
+}
+
+function freshness(date: Date): "fresh" | "stale" | "no-data" {
+  return Date.now() - date.getTime() > 24 * 60 * 60 * 1000 ? "stale" : "fresh";
 }
 
 function gameImportInputFromSteamCatalogEntry(entry: SteamCatalogEntry): GameImportInput {

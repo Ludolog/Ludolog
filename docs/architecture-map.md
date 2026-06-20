@@ -24,6 +24,7 @@ The Android app is a client only. It never talks to Steam, Neon or Prisma direct
 - `STEAM_WEB_API_KEY`: backend-only Steam key used by Steam catalog sync and live player count reads.
 - `ADMIN_API_SECRET`: backend-only secret required by manual admin POST endpoints via `x-admin-secret`.
 - `CRON_SECRET`: backend-only secret required by cron refresh endpoints in production.
+- `PRICE_REFRESH_*`, `PLAYER_COUNT_*`, `STEAM_STORE_PRICE_STALE_HOURS`, `GOG_PRICE_STALE_HOURS`, `CATALOG_PRICE_STALE_HOURS`: backend-only scheduler limits and freshness windows.
 - `PRICE_PROVIDER`: active default is `gamevalue`.
 - `PRICE_MODE`: active default is `internal`.
 - `ENABLE_LEGACY_PRICE_PROVIDERS`: must stay `false` unless a future legal/API-safe external adapter is intentionally enabled.
@@ -93,10 +94,15 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 8. The GOG connector is admin/backend-only, disabled by default and writes official DRM-free offers only after a manual `GameExternalMapping` exists.
 9. `POST /api/admin/gog/catalog/discover` stores small `GogCatalogEntry` review rows and returns suggested mappings, but it
    does not create mappings automatically.
-10. GOG price refresh defaults to `dryRun=true`; dry runs return parsed price previews and do not write `StoreOffer` or
+10. `POST /api/admin/gog/mappings/suggest` returns exact, review-required and uncertain candidates; `POST /api/admin/gog/mappings/approve` is the manual approval write path.
+11. GOG price refresh defaults to `dryRun=true`; dry runs return parsed price previews and do not write `StoreOffer` or
     `GamePriceSnapshot` rows.
-11. The Steam Store price connector is admin/backend-only, disabled by default and writes official Steam offers only from JSON `appdetails` responses.
-12. `GET /api/admin/prices/mock-cleanup/preview` reports old mock/demo price rows. `POST /api/admin/prices/mock-cleanup/run` requires `confirm=DELETE_MOCK_PRICE_DATA_ONLY` and deletes only mock price offers, mock price snapshots and mock price sources.
+12. The Steam Store price connector is admin/backend-only, disabled by default and writes official Steam offers only from JSON `appdetails` responses.
+13. `CatalogStoreOffer` stores Steam Store backfill for `SteamCatalogEntry` rows without creating `Game` records.
+14. `POST /api/admin/automation/refresh-prices` runs a capped scheduler for imported Steam Store prices and mapped GOG prices.
+15. `POST /api/admin/automation/backfill-catalog-prices` runs a capped catalog-only backfill scheduler.
+16. `GET|POST /api/cron/refresh-prices`, `GET|POST /api/cron/backfill-catalog-prices` and `GET|POST /api/cron/refresh-player-counts` are protected by `CRON_SECRET`.
+17. `GET /api/admin/prices/mock-cleanup/preview` reports old mock/demo price rows. `POST /api/admin/prices/mock-cleanup/run` requires `confirm=DELETE_MOCK_PRICE_DATA_ONLY` and deletes only mock price offers, mock price snapshots and mock price sources.
 
 ## Stats overview flow
 
@@ -105,7 +111,7 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 3. `CategoryRankingService` and `GameTagNormalizer` classify games into trend, price, data-source and genre categories.
 4. It calculates top players, trending up/down, drops, best value, free-to-play, tracked deals, watchlist popularity, hidden gems and categories.
 5. It returns `mode: "real" | "mixed" | "mock"` based on real/mock player and price snapshot counts.
-6. The overview includes `realInternalPriceSnapshots`, GOG/Steam Store/manual offer counts, games without prices, missing-data hints, player counts and price provider mode.
+6. The overview includes `realInternalPriceSnapshots`, GOG/Steam Store/manual/catalog offer counts, games without prices, stale player counts, missing-data hints, player counts and price provider mode.
 7. Home and Stats screens display `updatedAt`, source counts, player source badges, GameValue price source badges and category sections.
 
 ## Category taxonomy flow
@@ -142,4 +148,5 @@ Public `GET /api/games/:id/players` can read current/cached player data, but it 
 - Always run mock price cleanup preview before cleanup run.
 - Keep GOG discovery and price refresh limits small; discovery suggestions are not approved mappings.
 - Keep Steam Store price refreshes as `dryRun=true` until status/test output confirms valid JSON-derived prices.
+- Keep catalog price backfill capped and stored in `CatalogStoreOffer`; do not import catalog entries into `Game` during backfill.
 - Keep admin secrets in local form state or terminal environment only; do not commit them.

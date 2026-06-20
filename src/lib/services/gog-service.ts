@@ -3,7 +3,9 @@ import {
   getGogCatalogBaseUrl,
   getGogCountryCode,
   getGogCurrency,
+  getGogPriceStaleHours,
   getGogRequestLimitPerHour,
+  getPriceRefreshMaxRuntimeMs,
   isGogEnabled
 } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
@@ -22,6 +24,7 @@ import type {
   ApiGogCatalogDiscoverRequest,
   ApiGogCatalogDiscoverResponse,
   ApiGogCatalogSuggestedMapping,
+  ApiGogMappingSuggestResponse,
   ApiGogPricePreview,
   ApiGogPriceRefreshRequest,
   ApiGogPriceRefreshResponse
@@ -355,6 +358,79 @@ export class GogService {
     return mapping;
   }
 
+  async approveMapping(input: {
+    gameId: string;
+    gogProductId: string;
+    externalSlug?: string | null;
+    confidence?: GogMappingConfidence;
+  }): Promise<GameExternalMapping> {
+    const catalogEntry = input.externalSlug ? null : await repositories.gog.findCatalogByProductId(input.gogProductId);
+    return this.upsertMapping({
+      ...input,
+      externalSlug: input.externalSlug ?? catalogEntry?.slug ?? null,
+      confidence: input.confidence ?? "manual"
+    });
+  }
+
+  async suggestMappings(input: { mode?: "imported-games"; limit?: number }): Promise<ApiGogMappingSuggestResponse> {
+    ensureEnabled();
+    const limit = clampPositive(input.limit ?? 20, 1, 50);
+    const games = await repositories.games.listImported(limit);
+    const exactMatches: ApiGogCatalogSuggestedMapping[] = [];
+    const reviewRequired: ApiGogCatalogSuggestedMapping[] = [];
+    const uncertain: ApiGogCatalogSuggestedMapping[] = [];
+    const skipped: ApiGogMappingSuggestResponse["skipped"] = [];
+
+    for (const game of games) {
+      const existingMapping = await repositories.gog.findMappingByGameId(game.id);
+      if (existingMapping) {
+        skipped.push({
+          gameId: game.id,
+          steamAppId: game.steamAppId,
+          title: game.title,
+          reason: "GOG mapping already exists."
+        });
+        continue;
+      }
+
+      const search = await this.searchCatalog({ query: game.title, limit: 10 });
+      const suggestions = this.mapper.suggest(game, search.results);
+      if (suggestions.length === 0) {
+        skipped.push({
+          gameId: game.id,
+          steamAppId: game.steamAppId,
+          title: game.title,
+          reason: "No GOG catalog candidates found."
+        });
+        continue;
+      }
+
+      for (const suggestion of suggestions) {
+        const apiSuggestion = suggestionToApi(game, suggestion);
+        if (apiSuggestion.confidence === "exact") {
+          exactMatches.push(apiSuggestion);
+        } else if (apiSuggestion.confidence === "title-match") {
+          reviewRequired.push(apiSuggestion);
+        } else {
+          uncertain.push(apiSuggestion);
+        }
+      }
+    }
+
+    await logGog(
+      "info",
+      `GOG mapping suggestions finished. mode=imported-games, games=${games.length}, exact=${exactMatches.length}, review=${reviewRequired.length}, uncertain=${uncertain.length}, skipped=${skipped.length}.`
+    );
+
+    return {
+      mode: "imported-games",
+      exactMatches,
+      reviewRequired,
+      uncertain,
+      skipped
+    };
+  }
+
   async searchCatalog(input: { query: string; limit?: number }) {
     ensureEnabled();
     const products = await this.catalogConnector.search(input.query, input.limit ?? 10);
@@ -466,6 +542,8 @@ export class GogService {
 
   async refreshPrices(input: ApiGogPriceRefreshRequest): Promise<ApiGogPriceRefreshResponse> {
     ensureEnabled();
+    const started = Date.now();
+    const startedAt = new Date(started);
     const limit = Math.min(Math.max(input.limit ?? 10, 1), 10);
     const mappings = await this.mappingsForRefresh(input.gameIds, limit);
     const result: ApiGogPriceRefreshResponse = {
@@ -476,6 +554,11 @@ export class GogService {
       refreshed: 0,
       skipped: 0,
       failed: 0,
+      skippedFreshCache: 0,
+      skippedNoMapping: input.gameIds && input.gameIds.length > mappings.length ? input.gameIds.length - mappings.length : 0,
+      startedAt: startedAt.toISOString(),
+      finishedAt: startedAt.toISOString(),
+      durationMs: 0,
       errors: [] as Array<{ gameId: string; gogProductId?: string; message: string }>,
       results: [] as Array<{
         gameId: string;
@@ -488,8 +571,14 @@ export class GogService {
         message: string | null;
       }>
     };
+    const staleBefore = new Date(Date.now() - getGogPriceStaleHours() * 60 * 60 * 1000);
 
     for (const mapping of mappings) {
+      if (Date.now() - started > getPriceRefreshMaxRuntimeMs()) {
+        result.failed += 1;
+        result.errors.push({ gameId: mapping.gameId, gogProductId: mapping.externalId, message: "GOG price refresh stopped at max runtime." });
+        break;
+      }
       try {
         if (mapping.confidence === "unknown") {
           result.skipped += 1;
@@ -509,6 +598,25 @@ export class GogService {
         const game = await repositories.games.findById(mapping.gameId);
         if (!game) {
           throw new GogConnectorError(`Game ${mapping.gameId} was not found.`, "not_found");
+        }
+
+        const latestGogSnapshot = (await repositories.snapshots.listPrices(game.id))
+          .filter((snapshot) => snapshot.source === "gog")
+          .sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())[0];
+        if (!result.dryRun && latestGogSnapshot && latestGogSnapshot.capturedAt >= staleBefore) {
+          result.skipped += 1;
+          result.skippedFreshCache = (result.skippedFreshCache ?? 0) + 1;
+          result.results.push({
+            gameId: game.id,
+            gogProductId: mapping.externalId,
+            refreshed: false,
+            skipped: true,
+            preview: null,
+            offerId: null,
+            snapshotId: null,
+            message: "Skipped fresh GOG price cache."
+          });
+          continue;
         }
 
         const product = await this.priceConnector.getCatalogProduct({
@@ -563,9 +671,13 @@ export class GogService {
       }
     }
 
+    const finishedAt = new Date();
+    result.finishedAt = finishedAt.toISOString();
+    result.durationMs = finishedAt.getTime() - startedAt.getTime();
+
     await logGog(
       result.failed > 0 ? "warning" : "info",
-      `GOG price refresh finished. dryRun=${result.dryRun}, requested=${result.requested}, refreshed=${result.refreshed}, skipped=${result.skipped}, failed=${result.failed}.`
+      `GOG price refresh finished. dryRun=${result.dryRun}, requested=${result.requested}, refreshed=${result.refreshed}, skipped=${result.skipped}, skippedFreshCache=${result.skippedFreshCache ?? 0}, failed=${result.failed}, durationMs=${result.durationMs}.`
     );
 
     return result;

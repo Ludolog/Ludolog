@@ -8,6 +8,7 @@ import {
   countOffersBySource,
   countPriceSnapshotsBySource,
   createPriceAlert,
+  findGogCatalogEntryByProductId,
   findGogMappingByGameId,
   findGogMappingsByGameIds,
   findSteamCatalogEntryBySteamAppId,
@@ -32,6 +33,7 @@ import {
   listGames,
   listGogMappings,
   listIntegrationLogs,
+  listSteamCatalogEntries,
   listPriceAlerts,
   listWatchlist,
   recordIntegrationLog,
@@ -52,6 +54,8 @@ import {
 import type {
   AlertRepository,
   AppRepositories,
+  CatalogStoreOfferInput,
+  CatalogStoreOfferRepository,
   DiagnosticsRepository,
   GameRepository,
   GogRepository,
@@ -63,6 +67,13 @@ import type {
   WatchlistRepository
 } from "@/lib/repositories/contracts";
 import type { GameImportInput, GamePriceSnapshot, PlayerCountSnapshot, StoreOffer } from "@/lib/types";
+import type { CatalogStoreOffer } from "@/lib/types";
+
+const catalogStoreOffers: CatalogStoreOffer[] = [];
+
+function catalogOfferFreshness(fetchedAt: Date, staleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000)): CatalogStoreOffer["freshness"] {
+  return fetchedAt.getTime() < staleBefore.getTime() ? "stale" : "fresh";
+}
 
 class MockGameRepository implements GameRepository {
   async list() {
@@ -163,7 +174,8 @@ class MockPriceRepository implements PriceRepository {
         countOffersBySource("manual") + countOffersBySource("gog") + countOffersBySource("steam-store"),
       mockOffers: countOffersBySource("mock"),
       steamStoreOfferCount: countOffersBySource("steam-store"),
-      steamStorePriceSnapshotCount: countPriceSnapshotsBySource("steam-store")
+      steamStorePriceSnapshotCount: countPriceSnapshotsBySource("steam-store"),
+      catalogStoreOfferCount: catalogStoreOffers.length
     };
   }
 
@@ -173,6 +185,57 @@ class MockPriceRepository implements PriceRepository {
 
   async runMockCleanup() {
     return runMockPriceCleanup();
+  }
+}
+
+class MockCatalogStoreOfferRepository implements CatalogStoreOfferRepository {
+  async upsert(input: CatalogStoreOfferInput) {
+    const now = new Date();
+    const existingIndex = catalogStoreOffers.findIndex((offer) => offer.id === input.id);
+    const existing = existingIndex >= 0 ? catalogStoreOffers[existingIndex] : null;
+    const offer: CatalogStoreOffer = {
+      ...input,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      sourceConfidence: input.provider === "steam-store" ? "experimental-store-api" : "internal-real",
+      sourceName: input.provider,
+      freshness: catalogOfferFreshness(input.fetchedAt)
+    };
+    if (existingIndex >= 0) {
+      catalogStoreOffers[existingIndex] = offer;
+    } else {
+      catalogStoreOffers.push(offer);
+    }
+    return { offer, created: existing === null };
+  }
+
+  async findBySteamAppIds(steamAppIds: number[]) {
+    const ids = new Set(steamAppIds);
+    return catalogStoreOffers
+      .filter((offer) => offer.steamAppId !== null && ids.has(offer.steamAppId))
+      .map((offer) => ({ ...offer, freshness: catalogOfferFreshness(offer.fetchedAt) }));
+  }
+
+  async listSteamBackfillCandidates(limit: number, staleBefore: Date) {
+    const games = new Set(listGames().map((game) => game.steamAppId));
+    const fresh = new Set(
+      catalogStoreOffers
+        .filter((offer) => offer.provider === "steam-store" && offer.fetchedAt >= staleBefore && offer.steamAppId !== null)
+        .map((offer) => offer.steamAppId as number)
+    );
+    return listSteamCatalogEntries(Math.max(limit * 3, limit))
+      .filter((entry) => !games.has(entry.steamAppId) && !fresh.has(entry.steamAppId))
+      .slice(0, limit);
+  }
+
+  async status(staleBefore: Date) {
+    const steamCatalogOffers = catalogStoreOffers.filter((offer) => offer.provider === "steam-store");
+    return {
+      catalogStoreOfferCount: catalogStoreOffers.length,
+      staleCatalogStoreOfferCount: catalogStoreOffers.filter((offer) => offer.fetchedAt < staleBefore).length,
+      lastCatalogStoreOfferRefresh:
+        steamCatalogOffers.sort((a, b) => b.fetchedAt.getTime() - a.fetchedAt.getTime())[0]?.fetchedAt ?? null
+    };
   }
 }
 
@@ -197,6 +260,10 @@ class MockSteamCatalogRepository implements SteamCatalogRepository {
 class MockGogRepository implements GogRepository {
   async searchCatalog(query: string, limit?: number) {
     return searchGogCatalogEntries(query, limit);
+  }
+
+  async findCatalogByProductId(gogProductId: string) {
+    return findGogCatalogEntryByProductId(gogProductId);
   }
 
   async upsertCatalogEntries(entries: Parameters<typeof upsertGogCatalogEntries>[0]) {
@@ -311,6 +378,7 @@ export function createMockRepositories(): AppRepositories {
     steamCatalog: new MockSteamCatalogRepository(),
     gog: new MockGogRepository(),
     prices: new MockPriceRepository(),
+    catalogOffers: new MockCatalogStoreOfferRepository(),
     watchlist: new MockWatchlistRepository(),
     alerts: new MockAlertRepository(),
     snapshots: new MockSnapshotRepository(),

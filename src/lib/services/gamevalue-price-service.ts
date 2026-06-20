@@ -35,7 +35,8 @@ export class GameValuePriceService {
       realOffers: status.realOffers,
       mockOffers: status.mockOffers,
       steamStoreOfferCount: status.steamStoreOfferCount,
-      steamStorePriceSnapshotCount: status.steamStorePriceSnapshotCount
+      steamStorePriceSnapshotCount: status.steamStorePriceSnapshotCount,
+      catalogStoreOfferCount: status.catalogStoreOfferCount
     };
   }
 

@@ -1,9 +1,23 @@
 ﻿import Link from "next/link";
-import { AlertTriangle, Database, Layers, RefreshCw, Server, ShoppingCart } from "lucide-react";
+import { AlertTriangle, Clock, Database, Layers, RefreshCw, Server, ShoppingCart } from "lucide-react";
 
 import { RefreshButton } from "@/components/forms/refresh-button";
 import { AdminActionButton } from "@/components/forms/admin-action-button";
 import { AdminSecretPanel } from "@/components/forms/admin-secret-panel";
+import {
+  getCatalogPriceStaleHours,
+  getGogPriceStaleHours,
+  getPlayerCountRefreshLimit,
+  getPlayerCountStaleMinutes,
+  getPriceRefreshCatalogBackfillLimit,
+  getPriceRefreshGogLimit,
+  getPriceRefreshImportedLimit,
+  getPriceRefreshMaxRuntimeMs,
+  getPriceRefreshSteamStoreLimit,
+  getSteamStorePriceStaleHours,
+  isPriceRefreshCatalogBackfillEnabled,
+  isPriceRefreshEnabled
+} from "@/lib/config";
 import { formatDate, formatNumber, formatPrice } from "@/lib/format";
 import { repositories } from "@/lib/repositories";
 import { categoryRankingService } from "@/lib/services/category-service";
@@ -78,6 +92,7 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           label="Steam snaps"
           value={String(status.steamStorePriceSnapshotCount)}
         />
+        <StatusCard icon={<ShoppingCart size={18} />} label="Catalog offers" value={String(status.catalogStoreOfferCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Player snapshots" value={String(status.playerSnapshotCount)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Real player snaps" value={String(status.realPlayerSnapshots)} />
         <StatusCard icon={<RefreshCw size={18} />} label="Mock player snaps" value={String(status.mockPlayerSnapshots)} />
@@ -230,6 +245,88 @@ export default async function AdminPage(): Promise<React.ReactElement> {
       </section>
 
       <section className="surface rounded-lg p-5">
+        <h2 className="text-lg font-semibold text-white">Automation and freshness</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Cron-safe refresh controls for Steam Store prices, mapped GOG prices, catalog price backfill and Steam player
+          snapshots. Defaults are capped; use dry runs before real refreshes.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <InlineStatus icon={<Clock size={18} />} label="PRICE_REFRESH" value={isPriceRefreshEnabled() ? "enabled" : "disabled"} />
+          <InlineStatus
+            icon={<Clock size={18} />}
+            label="Catalog backfill"
+            value={isPriceRefreshCatalogBackfillEnabled() ? "enabled" : "manual"}
+          />
+          <InlineStatus icon={<Clock size={18} />} label="Imported limit" value={String(getPriceRefreshImportedLimit())} />
+          <InlineStatus icon={<Clock size={18} />} label="Steam limit" value={String(getPriceRefreshSteamStoreLimit())} />
+          <InlineStatus icon={<Clock size={18} />} label="GOG limit" value={String(getPriceRefreshGogLimit())} />
+          <InlineStatus icon={<Clock size={18} />} label="Backfill limit" value={String(getPriceRefreshCatalogBackfillLimit())} />
+          <InlineStatus icon={<Clock size={18} />} label="Max runtime" value={`${getPriceRefreshMaxRuntimeMs()} ms`} />
+          <InlineStatus icon={<Clock size={18} />} label="Player limit" value={String(getPlayerCountRefreshLimit())} />
+          <InlineStatus icon={<RefreshCw size={18} />} label="Steam stale" value={`${getSteamStorePriceStaleHours()} h`} />
+          <InlineStatus icon={<RefreshCw size={18} />} label="GOG stale" value={`${getGogPriceStaleHours()} h`} />
+          <InlineStatus icon={<RefreshCw size={18} />} label="Catalog stale" value={`${getCatalogPriceStaleHours()} h`} />
+          <InlineStatus icon={<RefreshCw size={18} />} label="Players stale" value={`${getPlayerCountStaleMinutes()} min`} />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Last price"
+            value={status.lastPriceRefresh ? formatDate(status.lastPriceRefresh) : "n/a"}
+          />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Last players"
+            value={status.lastPlayerCountRefresh ? formatDate(status.lastPlayerCountRefresh) : "n/a"}
+          />
+          <InlineStatus icon={<ShoppingCart size={18} />} label="Catalog offers" value={String(status.catalogStoreOfferCount)} />
+          <InlineStatus icon={<ShoppingCart size={18} />} label="Real offers" value={String(status.realOffers)} />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <AdminActionButton
+            endpoint="/api/admin/automation/refresh-prices"
+            label="Dry run price automation"
+            body={{ dryRun: true, includeCatalogBackfill: false }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/automation/refresh-prices"
+            label="Run price automation"
+            body={{ dryRun: false, includeCatalogBackfill: false }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/automation/refresh-prices"
+            label="Dry run prices + catalog"
+            body={{ dryRun: true, includeCatalogBackfill: true }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/automation/backfill-catalog-prices"
+            label="Dry run catalog backfill"
+            body={{ dryRun: true }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/automation/backfill-catalog-prices"
+            label="Run catalog backfill"
+            body={{ dryRun: false }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/player-counts/refresh"
+            label="Refresh top players"
+            body={{ mode: "top", limit: getPlayerCountRefreshLimit() }}
+            editableBody
+            requireSecret
+          />
+        </div>
+      </section>
+
+      <section className="surface rounded-lg p-5">
         <h2 className="text-lg font-semibold text-white">GOG Connector</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
           Backend-only store connector for the internal GameValue Price API. It uses public GOG JSON endpoints in small
@@ -274,6 +371,13 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             requireSecret
           />
           <AdminActionButton
+            endpoint="/api/admin/gog/mappings/suggest"
+            label="Suggest GOG mappings"
+            body={{ mode: "imported-games", limit: 20 }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
             endpoint="/api/admin/gog/catalog/discover"
             label="Discover GOG queries"
             body={{ queries: ["witcher", "cyberpunk", "stardew valley"], limit: 3 }}
@@ -294,6 +398,17 @@ export default async function AdminPage(): Promise<React.ReactElement> {
               gameId: "cyberpunk-2077",
               gogProductId: "2093619782",
               externalSlug: "cyberpunk_2077",
+              confidence: "manual"
+            }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/gog/mappings/approve"
+            label="Approve GOG mapping"
+            body={{
+              gameId: "cyberpunk-2077",
+              gogProductId: "2093619782",
               confidence: "manual"
             }}
             editableBody
@@ -383,14 +498,28 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           <AdminActionButton
             endpoint="/api/admin/steam-store-prices/refresh"
             label="Dry run imported Steam prices"
-            body={{ limit: 5, dryRun: true }}
+            body={{ mode: "imported", limit: 5, dryRun: true }}
             editableBody
             requireSecret
           />
           <AdminActionButton
             endpoint="/api/admin/steam-store-prices/refresh"
             label="Refresh imported Steam prices"
-            body={{ limit: 5, dryRun: false }}
+            body={{ mode: "imported", limit: 5, dryRun: false }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/steam-store-prices/refresh"
+            label="Dry run catalog Steam prices"
+            body={{ mode: "catalog-backfill", limit: 10, dryRun: true }}
+            editableBody
+            requireSecret
+          />
+          <AdminActionButton
+            endpoint="/api/admin/steam-store-prices/refresh"
+            label="Backfill catalog Steam prices"
+            body={{ mode: "catalog-backfill", limit: 10, dryRun: false }}
             editableBody
             requireSecret
           />

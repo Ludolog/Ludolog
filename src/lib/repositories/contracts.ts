@@ -1,5 +1,6 @@
 import type {
   AdminStatus,
+  CatalogStoreOffer,
   GameExternalMapping,
   Game,
   GameImportInput,
@@ -69,6 +70,7 @@ export type PricesStatus = {
   mockOffers: number;
   steamStoreOfferCount: number;
   steamStorePriceSnapshotCount: number;
+  catalogStoreOfferCount: number;
 };
 
 export type MockPriceCleanupGame = {
@@ -114,6 +116,21 @@ export interface PriceRepository {
   runMockCleanup(): Promise<MockPriceCleanupRun>;
 }
 
+export type CatalogStoreOfferInput = Omit<CatalogStoreOffer, "createdAt" | "updatedAt" | "sourceConfidence" | "sourceName" | "freshness">;
+
+export type CatalogStoreOfferStatus = {
+  catalogStoreOfferCount: number;
+  staleCatalogStoreOfferCount: number;
+  lastCatalogStoreOfferRefresh: Date | null;
+};
+
+export interface CatalogStoreOfferRepository {
+  upsert(input: CatalogStoreOfferInput): Promise<{ offer: CatalogStoreOffer; created: boolean }>;
+  findBySteamAppIds(steamAppIds: number[]): Promise<CatalogStoreOffer[]>;
+  listSteamBackfillCandidates(limit: number, staleBefore: Date): Promise<SteamCatalogEntry[]>;
+  status(staleBefore: Date): Promise<CatalogStoreOfferStatus>;
+}
+
 export type SteamCatalogUpsertInput = Omit<SteamCatalogEntry, "createdAt" | "updatedAt">;
 
 export type SteamCatalogUpsertResult = {
@@ -144,6 +161,7 @@ export type GogMappingInput = {
 
 export interface GogRepository {
   searchCatalog(query: string, limit?: number): Promise<GogCatalogEntry[]>;
+  findCatalogByProductId(gogProductId: string): Promise<GogCatalogEntry | null>;
   upsertCatalogEntries(entries: GogCatalogUpsertInput[]): Promise<GogCatalogUpsertResult>;
   listMappings(limit?: number): Promise<GameExternalMapping[]>;
   findMappingByGameId(gameId: string): Promise<GameExternalMapping | null>;
@@ -188,6 +206,7 @@ export interface AppRepositories {
   steamCatalog: SteamCatalogRepository;
   gog: GogRepository;
   prices: PriceRepository;
+  catalogOffers: CatalogStoreOfferRepository;
   watchlist: WatchlistRepository;
   alerts: AlertRepository;
   snapshots: SnapshotRepository;

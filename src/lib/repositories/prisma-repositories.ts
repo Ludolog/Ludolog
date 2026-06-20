@@ -19,6 +19,8 @@ import { prisma } from "@/lib/repositories/prisma-client";
 import type {
   AlertRepository,
   AppRepositories,
+  CatalogStoreOfferInput,
+  CatalogStoreOfferRepository,
   DiagnosticsRepository,
   GameRepository,
   GogRepository,
@@ -41,6 +43,7 @@ import {
 } from "@/lib/services/price-source-utils";
 import type {
   AdminStatus,
+  CatalogStoreOffer,
   DataSource,
   Game,
   GameExternalMapping,
@@ -73,6 +76,7 @@ type PrismaAlert = Prisma.PriceAlertGetPayload<Record<string, never>>;
 type PrismaLog = Prisma.IntegrationLogGetPayload<Record<string, never>>;
 type PrismaStore = Prisma.StoreGetPayload<Record<string, never>>;
 type PrismaPriceSource = Prisma.PriceSourceGetPayload<Record<string, never>>;
+type PrismaCatalogStoreOffer = Prisma.CatalogStoreOfferGetPayload<Record<string, never>>;
 
 function sourceFromPrisma(source: string): DataSource {
   if (source === "steam_api") {
@@ -277,6 +281,36 @@ function mapPriceSource(source: PrismaPriceSource): PriceSource {
     isActive: source.isActive,
     createdAt: source.createdAt,
     updatedAt: source.updatedAt
+  };
+}
+
+function mapCatalogStoreOffer(offer: PrismaCatalogStoreOffer, staleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000)): CatalogStoreOffer {
+  return {
+    id: offer.id,
+    steamAppId: offer.steamAppId,
+    gogProductId: offer.gogProductId,
+    catalogSource: offer.catalogSource,
+    gameId: offer.gameId,
+    provider: offer.provider,
+    storeName: offer.storeName,
+    storeType: offer.storeType as CatalogStoreOffer["storeType"],
+    title: offer.title,
+    price: Number(offer.price),
+    regularPrice: offer.regularPrice === null ? null : Number(offer.regularPrice),
+    currency: offer.currency,
+    discountPercent: offer.discountPercent,
+    externalUrl: offer.externalUrl,
+    countryCode: offer.countryCode,
+    available: offer.available,
+    drm: offer.drm,
+    sourceRawId: offer.sourceRawId,
+    rawProviderData: offer.rawProviderData,
+    fetchedAt: offer.fetchedAt,
+    createdAt: offer.createdAt,
+    updatedAt: offer.updatedAt,
+    sourceConfidence: offer.provider === "steam-store" ? "experimental-store-api" : "internal-real",
+    sourceName: offer.provider,
+    freshness: offer.fetchedAt < staleBefore ? "stale" : "fresh"
   };
 }
 
@@ -971,6 +1005,11 @@ class PrismaGogRepository implements GogRepository {
     return entries.map(mapGogCatalogEntry);
   }
 
+  async findCatalogByProductId(gogProductId: string): Promise<GogCatalogEntry | null> {
+    const entry = await prisma.gogCatalogEntry.findUnique({ where: { gogProductId } });
+    return entry ? mapGogCatalogEntry(entry) : null;
+  }
+
   async upsertCatalogEntries(entries: Array<Omit<GogCatalogEntry, "createdAt" | "updatedAt">>) {
     let created = 0;
     let updated = 0;
@@ -1320,7 +1359,8 @@ class PrismaPriceRepository implements PriceRepository {
       manualOffers,
       gogOffers,
       steamStoreOffers,
-      mockOffers
+      mockOffers,
+      catalogOfferStatus
     ] = await Promise.all([
       prisma.storeOffer.count(),
       prisma.gamePriceSnapshot.count(),
@@ -1334,7 +1374,8 @@ class PrismaPriceRepository implements PriceRepository {
       new PrismaGameRepository().countOffersBySource("manual"),
       new PrismaGameRepository().countOffersBySource("gog"),
       new PrismaGameRepository().countOffersBySource("steam-store"),
-      new PrismaGameRepository().countOffersBySource("mock")
+      new PrismaGameRepository().countOffersBySource("mock"),
+      new PrismaCatalogStoreOfferRepository().status(new Date(Date.now() - 24 * 60 * 60 * 1000))
     ]);
     const realInternalPriceSnapshots = manualPriceSnapshots + gogPriceSnapshots + steamStorePriceSnapshots;
     const realOffers = manualOffers + gogOffers + steamStoreOffers;
@@ -1349,7 +1390,8 @@ class PrismaPriceRepository implements PriceRepository {
       realOffers,
       mockOffers,
       steamStoreOfferCount: steamStoreOffers,
-      steamStorePriceSnapshotCount: steamStorePriceSnapshots
+      steamStorePriceSnapshotCount: steamStorePriceSnapshots,
+      catalogStoreOfferCount: catalogOfferStatus.catalogStoreOfferCount
     };
   }
 
@@ -1374,6 +1416,116 @@ class PrismaPriceRepository implements PriceRepository {
       deletedStoreOffers: deletedOffers.count,
       deletedPriceSnapshots: deletedSnapshots.count,
       deletedPriceSources: deletedSources.count
+    };
+  }
+}
+
+class PrismaCatalogStoreOfferRepository implements CatalogStoreOfferRepository {
+  async upsert(input: CatalogStoreOfferInput): Promise<{ offer: CatalogStoreOffer; created: boolean }> {
+    const existing = await prisma.catalogStoreOffer.findUnique({ where: { id: input.id } });
+    const now = new Date();
+    const offer = await prisma.catalogStoreOffer.upsert({
+      where: { id: input.id },
+      update: {
+        steamAppId: input.steamAppId,
+        gogProductId: input.gogProductId,
+        catalogSource: input.catalogSource,
+        gameId: input.gameId,
+        provider: input.provider,
+        storeName: input.storeName,
+        storeType: input.storeType,
+        title: input.title,
+        price: input.price,
+        regularPrice: input.regularPrice,
+        currency: input.currency,
+        discountPercent: input.discountPercent,
+        externalUrl: input.externalUrl,
+        countryCode: input.countryCode,
+        available: input.available,
+        drm: input.drm,
+        sourceRawId: input.sourceRawId,
+        rawProviderData: input.rawProviderData as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput,
+        fetchedAt: input.fetchedAt,
+        updatedAt: now
+      },
+      create: {
+        id: input.id,
+        steamAppId: input.steamAppId,
+        gogProductId: input.gogProductId,
+        catalogSource: input.catalogSource,
+        gameId: input.gameId,
+        provider: input.provider,
+        storeName: input.storeName,
+        storeType: input.storeType,
+        title: input.title,
+        price: input.price,
+        regularPrice: input.regularPrice,
+        currency: input.currency,
+        discountPercent: input.discountPercent,
+        externalUrl: input.externalUrl,
+        countryCode: input.countryCode,
+        available: input.available,
+        drm: input.drm,
+        sourceRawId: input.sourceRawId,
+        rawProviderData: input.rawProviderData as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput,
+        fetchedAt: input.fetchedAt,
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+    return { offer: mapCatalogStoreOffer(offer), created: existing === null };
+  }
+
+  async findBySteamAppIds(steamAppIds: number[]): Promise<CatalogStoreOffer[]> {
+    if (steamAppIds.length === 0) {
+      return [];
+    }
+    const offers = await prisma.catalogStoreOffer.findMany({
+      where: { steamAppId: { in: steamAppIds }, provider: "steam-store" },
+      orderBy: { fetchedAt: "desc" }
+    });
+    return offers.map((offer) => mapCatalogStoreOffer(offer));
+  }
+
+  async listSteamBackfillCandidates(limit: number, staleBefore: Date): Promise<SteamCatalogEntry[]> {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    const [importedGames, freshOffers] = await Promise.all([
+      prisma.game.findMany({ select: { steamAppId: true } }),
+      prisma.catalogStoreOffer.findMany({
+        where: {
+          provider: "steam-store",
+          steamAppId: { not: null },
+          fetchedAt: { gte: staleBefore }
+        },
+        select: { steamAppId: true }
+      })
+    ]);
+    const excluded = [
+      ...importedGames.map((game) => game.steamAppId),
+      ...freshOffers.map((offer) => offer.steamAppId).filter((steamAppId): steamAppId is number => steamAppId !== null)
+    ];
+    const entries = await prisma.steamCatalogEntry.findMany({
+      where: {
+        isGame: true,
+        isActive: true,
+        ...(excluded.length > 0 ? { steamAppId: { notIn: excluded } } : {})
+      },
+      orderBy: { steamAppId: "asc" },
+      take: safeLimit
+    });
+    return entries.map(mapSteamCatalogEntry);
+  }
+
+  async status(staleBefore: Date) {
+    const [catalogStoreOfferCount, staleCatalogStoreOfferCount, latest] = await Promise.all([
+      prisma.catalogStoreOffer.count(),
+      prisma.catalogStoreOffer.count({ where: { fetchedAt: { lt: staleBefore } } }),
+      prisma.catalogStoreOffer.findFirst({ orderBy: { fetchedAt: "desc" } })
+    ]);
+    return {
+      catalogStoreOfferCount,
+      staleCatalogStoreOfferCount,
+      lastCatalogStoreOfferRefresh: latest?.fetchedAt ?? null
     };
   }
 }
@@ -1439,12 +1591,13 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
       (await new PrismaGameRepository().countOffersBySource("steam-store")) +
       (await new PrismaGameRepository().countOffersBySource("ggdeals")) +
       (await new PrismaGameRepository().countOffersBySource("price-api"));
-    const [gogStatus, gogOfferCount, steamStoreOfferCount, lastGogPriceRefresh, lastSteamStorePriceRefresh] = await Promise.all([
+    const [gogStatus, gogOfferCount, steamStoreOfferCount, lastGogPriceRefresh, lastSteamStorePriceRefresh, catalogOfferStatus] = await Promise.all([
       new PrismaGogRepository().status(),
       new PrismaGameRepository().countOffersBySource("gog"),
       new PrismaGameRepository().countOffersBySource("steam-store"),
       prisma.gamePriceSnapshot.findFirst({ where: { source: "gog" }, orderBy: { capturedAt: "desc" } }),
-      prisma.gamePriceSnapshot.findFirst({ where: { source: "steam_store" }, orderBy: { capturedAt: "desc" } })
+      prisma.gamePriceSnapshot.findFirst({ where: { source: "steam_store" }, orderBy: { capturedAt: "desc" } }),
+      new PrismaCatalogStoreOfferRepository().status(new Date(Date.now() - 24 * 60 * 60 * 1000))
     ]);
     const gogLogs = integrationLogs.filter((log) => log.service === "gog");
     const steamStoreLogs = integrationLogs.filter((log) => log.service === "steam-store");
@@ -1500,6 +1653,7 @@ class PrismaDiagnosticsRepository implements DiagnosticsRepository {
       steamStoreCacheTtlMinutes: getSteamStorePriceCacheTtlMinutes(),
       steamStoreOfferCount,
       steamStorePriceSnapshotCount: steamStorePriceSnapshots,
+      catalogStoreOfferCount: catalogOfferStatus.catalogStoreOfferCount,
       lastSteamStorePriceRefresh: lastSteamStorePriceRefresh?.capturedAt ?? null,
       lastSteamStorePriceError: steamStoreLogs.find((log) => log.level === "error") ?? null,
       realPlayerSnapshots: await new PrismaSnapshotRepository().countPlayerSnapshotsBySource("steam-api"),
@@ -1516,6 +1670,7 @@ export function createPrismaRepositories(): AppRepositories {
     steamCatalog: new PrismaSteamCatalogRepository(),
     gog: new PrismaGogRepository(),
     prices: new PrismaPriceRepository(),
+    catalogOffers: new PrismaCatalogStoreOfferRepository(),
     watchlist: new PrismaWatchlistRepository(),
     alerts: new PrismaAlertRepository(),
     snapshots: new PrismaSnapshotRepository(),

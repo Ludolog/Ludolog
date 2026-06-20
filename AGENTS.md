@@ -30,6 +30,8 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 - GOG catalog discovery stores review entries and suggestions, not automatic mappings.
 - GOG price refresh defaults to dry run.
 - Steam Store price connector exists and is experimental.
+- Price refresh automation exists for small Steam Store, GOG and catalog backfill batches.
+- `CatalogStoreOffer` stores catalog-only Steam Store backfill prices without importing rows into `Game`.
 - GG.deals, ITAD, and CheapShark are legacy/disabled and are not active price providers.
 
 ## Technical Decisions
@@ -42,6 +44,9 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 - Do not work on Google Play release or release signing now.
 - Mock/demo prices must never be treated as trusted or real prices.
 - Do not import the full Steam catalog into `Game`; keep the large catalog in `SteamCatalogEntry`.
+- Do not run mass price refreshes over the full Steam catalog.
+- Use `CatalogStoreOffer` for catalog price backfill instead of creating tracked `Game` records.
+- GOG mapping suggestions require manual approval before price writes.
 
 ## Secrets And Safety
 
@@ -94,6 +99,19 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `STEAM_STORE_PRICE_ENABLED`
 - `STEAM_STORE_COUNTRY`
 - `STEAM_STORE_CURRENCY`
+- `PRICE_REFRESH_ENABLED`
+- `PRICE_REFRESH_IMPORTED_LIMIT`
+- `PRICE_REFRESH_STEAM_STORE_LIMIT`
+- `PRICE_REFRESH_GOG_LIMIT`
+- `PRICE_REFRESH_CATALOG_BACKFILL_ENABLED`
+- `PRICE_REFRESH_CATALOG_BACKFILL_LIMIT`
+- `PRICE_REFRESH_MAX_RUNTIME_MS`
+- `PLAYER_COUNT_REFRESH_LIMIT`
+- `PLAYER_COUNT_REFRESH_MAX_RUNTIME_MS`
+- `PLAYER_COUNT_STALE_MINUTES`
+- `STEAM_STORE_PRICE_STALE_HOURS`
+- `GOG_PRICE_STALE_HOURS`
+- `CATALOG_PRICE_STALE_HOURS`
 
 ## Commands
 
@@ -124,11 +142,18 @@ Names only; never write real values in docs, commits, logs, or chat.
 - `POST /api/admin/gog/catalog/search`
 - `POST /api/admin/gog/catalog/discover`
 - `POST /api/admin/gog/mappings`
+- `POST /api/admin/gog/mappings/suggest`
+- `POST /api/admin/gog/mappings/approve`
 - `POST /api/admin/gog/prices/test`
 - `POST /api/admin/gog/prices/refresh`
 - `GET /api/admin/steam-store-prices/status`
 - `POST /api/admin/steam-store-prices/test`
 - `POST /api/admin/steam-store-prices/refresh`
+- `POST /api/admin/automation/refresh-prices`
+- `POST /api/admin/automation/backfill-catalog-prices`
+- `GET|POST /api/cron/refresh-player-counts`
+- `GET|POST /api/cron/refresh-prices`
+- `GET|POST /api/cron/backfill-catalog-prices`
 - `GET /api/admin/prices/mock-cleanup/preview`
 - `POST /api/admin/prices/mock-cleanup/run`
 
@@ -146,11 +171,12 @@ Names only; never write real values in docs, commits, logs, or chat.
 
 ## Current Known State
 
-- `SteamCatalogEntry` is around 500 rows.
+- `SteamCatalogEntry` is around 2000 rows.
 - `Game` is around 20 rows.
-- GOG is enabled, but production offers/mappings are not present yet.
-- Steam Store prices are enabled, but production offers are not present yet.
+- GOG is enabled; mappings are still manual approval only.
+- Steam Store prices are enabled for small imported-game refreshes and catalog backfill.
+- `CatalogStoreOffer` keeps catalog price backfill separate from imported `Game` rows.
 - Stats mode is `mixed`.
 - Search/import/details works.
 - Categories work.
-- Mock/demo prices are excluded from trusted rankings, but old mock/demo price data still exists in the database until cleanup is safely run.
+- Mock/demo prices are excluded from trusted rankings; production mock price rows have been cleaned when status shows zero mock offers/snapshots.

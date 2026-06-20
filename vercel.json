@@ -2,5 +2,15 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "regions": ["fra1"]
+  "regions": ["fra1"],
+  "crons": [
+    {
+      "path": "/api/cron/refresh-player-counts",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/refresh-prices",
+      "schedule": "0 */6 * * *"
+    }
+  ]
 }

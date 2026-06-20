@@ -128,6 +128,58 @@ export function getSteamStorePriceMaxPerRun(): number {
   return Math.min(Math.floor(raw), 50);
 }
 
+export function isPriceRefreshEnabled(): boolean {
+  return getOptionalEnv("PRICE_REFRESH_ENABLED") !== "false";
+}
+
+export function getPriceRefreshImportedLimit(): number {
+  return numberEnv("PRICE_REFRESH_IMPORTED_LIMIT", 20, 1, 50);
+}
+
+export function getPriceRefreshSteamStoreLimit(): number {
+  return numberEnv("PRICE_REFRESH_STEAM_STORE_LIMIT", getSteamStorePriceMaxPerRun(), 1, 50);
+}
+
+export function getPriceRefreshGogLimit(): number {
+  return numberEnv("PRICE_REFRESH_GOG_LIMIT", 10, 1, 10);
+}
+
+export function isPriceRefreshCatalogBackfillEnabled(): boolean {
+  return getOptionalEnv("PRICE_REFRESH_CATALOG_BACKFILL_ENABLED") === "true";
+}
+
+export function getPriceRefreshCatalogBackfillLimit(): number {
+  return numberEnv("PRICE_REFRESH_CATALOG_BACKFILL_LIMIT", 10, 1, 50);
+}
+
+export function getPriceRefreshMaxRuntimeMs(): number {
+  return numberEnv("PRICE_REFRESH_MAX_RUNTIME_MS", 25_000, 1000, 55_000);
+}
+
+export function getPlayerCountRefreshLimit(): number {
+  return numberEnv("PLAYER_COUNT_REFRESH_LIMIT", 25, 1, 50);
+}
+
+export function getPlayerCountRefreshMaxRuntimeMs(): number {
+  return numberEnv("PLAYER_COUNT_REFRESH_MAX_RUNTIME_MS", 25_000, 1000, 55_000);
+}
+
+export function getPlayerCountStaleMinutes(): number {
+  return numberEnv("PLAYER_COUNT_STALE_MINUTES", 30, 1, 24 * 60);
+}
+
+export function getSteamStorePriceStaleHours(): number {
+  return numberEnv("STEAM_STORE_PRICE_STALE_HOURS", 6, 1, 24 * 30);
+}
+
+export function getGogPriceStaleHours(): number {
+  return numberEnv("GOG_PRICE_STALE_HOURS", 12, 1, 24 * 30);
+}
+
+export function getCatalogPriceStaleHours(): number {
+  return numberEnv("CATALOG_PRICE_STALE_HOURS", 24 * 7, 1, 24 * 90);
+}
+
 export function getAdminApiSecret(): string | undefined {
   return getOptionalEnv("ADMIN_API_SECRET");
 }
@@ -138,4 +190,12 @@ export function getCronSecret(): string | undefined {
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/g, "");
+}
+
+function numberEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = Number(getOptionalEnv(name) ?? String(fallback));
+  if (!Number.isFinite(raw)) {
+    return fallback;
+  }
+  return Math.max(min, Math.min(max, Math.floor(raw)));
 }

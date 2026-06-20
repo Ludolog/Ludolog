@@ -136,6 +136,38 @@ model GogCatalogEntry {
   @@index([syncedAt])
 }
 
+model CatalogStoreOffer {
+  id              String     @id
+  steamAppId      Int?
+  gogProductId    String?
+  catalogSource   String
+  gameId          String?
+  provider        String
+  storeName       String
+  storeType       String     @default("unknown")
+  title           String?
+  price           Decimal    @db.Decimal(10, 2)
+  regularPrice    Decimal?   @db.Decimal(10, 2)
+  currency        String
+  discountPercent Int
+  externalUrl     String?
+  countryCode     String     @default("PL")
+  available       Boolean    @default(true)
+  drm             String
+  sourceRawId     String?
+  rawProviderData Json?
+  fetchedAt       DateTime
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([steamAppId])
+  @@index([gogProductId])
+  @@index([catalogSource])
+  @@index([provider])
+  @@index([storeName])
+  @@index([fetchedAt])
+}
+
 model GameExternalMapping {
   id           String   @id
   gameId       String

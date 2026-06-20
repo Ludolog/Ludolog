@@ -23,6 +23,8 @@ Stored records use:
 - `storeType=official`
 - `drm=Steam`
 
+Catalog-only backfill writes to `CatalogStoreOffer`, not to `StoreOffer` or `GamePriceSnapshot`, unless the game is already imported and refreshed through normal imported-game mode. Backfill must not create `Game` rows.
+
 Status:
 
 ```powershell
@@ -48,3 +50,18 @@ Invoke-RestMethod `
 ```
 
 Do not run with `dryRun=false` until `STEAM_STORE_PRICE_ENABLED=true` has been deployed and the dry run confirms JSON-derived price data. Non-JSON responses are rejected and are never stored as offers or snapshots.
+
+Safe catalog backfill dry run:
+
+```powershell
+$body = @{ mode = "catalog-backfill"; limit = 10; dryRun = $true } | ConvertTo-Json -Compress
+
+Invoke-RestMethod `
+  -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/refresh" `
+  -Method POST `
+  -Headers $headers `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+Use `dryRun=false` only after checking the dry-run result. Keep limits small; do not run a full 2000-entry catalog refresh in one request.

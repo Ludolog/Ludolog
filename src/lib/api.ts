@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
-import { getAdminApiSecret } from "@/lib/config";
+import { getAdminApiSecret, getCronSecret } from "@/lib/config";
 
 export function jsonError(message: string, status = 400): NextResponse {
   return NextResponse.json({ error: message }, { status });
@@ -38,6 +38,17 @@ export function requireAdminSecret(request: Request): NextResponse | null {
   const provided = request.headers.get("x-admin-secret");
   if (!provided || !constantTimeEqual(provided, expected)) {
     return jsonError("Unauthorized admin action.", 401);
+  }
+
+  return null;
+}
+
+export function requireCronSecret(request: Request): NextResponse | null {
+  const expected = getCronSecret();
+  const provided = request.headers.get("x-cron-secret") ?? request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+
+  if (!expected || !provided || !constantTimeEqual(provided, expected)) {
+    return jsonError("Unauthorized cron action.", 401);
   }
 
   return null;

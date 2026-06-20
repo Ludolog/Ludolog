@@ -132,6 +132,15 @@ export const gogMappingSchema = z.object({
   confidence: z.enum(["exact", "title-match", "manual", "unknown"]).default("manual")
 });
 
+export const gogMappingSuggestSchema = z.object({
+  mode: z.literal("imported-games").default("imported-games"),
+  limit: z.number().int().positive().max(50).default(20)
+});
+
+export const gogMappingApproveSchema = gogMappingSchema.extend({
+  confidence: z.enum(["exact", "title-match", "manual", "unknown"]).default("manual")
+});
+
 export const gogResolveGameSchema = z.object({
   gameId: z.string().trim().min(1).max(120),
   limit: z.number().int().positive().max(25).default(10)
@@ -162,6 +171,7 @@ export const steamStorePriceTestSchema = z.object({
 });
 
 export const steamStorePriceRefreshSchema = z.object({
+  mode: z.enum(["imported", "catalog-backfill"]).default("imported"),
   steamAppIds: z.array(z.number().int().positive()).max(50).optional(),
   gameIds: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
   limit: z.number().int().positive().max(50).optional(),

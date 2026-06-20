@@ -31,8 +31,11 @@ describe("GET /api/stats/overview", () => {
       mockPlayerSnapshots: expect.any(Number),
       gogOffers: expect.any(Number),
       steamStoreOffers: expect.any(Number),
+      catalogStoreOffers: expect.any(Number),
       manualOffers: expect.any(Number),
-      gamesWithoutPrices: expect.any(Number)
+      gamesWithoutPrices: expect.any(Number),
+      stalePlayerSnapshots: expect.any(Number),
+      gamesWithoutPlayerData: expect.any(Number)
     });
   });
 });

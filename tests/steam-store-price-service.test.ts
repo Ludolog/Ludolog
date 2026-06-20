@@ -37,6 +37,23 @@ const samplePaidAppDetails = {
   }
 };
 
+const sampleCatalogAppDetails = {
+  "123456": {
+    success: true,
+    data: {
+      name: "Catalog Backfill Fixture",
+      type: "game",
+      is_free: false,
+      price_overview: {
+        currency: "PLN",
+        initial: 9999,
+        final: 4999,
+        discount_percent: 50
+      }
+    }
+  }
+};
+
 describe("Steam Store price connector", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -154,5 +171,54 @@ describe("Steam Store price connector", () => {
     });
     expect(afterOffers).toHaveLength(beforeOffers.length);
     expect(afterSnapshots).toHaveLength(beforeSnapshots.length);
+  });
+
+  it("dry-runs catalog backfill without importing a catalog game into Game", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    vi.stubEnv("STEAM_STORE_PRICE_ENABLED", "true");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(JSON.stringify(sampleCatalogAppDetails), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      })
+    );
+    await repositories.steamCatalog.upsertMany([
+      {
+        id: "steam-catalog-123456",
+        steamAppId: 123456,
+        title: "Catalog Backfill Fixture",
+        appType: "game",
+        lastModified: null,
+        priceChangeNumber: null,
+        isGame: true,
+        isActive: true,
+        source: "steam-api",
+        syncedAt: new Date("2026-06-20T00:00:00.000Z")
+      }
+    ]);
+    const beforeStatus = await repositories.catalogOffers.status(new Date());
+
+    const response = await refreshSteamStorePrices(
+      new Request("http://localhost/api/admin/steam-store-prices/refresh", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ mode: "catalog-backfill", limit: 1, dryRun: true })
+      })
+    );
+    const body = await response.json();
+    const afterStatus = await repositories.catalogOffers.status(new Date());
+    const importedGame = await repositories.games.findBySteamAppId(123456);
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ sourceName: "steam-store", dryRun: true, requested: 1, refreshed: 0, skipped: 1 });
+    expect(body.results[0]).toMatchObject({ gameId: null, steamAppId: 123456, offerId: null, snapshotId: null });
+    expect(importedGame).toBeNull();
+    expect(afterStatus.catalogStoreOfferCount).toBe(beforeStatus.catalogStoreOfferCount);
   });
 });

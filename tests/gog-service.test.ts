@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { POST as searchGogCatalog } from "@/app/api/admin/gog/catalog/search/route";
 import { POST as discoverGogCatalog } from "@/app/api/admin/gog/catalog/discover/route";
+import { POST as approveGogMapping } from "@/app/api/admin/gog/mappings/approve/route";
 import { POST as createGogMapping } from "@/app/api/admin/gog/mappings/route";
+import { POST as suggestGogMappings } from "@/app/api/admin/gog/mappings/suggest/route";
 import { POST as refreshGogPrices } from "@/app/api/admin/gog/prices/refresh/route";
 import { repositories } from "@/lib/repositories";
 import {
@@ -27,6 +29,19 @@ const sampleCyberpunkProduct = {
     discount: "-97%",
     finalMoney: { amount: "1.49", currency: "USD", discount: "48.50" },
     baseMoney: { amount: "49.99", currency: "USD" }
+  }
+};
+
+const sampleWitcherProduct = {
+  id: "1207658924",
+  title: "The Witcher 3: Wild Hunt",
+  slug: "the_witcher_3_wild_hunt",
+  productType: "game",
+  storeLink: "https://www.gog.com/en/game/the_witcher_3_wild_hunt",
+  price: {
+    finalMoney: { amount: "29.99", currency: "PLN" },
+    baseMoney: { amount: "149.99", currency: "PLN" },
+    discount: "-80%"
   }
 };
 
@@ -195,6 +210,82 @@ describe("GOG connector", () => {
     expect(body.foundProducts).toBe(1);
     expect(body.createdCatalogEntries + body.updatedCatalogEntries).toBeGreaterThan(0);
     expect(body.suggestedMappings.length + body.uncertainMatches.length).toBeGreaterThan(0);
+  });
+
+  it("suggests GOG mappings for manual review without writing mappings", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    vi.stubEnv("GOG_ENABLED", "true");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(JSON.stringify({ products: [sampleCyberpunkProduct] }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      })
+    );
+
+    const response = await suggestGogMappings(
+      new Request("http://localhost/api/admin/gog/mappings/suggest", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({ mode: "imported-games", limit: 2 })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ mode: "imported-games" });
+    expect(Array.isArray(body.exactMatches)).toBe(true);
+    expect(Array.isArray(body.reviewRequired)).toBe(true);
+    expect(Array.isArray(body.uncertain)).toBe(true);
+    expect(Array.isArray(body.skipped)).toBe(true);
+  });
+
+  it("approves a GOG mapping and fills the slug from a stored catalog entry", async () => {
+    vi.stubEnv("ADMIN_API_SECRET", "test-admin-secret");
+    await repositories.gog.upsertCatalogEntries([
+      {
+        id: "gog-catalog-1207658924",
+        gogProductId: "1207658924",
+        title: "The Witcher 3: Wild Hunt",
+        slug: "the_witcher_3_wild_hunt",
+        url: "https://www.gog.com/en/game/the_witcher_3_wild_hunt",
+        imageUrl: null,
+        isActive: true,
+        productType: "game",
+        rawData: sampleWitcherProduct,
+        syncedAt: new Date("2026-06-20T00:00:00.000Z")
+      }
+    ]);
+
+    const response = await approveGogMapping(
+      new Request("http://localhost/api/admin/gog/mappings/approve", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-secret": "test-admin-secret"
+        },
+        body: JSON.stringify({
+          gameId: "the-witcher-3",
+          gogProductId: "1207658924",
+          confidence: "manual"
+        })
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({
+      gameId: "the-witcher-3",
+      provider: "gog",
+      externalId: "1207658924",
+      externalSlug: "the_witcher_3_wild_hunt",
+      confidence: "manual"
+    });
   });
 
   it("refreshes a mapped GOG game into StoreOffer and GamePriceSnapshot", async () => {

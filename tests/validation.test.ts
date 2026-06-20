@@ -3,11 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   priceAlertCreateSchema,
   gogCatalogDiscoverSchema,
+  gogMappingApproveSchema,
+  gogMappingSuggestSchema,
   gogPriceRefreshSchema,
   priceProviderDiagnosticsSchema,
   priceRefreshSchema,
   searchQuerySchema,
   steamCatalogSyncUntilSchema,
+  steamStorePriceRefreshSchema,
   watchlistCreateSchema
 } from "@/lib/validation";
 
@@ -62,5 +65,21 @@ describe("validation schemas", () => {
     const payload = gogPriceRefreshSchema.parse({ mode: "mapped-games", limit: 1 });
 
     expect(payload).toMatchObject({ mode: "mapped-games", limit: 1, dryRun: true });
+  });
+
+  it("accepts bounded GOG mapping suggestion and approval inputs", () => {
+    const suggest = gogMappingSuggestSchema.parse({ mode: "imported-games", limit: 20 });
+    const approve = gogMappingApproveSchema.parse({ gameId: "the-witcher-3", gogProductId: "1207658924" });
+
+    expect(suggest).toMatchObject({ mode: "imported-games", limit: 20 });
+    expect(approve).toMatchObject({ gameId: "the-witcher-3", gogProductId: "1207658924", confidence: "manual" });
+    expect(() => gogMappingSuggestSchema.parse({ mode: "imported-games", limit: 500 })).toThrow();
+  });
+
+  it("accepts bounded Steam Store catalog backfill input", () => {
+    const payload = steamStorePriceRefreshSchema.parse({ mode: "catalog-backfill", limit: 10, dryRun: true });
+
+    expect(payload).toMatchObject({ mode: "catalog-backfill", limit: 10, dryRun: true });
+    expect(() => steamStorePriceRefreshSchema.parse({ mode: "catalog-backfill", limit: 500 })).toThrow();
   });
 });

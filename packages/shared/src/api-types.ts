@@ -119,6 +119,34 @@ export type ApiStoreOffer = {
   sourceType?: PriceSourceType | null;
 };
 
+export type PriceFreshness = "fresh" | "stale" | "no-data";
+
+export type ApiCatalogStoreOffer = {
+  id: string;
+  steamAppId: number | null;
+  gogProductId: string | null;
+  catalogSource: "steam" | "gog" | string;
+  gameId: string | null;
+  provider: PriceProviderName | string;
+  storeName: string;
+  storeType: StoreType;
+  title: string | null;
+  price: number;
+  regularPrice: number | null;
+  currency: string;
+  discountPercent: number;
+  externalUrl: string | null;
+  countryCode: string;
+  available: boolean;
+  drm: string;
+  sourceRawId: string | null;
+  fetchedAt: DateString;
+  updatedAt: DateString;
+  sourceConfidence: PriceSourceConfidence;
+  sourceName: string | null;
+  freshness: PriceFreshness;
+};
+
 export type ApiGamePriceSnapshot = {
   id: string;
   gameId: string;
@@ -187,6 +215,12 @@ export type ApiGameSearchResult = {
   currentPlayers: number;
   currentPrice: number;
   historicalLow: number;
+  catalogOffer?: ApiCatalogStoreOffer | null;
+  lastUpdatedAt?: DateString | null;
+  freshness?: PriceFreshness;
+  nextRefreshAt?: DateString | null;
+  dataSource?: ApiPriceDataSource;
+  confidence?: PriceSourceConfidence;
   tags: string[];
 };
 
@@ -285,8 +319,11 @@ export type ApiStatsOverview = {
     mockPlayerSnapshots: number;
     gogOffers: number;
     steamStoreOffers: number;
+    catalogStoreOffers: number;
     manualOffers: number;
     gamesWithoutPrices: number;
+    stalePlayerSnapshots: number;
+    gamesWithoutPlayerData: number;
   };
   missingDataHints: string[];
   updatedAt: DateString;
@@ -420,6 +457,7 @@ export type ApiAdminStatus = {
   steamStoreCacheTtlMinutes: number;
   steamStoreOfferCount: number;
   steamStorePriceSnapshotCount: number;
+  catalogStoreOfferCount: number;
   lastSteamStorePriceRefresh: DateString | null;
   lastSteamStorePriceError: ApiIntegrationLog | null;
   realPlayerSnapshots: number;
@@ -442,6 +480,7 @@ export type ApiPricesStatus = {
   mockOffers: number;
   steamStoreOfferCount: number;
   steamStorePriceSnapshotCount: number;
+  catalogStoreOfferCount: number;
 };
 
 export type ApiGogMappingConfidence = "exact" | "title-match" | "manual" | "unknown";
@@ -528,6 +567,24 @@ export type ApiGogCatalogDiscoverResponse = {
   updatedCatalogEntries: number;
   suggestedMappings: ApiGogCatalogSuggestedMapping[];
   uncertainMatches: ApiGogCatalogSuggestedMapping[];
+};
+
+export type ApiGogMappingSuggestRequest = {
+  mode?: "imported-games";
+  limit?: number;
+};
+
+export type ApiGogMappingSuggestResponse = {
+  mode: "imported-games";
+  exactMatches: ApiGogCatalogSuggestedMapping[];
+  reviewRequired: ApiGogCatalogSuggestedMapping[];
+  uncertain: ApiGogCatalogSuggestedMapping[];
+  skipped: Array<{
+    gameId: string;
+    steamAppId: number;
+    title: string;
+    reason: string;
+  }>;
 };
 
 export type ApiGogMappingRequest = {
@@ -621,6 +678,7 @@ export type ApiSteamStorePriceStatus = {
   cacheTtlMinutes: number;
   steamStoreOfferCount: number;
   steamStorePriceSnapshotCount: number;
+  catalogStoreOfferCount: number;
   lastSteamStorePriceRefresh: DateString | null;
   lastSteamStorePriceError: ApiIntegrationLog | null;
   statusMessage: string | null;
@@ -658,6 +716,7 @@ export type ApiSteamStorePriceTestResponse = {
 };
 
 export type ApiSteamStorePriceRefreshRequest = {
+  mode?: "imported" | "catalog-backfill";
   steamAppIds?: number[];
   gameIds?: string[];
   limit?: number;
@@ -665,7 +724,7 @@ export type ApiSteamStorePriceRefreshRequest = {
 };
 
 export type ApiSteamStorePriceRefreshResult = {
-  gameId: string;
+  gameId: string | null;
   steamAppId: number;
   refreshed: boolean;
   skipped: boolean;
@@ -683,8 +742,58 @@ export type ApiSteamStorePriceRefreshResponse = {
   refreshed: number;
   skipped: number;
   failed: number;
+  createdOffers?: number;
+  updatedOffers?: number;
+  createdSnapshots?: number;
+  skippedFreshCache?: number;
+  skippedNoPrice?: number;
+  startedAt?: DateString;
+  finishedAt?: DateString;
+  durationMs?: number;
   errors: Array<{ steamAppId: number; gameId?: string; message: string }>;
   results: ApiSteamStorePriceRefreshResult[];
+};
+
+export type ApiAutomationSourceReport = {
+  source: "steam-store" | "gog" | "player-counts";
+  mode: string;
+  dryRun: boolean;
+  requested: number;
+  refreshed: number;
+  skipped: number;
+  skippedFreshCache: number;
+  skippedNoMapping: number;
+  skippedNoPrice: number;
+  failed: number;
+  createdOffers: number;
+  updatedOffers: number;
+  createdSnapshots: number;
+  errors: Array<{ input: string; message: string }>;
+  startedAt: DateString;
+  finishedAt: DateString;
+  durationMs: number;
+};
+
+export type ApiPriceRefreshAutomationResponse = {
+  source: "price-refresh";
+  mode: "scheduled" | "manual" | "catalog-backfill";
+  dryRun: boolean;
+  enabled: boolean;
+  requested: number;
+  refreshed: number;
+  skipped: number;
+  skippedFreshCache: number;
+  skippedNoMapping: number;
+  skippedNoPrice: number;
+  failed: number;
+  createdOffers: number;
+  updatedOffers: number;
+  createdSnapshots: number;
+  errors: Array<{ input: string; message: string }>;
+  startedAt: DateString;
+  finishedAt: DateString;
+  durationMs: number;
+  reports: ApiAutomationSourceReport[];
 };
 
 export type ApiGogPriceTestResponse = {
@@ -719,6 +828,11 @@ export type ApiGogPriceRefreshResponse = {
   refreshed: number;
   skipped: number;
   failed: number;
+  skippedFreshCache?: number;
+  skippedNoMapping?: number;
+  startedAt?: DateString;
+  finishedAt?: DateString;
+  durationMs?: number;
   errors: Array<{ gameId: string; gogProductId?: string; message: string }>;
   results: ApiGogPriceRefreshResult[];
 };
@@ -854,6 +968,11 @@ export type ApiGamePricesResponse = {
   gameId: string;
   history: ApiGamePriceSnapshot[];
   offers: ApiStoreOffer[];
+  freshness: {
+    latestPriceRefresh: DateString | null;
+    freshness: PriceFreshness;
+    nextRefreshAt: DateString | null;
+  };
 };
 
 export type ApiPlayerCountRefreshError = {
@@ -863,11 +982,17 @@ export type ApiPlayerCountRefreshError = {
 
 export type ApiPlayerCountRefreshResponse = {
   mode: "watchlist" | "top" | "all-imported" | "explicit";
+  source?: "steam";
+  dryRun?: false;
   requested: number;
   refreshed: number;
+  skippedFreshCache?: number;
   failed: number;
   errors: ApiPlayerCountRefreshError[];
   snapshots: ApiPlayerCountSnapshot[];
+  startedAt?: DateString;
+  finishedAt?: DateString;
+  durationMs?: number;
 };
 
 export type ApiBulkImportResult = {

@@ -171,6 +171,7 @@ The internal price layer adds:
 - extended `GamePriceSnapshot` rows for durable price history.
 - `GogCatalogEntry` and `GameExternalMapping` for manual Steam/GameValue-to-GOG product mapping.
 - experimental `steam-store` price records from the Steam Store JSON `appdetails` endpoint.
+- `CatalogStoreOffer` for catalog-only Steam Store price backfill that does not import rows into `Game`.
 
 `GameValuePriceService` validates admin inputs, creates stores and sources when needed, upserts offers and appends snapshots. `sourceConfidence` distinguishes `internal-real`, `experimental-store-api`, `internal-mock`, `external-legacy` and `no-price-data`, which lets web and Android show clear badges without exposing technical provider failures.
 
@@ -181,6 +182,8 @@ review. It returns suggested and uncertain mappings separately, but it never cre
 its own. GOG price refresh defaults to `dryRun=true`, returning parsed price previews without writing offers or snapshots.
 
 `SteamStorePriceService` is the second real/experimental connector. It is disabled by default, uses Steam Store `appdetails` JSON only, keeps admin batches small and writes `source=steam-store` offers/snapshots only when explicitly invoked. It rejects non-JSON responses and never stores HTML.
+
+`PriceRefreshScheduler` coordinates capped imported Steam Store refreshes, mapped GOG refreshes and optional catalog backfill. The cron endpoints are protected by `CRON_SECRET`, while admin automation endpoints require `x-admin-secret` and default to dry-run style operation in the dashboard.
 
 Mock price cleanup is separated from general database maintenance. `GET /api/admin/prices/mock-cleanup/preview` reports affected mock offers, mock snapshots and mock price sources; `POST /api/admin/prices/mock-cleanup/run` requires `DELETE_MOCK_PRICE_DATA_ONLY` and does not delete games, catalogs, external mappings or player snapshots.
 

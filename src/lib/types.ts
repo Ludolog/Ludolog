@@ -156,6 +156,34 @@ export type StoreOffer = {
   sourceType?: PriceSourceType | null;
 };
 
+export type CatalogStoreOffer = {
+  id: string;
+  steamAppId: number | null;
+  gogProductId: string | null;
+  catalogSource: "steam" | "gog" | string;
+  gameId: string | null;
+  provider: PriceProviderName | string;
+  storeName: string;
+  storeType: StoreType;
+  title: string | null;
+  price: number;
+  regularPrice: number | null;
+  currency: string;
+  discountPercent: number;
+  externalUrl: string | null;
+  countryCode: string;
+  available: boolean;
+  drm: string;
+  sourceRawId: string | null;
+  rawProviderData: unknown | null;
+  fetchedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  sourceConfidence: PriceSourceConfidence;
+  sourceName: string | null;
+  freshness: "fresh" | "stale" | "no-data";
+};
+
 export type GamePriceSnapshot = {
   id: string;
   gameId: string;
@@ -342,6 +370,7 @@ export type AdminStatus = {
   steamStoreCacheTtlMinutes: number;
   steamStoreOfferCount: number;
   steamStorePriceSnapshotCount: number;
+  catalogStoreOfferCount: number;
   lastSteamStorePriceRefresh: Date | null;
   lastSteamStorePriceError: IntegrationLog | null;
   realPlayerSnapshots: number;

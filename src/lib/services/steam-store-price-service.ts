@@ -4,9 +4,13 @@ import {
   getSteamStoreCurrency,
   getSteamStorePriceCacheTtlMinutes,
   getSteamStorePriceMaxPerRun,
+  getCatalogPriceStaleHours,
+  getPriceRefreshMaxRuntimeMs,
+  getSteamStorePriceStaleHours,
   isSteamStorePriceEnabled
 } from "@/lib/config";
 import { repositories } from "@/lib/repositories";
+import type { CatalogStoreOfferInput } from "@/lib/repositories/contracts";
 import { sourceConfidenceForDataSource } from "@/lib/services/price-source-utils";
 import type { Game, GamePriceSnapshot, IntegrationLog, PriceSource, Store, StoreOffer } from "@/lib/types";
 import type {
@@ -173,10 +177,11 @@ export class SteamStorePriceService {
   private readonly normalizer = new SteamStorePriceNormalizer();
 
   async status(): Promise<ApiSteamStorePriceStatus> {
-    const [logs, offerCount, snapshotCount] = await Promise.all([
+    const [logs, offerCount, snapshotCount, catalogOfferStatus] = await Promise.all([
       repositories.diagnostics.listIntegrationLogs(),
       repositories.games.countOffersBySource("steam-store"),
-      repositories.snapshots.countPriceSnapshotsBySource("steam-store")
+      repositories.snapshots.countPriceSnapshotsBySource("steam-store"),
+      repositories.catalogOffers.status(new Date(Date.now() - getCatalogPriceStaleHours() * 60 * 60 * 1000))
     ]);
     const steamLogs = logs.filter((log) => log.service === "steam-store");
     const lastRefreshLog = steamLogs.find((log) => log.message.startsWith("Steam Store price refresh finished"));
@@ -189,6 +194,7 @@ export class SteamStorePriceService {
       cacheTtlMinutes: getSteamStorePriceCacheTtlMinutes(),
       steamStoreOfferCount: offerCount,
       steamStorePriceSnapshotCount: snapshotCount,
+      catalogStoreOfferCount: catalogOfferStatus.catalogStoreOfferCount,
       lastSteamStorePriceRefresh: lastRefreshLog?.createdAt.toISOString() ?? null,
       lastSteamStorePriceError: steamLogs.find((log) => log.level === "error") ? toApiLog(steamLogs.find((log) => log.level === "error")!) : null,
       statusMessage: isSteamStorePriceEnabled() ? null : "Steam Store price connector disabled by environment.",
@@ -215,6 +221,12 @@ export class SteamStorePriceService {
   async refreshPrices(input: ApiSteamStorePriceRefreshRequest): Promise<ApiSteamStorePriceRefreshResponse> {
     ensureSteamStoreEnabled();
     const limit = Math.min(input.limit ?? getSteamStorePriceMaxPerRun(), getSteamStorePriceMaxPerRun());
+    const mode = input.mode ?? "imported";
+    if (mode === "catalog-backfill") {
+      return this.refreshCatalogBackfill(input, limit);
+    }
+
+    const startedAt = new Date();
     const games = await this.resolveRefreshGames(input, limit);
     const response: ApiSteamStorePriceRefreshResponse = {
       provider: "gamevalue",
@@ -224,12 +236,45 @@ export class SteamStorePriceService {
       refreshed: 0,
       skipped: 0,
       failed: 0,
+      createdOffers: 0,
+      updatedOffers: 0,
+      createdSnapshots: 0,
+      skippedFreshCache: 0,
+      skippedNoPrice: 0,
+      startedAt: startedAt.toISOString(),
+      finishedAt: startedAt.toISOString(),
+      durationMs: 0,
       errors: [],
       results: []
     };
+    const staleBefore = new Date(Date.now() - getSteamStorePriceStaleHours() * 60 * 60 * 1000);
 
     for (const game of games) {
+      if (Date.now() - startedAt.getTime() > getPriceRefreshMaxRuntimeMs()) {
+        response.failed += 1;
+        response.errors.push({ gameId: game.id, steamAppId: game.steamAppId, message: "Steam Store price refresh stopped at max runtime." });
+        break;
+      }
       try {
+        const history = await repositories.snapshots.listPrices(game.id);
+        const latestSteamStore = history
+          .filter((snapshot) => snapshot.source === "steam-store")
+          .sort((a, b) => b.capturedAt.getTime() - a.capturedAt.getTime())[0];
+        if (!response.dryRun && latestSteamStore && latestSteamStore.capturedAt >= staleBefore) {
+          response.skipped += 1;
+          response.skippedFreshCache = (response.skippedFreshCache ?? 0) + 1;
+          response.results.push({
+            gameId: game.id,
+            steamAppId: game.steamAppId,
+            refreshed: false,
+            skipped: true,
+            preview: null,
+            offerId: null,
+            snapshotId: null,
+            message: "Skipped fresh Steam Store price cache."
+          });
+          continue;
+        }
         const payload = await this.connector.getAppDetails(game.steamAppId);
         const normalized = this.normalizer.normalize(game.steamAppId, payload);
         if (response.dryRun) {
@@ -247,8 +292,12 @@ export class SteamStorePriceService {
           continue;
         }
 
+        const existed = (await repositories.games.listOffers(game.id)).some((offer) => offer.id === `offer-${game.id}-steam-store`);
         const written = await this.writePrice(game, normalized);
         response.refreshed += 1;
+        response.createdOffers = (response.createdOffers ?? 0) + (existed ? 0 : 1);
+        response.updatedOffers = (response.updatedOffers ?? 0) + (existed ? 1 : 0);
+        response.createdSnapshots = (response.createdSnapshots ?? 0) + 1;
         response.results.push({
           gameId: game.id,
           steamAppId: game.steamAppId,
@@ -262,6 +311,9 @@ export class SteamStorePriceService {
       } catch (error) {
         const message = sanitizeSteamStoreError(error);
         response.failed += 1;
+        if (error instanceof SteamStoreConnectorError && error.errorType === "no_price_data") {
+          response.skippedNoPrice = (response.skippedNoPrice ?? 0) + 1;
+        }
         response.errors.push({ gameId: game.id, steamAppId: game.steamAppId, message });
         response.results.push({
           gameId: game.id,
@@ -275,11 +327,110 @@ export class SteamStorePriceService {
         });
       }
     }
+    const finishedAt = new Date();
+    response.finishedAt = finishedAt.toISOString();
+    response.durationMs = finishedAt.getTime() - startedAt.getTime();
 
     await repositories.diagnostics.recordIntegrationLog({
       service: "steam-store",
       level: response.failed > 0 ? "warning" : "info",
-      message: `Steam Store price refresh finished. dryRun=${response.dryRun}, requested=${response.requested}, refreshed=${response.refreshed}, skipped=${response.skipped}, failed=${response.failed}.`
+      message: `Steam Store price refresh finished. mode=${mode}, dryRun=${response.dryRun}, requested=${response.requested}, refreshed=${response.refreshed}, skipped=${response.skipped}, failed=${response.failed}, durationMs=${response.durationMs}.`
+    });
+
+    return response;
+  }
+
+  private async refreshCatalogBackfill(input: ApiSteamStorePriceRefreshRequest, limit: number): Promise<ApiSteamStorePriceRefreshResponse> {
+    const startedAt = new Date();
+    const staleBefore = new Date(Date.now() - getCatalogPriceStaleHours() * 60 * 60 * 1000);
+    const entries = await repositories.catalogOffers.listSteamBackfillCandidates(limit, staleBefore);
+    const response: ApiSteamStorePriceRefreshResponse = {
+      provider: "gamevalue",
+      sourceName: "steam-store",
+      dryRun: input.dryRun ?? true,
+      requested: entries.length,
+      refreshed: 0,
+      skipped: 0,
+      failed: 0,
+      createdOffers: 0,
+      updatedOffers: 0,
+      createdSnapshots: 0,
+      skippedFreshCache: 0,
+      skippedNoPrice: 0,
+      startedAt: startedAt.toISOString(),
+      finishedAt: startedAt.toISOString(),
+      durationMs: 0,
+      errors: [],
+      results: []
+    };
+
+    for (const entry of entries) {
+      if (Date.now() - startedAt.getTime() > getPriceRefreshMaxRuntimeMs()) {
+        response.failed += 1;
+        response.errors.push({ steamAppId: entry.steamAppId, message: "Steam Store catalog backfill stopped at max runtime." });
+        break;
+      }
+      try {
+        const payload = await this.connector.getAppDetails(entry.steamAppId);
+        const normalized = this.normalizer.normalize(entry.steamAppId, payload);
+        const preview = previewOnly(normalized);
+        if (response.dryRun) {
+          response.skipped += 1;
+          response.results.push({
+            gameId: null,
+            steamAppId: entry.steamAppId,
+            refreshed: false,
+            skipped: true,
+            preview,
+            offerId: null,
+            snapshotId: null,
+            message: "Dry run only; no catalog Steam Store price data was written."
+          });
+          continue;
+        }
+        const game = await repositories.games.findBySteamAppId(entry.steamAppId);
+        const written = await repositories.catalogOffers.upsert(buildCatalogSteamStoreOffer(entry.steamAppId, game?.id ?? null, normalized));
+        response.refreshed += 1;
+        response.createdOffers = (response.createdOffers ?? 0) + (written.created ? 1 : 0);
+        response.updatedOffers = (response.updatedOffers ?? 0) + (written.created ? 0 : 1);
+        response.results.push({
+          gameId: game?.id ?? null,
+          steamAppId: entry.steamAppId,
+          refreshed: true,
+          skipped: false,
+          preview,
+          offerId: written.offer.id,
+          snapshotId: null,
+          message: null
+        });
+      } catch (error) {
+        const message = sanitizeSteamStoreError(error);
+        response.failed += 1;
+        if (error instanceof SteamStoreConnectorError && error.errorType === "no_price_data") {
+          response.skippedNoPrice = (response.skippedNoPrice ?? 0) + 1;
+        }
+        response.errors.push({ steamAppId: entry.steamAppId, message });
+        response.results.push({
+          gameId: null,
+          steamAppId: entry.steamAppId,
+          refreshed: false,
+          skipped: false,
+          preview: null,
+          offerId: null,
+          snapshotId: null,
+          message
+        });
+      }
+    }
+
+    const finishedAt = new Date();
+    response.finishedAt = finishedAt.toISOString();
+    response.durationMs = finishedAt.getTime() - startedAt.getTime();
+
+    await repositories.diagnostics.recordIntegrationLog({
+      service: "steam-store",
+      level: response.failed > 0 ? "warning" : "info",
+      message: `Steam Store catalog backfill finished. dryRun=${response.dryRun}, requested=${response.requested}, refreshed=${response.refreshed}, skipped=${response.skipped}, failed=${response.failed}, durationMs=${response.durationMs}.`
     });
 
     return response;
@@ -433,6 +584,41 @@ function buildSteamStoreSnapshot(
 function previewOnly(normalized: NormalizedSteamStorePrice): ApiSteamStorePricePreview {
   const { rawData: _, ...preview } = normalized;
   return preview;
+}
+
+function buildCatalogSteamStoreOffer(
+  steamAppId: number,
+  gameId: string | null,
+  normalized: NormalizedSteamStorePrice
+): CatalogStoreOfferInput {
+  const now = new Date();
+  return {
+    id: `catalog-offer-steam-store-${steamAppId}`,
+    steamAppId,
+    gogProductId: null,
+    catalogSource: "steam",
+    gameId,
+    provider: "steam-store",
+    storeName: "Steam",
+    storeType: "official",
+    title: normalized.title,
+    price: normalized.price,
+    regularPrice: normalized.regularPrice,
+    currency: normalized.currency,
+    discountPercent: normalized.discountPercent,
+    externalUrl: normalized.externalUrl,
+    countryCode: normalized.countryCode,
+    available: normalized.available,
+    drm: "Steam",
+    sourceRawId: `steam-store:${steamAppId}`,
+    rawProviderData: {
+      steamAppId,
+      fetchedAt: now.toISOString(),
+      isFreeToPlay: normalized.isFreeToPlay,
+      priceOverviewPresent: Boolean(normalized.rawData.price_overview)
+    },
+    fetchedAt: now
+  };
 }
 
 async function fetchJson(url: string, fetcher: Fetcher): Promise<unknown> {

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { jsonError, resolveRouteParams } from "@/lib/api";
+import { getSteamStorePriceStaleHours } from "@/lib/config";
 import { priceApiService } from "@/lib/services/price-api-service";
 import { gameSearchService } from "@/lib/services/game-search-service";
+import type { PriceFreshness } from "@shared/api-types";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -20,6 +22,32 @@ export async function GET(_: Request, context: RouteContext): Promise<NextRespon
     priceApiService.getPriceHistory(game.id),
     priceApiService.listOffers(game.id)
   ]);
+  const latestPriceRefresh = [...history].sort(
+    (a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime()
+  )[0]?.capturedAt ?? null;
+  const freshness = priceFreshness(latestPriceRefresh);
 
-  return NextResponse.json({ gameId: game.id, history, offers });
+  return NextResponse.json({
+    gameId: game.id,
+    history,
+    offers,
+    freshness: {
+      latestPriceRefresh,
+      freshness,
+      nextRefreshAt: latestPriceRefresh ? nextRefreshAt(latestPriceRefresh) : null
+    }
+  });
+}
+
+function priceFreshness(latestPriceRefresh: Date | string | null): PriceFreshness {
+  if (!latestPriceRefresh) {
+    return "no-data";
+  }
+  const staleMs = getSteamStorePriceStaleHours() * 60 * 60 * 1000;
+  return Date.now() - new Date(latestPriceRefresh).getTime() > staleMs ? "stale" : "fresh";
+}
+
+function nextRefreshAt(latestPriceRefresh: Date | string): string {
+  const next = new Date(new Date(latestPriceRefresh).getTime() + getSteamStorePriceStaleHours() * 60 * 60 * 1000);
+  return next.toISOString();
 }

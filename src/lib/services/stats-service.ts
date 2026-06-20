@@ -1,4 +1,10 @@
-import { getGGDealsApiKey, getPriceMode, getPriceProvider } from "@/lib/config";
+import {
+  getCatalogPriceStaleHours,
+  getGGDealsApiKey,
+  getPlayerCountStaleMinutes,
+  getPriceMode,
+  getPriceProvider
+} from "@/lib/config";
 import { repositories } from "@/lib/repositories";
 import {
   bestValueScore,
@@ -30,6 +36,7 @@ export class StatsService {
       priceApiOffers,
       mockOffers,
       importedGames,
+      catalogOfferStatus,
       latestPlayerRefresh,
       latestPriceRefresh,
       integrationLogs
@@ -50,14 +57,23 @@ export class StatsService {
       repositories.games.countOffersBySource("price-api"),
       repositories.games.countOffersBySource("mock"),
       repositories.games.listImported(500),
+      repositories.catalogOffers.status(new Date(Date.now() - getCatalogPriceStaleHours() * 60 * 60 * 1000)),
       repositories.snapshots.latestPlayerRefresh(),
       repositories.snapshots.latestPriceRefresh(),
       repositories.diagnostics.listIntegrationLogs()
     ]);
 
+    const playerStaleBefore = new Date(Date.now() - getPlayerCountStaleMinutes() * 60 * 1000);
+    const importedPlayerSnapshots = await Promise.all(
+      importedGames.map((game) => repositories.snapshots.latestPlayersBySteamAppId(game.steamAppId))
+    );
+    const gamesWithoutPlayerData = importedPlayerSnapshots.filter((snapshot) => snapshot === null).length;
+    const stalePlayerSnapshots = importedPlayerSnapshots.filter(
+      (snapshot) => snapshot !== null && snapshot.capturedAt < playerStaleBefore
+    ).length;
+
     const realInternalPriceSnapshots = manualPriceSnapshots + gogPriceSnapshots + steamStorePriceSnapshots;
-    const realPriceSnapshots =
-      realInternalPriceSnapshots + ggdealsPriceSnapshots + priceApiSnapshots;
+    const realPriceSnapshots = realInternalPriceSnapshots + ggdealsPriceSnapshots + priceApiSnapshots;
     const realOffers = manualOffers + gogOffers + steamStoreOffers + ggdealsOffers + priceApiOffers;
     const gamesWithoutPrices = sources.filter((source) => !source.profile.latestPrice && !source.profile.bestOffer).length;
     const ggdealsRuntime = resolveGGDealsStatusFromLogs({
@@ -76,8 +92,7 @@ export class StatsService {
     const freeToPlay = [...sourcesWithTrackedPrices]
       .filter((source) => toStatsGame(source).bestPrice === 0)
       .sort((a, b) => toStatsGame(b).currentPlayers - toStatsGame(a).currentPlayers);
-    const trackedDeals = [...sourcesWithTrackedPrices]
-      .sort((a, b) => bestValueScore(b) - bestValueScore(a));
+    const trackedDeals = [...sourcesWithTrackedPrices].sort((a, b) => bestValueScore(b) - bestValueScore(a));
     const hiddenGems = [...sources]
       .filter((source) => toStatsGame(source).currentPlayers <= 40000 && source.profile.score.score >= 70)
       .sort((a, b) => bestValueScore(b) - bestValueScore(a));
@@ -113,15 +128,21 @@ export class StatsService {
         mockPlayerSnapshots,
         gogOffers,
         steamStoreOffers,
+        catalogStoreOffers: catalogOfferStatus.catalogStoreOfferCount,
         manualOffers,
-        gamesWithoutPrices
+        gamesWithoutPrices,
+        stalePlayerSnapshots,
+        gamesWithoutPlayerData
       },
       missingDataHints: buildMissingDataHints({
         catalogEntries: catalogStatus.entryCount,
         importedGames: importedGames.length,
         gamesWithoutPrices,
+        gamesWithoutPlayerData,
+        stalePlayerSnapshots,
         gogOffers,
         steamStoreOffers,
+        catalogStoreOffers: catalogOfferStatus.catalogStoreOfferCount,
         mockPriceSnapshots
       }),
       updatedAt: new Date().toISOString(),
@@ -157,15 +178,21 @@ function buildMissingDataHints({
   catalogEntries,
   importedGames,
   gamesWithoutPrices,
+  gamesWithoutPlayerData,
+  stalePlayerSnapshots,
   gogOffers,
   steamStoreOffers,
+  catalogStoreOffers,
   mockPriceSnapshots
 }: {
   catalogEntries: number;
   importedGames: number;
   gamesWithoutPrices: number;
+  gamesWithoutPlayerData: number;
+  stalePlayerSnapshots: number;
   gogOffers: number;
   steamStoreOffers: number;
+  catalogStoreOffers: number;
   mockPriceSnapshots: number;
 }): string[] {
   const hints: string[] = [];
@@ -182,12 +209,24 @@ function buildMissingDataHints({
     hints.push("Część gier nie ma zaufanej ceny. Dodaj cenę manualną, GOG mapping albo Steam Store refresh.");
   }
 
+  if (gamesWithoutPlayerData > 0) {
+    hints.push("Część importowanych gier nie ma jeszcze realnego snapshotu graczy ze Steam.");
+  }
+
+  if (stalePlayerSnapshots > 0) {
+    hints.push("Część snapshotów graczy jest starsza niż ustawiony próg świeżości.");
+  }
+
   if (gogOffers === 0) {
     hints.push("GOG jest skonfigurowany, ale nie ma jeszcze widocznych ofert po mapowaniu.");
   }
 
   if (steamStoreOffers === 0) {
     hints.push("Steam Store connector jest eksperymentalny i wymaga testowego refreshu 1-2 gier.");
+  }
+
+  if (catalogStoreOffers === 0) {
+    hints.push("Katalog Steam nie ma jeszcze zapisanych cen backfill; użyj małego dry run przed realnym backfillem.");
   }
 
   if (mockPriceSnapshots > 0) {

@@ -1,48 +1,79 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { POST } from "@/app/api/cron/refresh-player-counts/route";
+import { GET as backfillCatalogPricesCron } from "@/app/api/cron/backfill-catalog-prices/route";
+import { GET as refreshPlayerCountsCron } from "@/app/api/cron/refresh-player-counts/route";
+import { GET as refreshPricesCron } from "@/app/api/cron/refresh-prices/route";
 
-describe("POST /api/cron/refresh-player-counts", () => {
+describe("cron endpoints", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it("refuses to run in production without CRON_SECRET", async () => {
-    vi.stubEnv("NODE_ENV", "production");
+  it("rejects player refresh cron requests without CRON_SECRET", async () => {
     vi.stubEnv("CRON_SECRET", "");
 
-    const response = await POST(new Request("http://localhost/api/cron/refresh-player-counts", { method: "POST" }));
+    const response = await refreshPlayerCountsCron(new Request("http://localhost/api/cron/refresh-player-counts"));
     const body = await response.json();
 
-    expect(response.status).toBe(503);
-    expect(body.error).toContain("CRON_SECRET");
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Unauthorized cron action.");
   });
 
   it("rejects requests with an invalid CRON_SECRET", async () => {
     vi.stubEnv("CRON_SECRET", "cron-secret");
 
-    const response = await POST(
+    const response = await refreshPlayerCountsCron(
       new Request("http://localhost/api/cron/refresh-player-counts", {
-        method: "POST",
         headers: { "x-cron-secret": "wrong-secret" }
       })
     );
     const body = await response.json();
 
     expect(response.status).toBe(401);
-    expect(body.error).toBe("Unauthorized.");
+    expect(body.error).toBe("Unauthorized cron action.");
   });
 
   it("accepts the CRON_SECRET through a bearer token", async () => {
     vi.stubEnv("CRON_SECRET", "cron-secret");
 
-    const response = await POST(
+    const response = await refreshPlayerCountsCron(
       new Request("http://localhost/api/cron/refresh-player-counts", {
-        method: "POST",
         headers: { authorization: "Bearer cron-secret" }
       })
     );
 
     expect(response.status).toBe(200);
+  });
+
+  it("protects the price refresh cron endpoint", async () => {
+    vi.stubEnv("CRON_SECRET", "cron-secret");
+
+    const unauthorized = await refreshPricesCron(new Request("http://localhost/api/cron/refresh-prices"));
+    const authorized = await refreshPricesCron(
+      new Request("http://localhost/api/cron/refresh-prices", {
+        headers: { authorization: "Bearer cron-secret" }
+      })
+    );
+    const body = await authorized.json();
+
+    expect(unauthorized.status).toBe(401);
+    expect(authorized.status).toBe(200);
+    expect(body).toMatchObject({ source: "price-refresh", mode: "scheduled", dryRun: false });
+  });
+
+  it("protects the catalog backfill cron endpoint", async () => {
+    vi.stubEnv("CRON_SECRET", "cron-secret");
+
+    const unauthorized = await backfillCatalogPricesCron(new Request("http://localhost/api/cron/backfill-catalog-prices"));
+    const authorized = await backfillCatalogPricesCron(
+      new Request("http://localhost/api/cron/backfill-catalog-prices", {
+        headers: { "x-cron-secret": "cron-secret" }
+      })
+    );
+    const body = await authorized.json();
+
+    expect(unauthorized.status).toBe(401);
+    expect(authorized.status).toBe(200);
+    expect(body).toMatchObject({ source: "price-refresh", mode: "catalog-backfill", dryRun: false });
   });
 });

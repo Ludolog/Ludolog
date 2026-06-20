@@ -58,7 +58,8 @@ Android App -> Vercel Next.js API -> Neon PostgreSQL
 ```
 
 Deployment instructions are in [docs/deployment.md](docs/deployment.md). The current data-flow map is in
-[docs/architecture-map.md](docs/architecture-map.md).
+[docs/architecture-map.md](docs/architecture-map.md), and production refresh operations are in
+[docs/price-refresh-automation.md](docs/price-refresh-automation.md).
 
 ## PostgreSQL and Prisma
 
@@ -93,6 +94,19 @@ ISTHEREANYDEAL_API_KEY=""
 GG_DEALS_API_KEY=""
 MOBILE_ALLOWED_ORIGINS="capacitor://localhost,http://localhost,http://localhost:5173,http://127.0.0.1:5173"
 CRON_SECRET=""
+PRICE_REFRESH_ENABLED=true
+PRICE_REFRESH_IMPORTED_LIMIT=20
+PRICE_REFRESH_STEAM_STORE_LIMIT=20
+PRICE_REFRESH_GOG_LIMIT=10
+PRICE_REFRESH_CATALOG_BACKFILL_ENABLED=false
+PRICE_REFRESH_CATALOG_BACKFILL_LIMIT=10
+PRICE_REFRESH_MAX_RUNTIME_MS=25000
+PLAYER_COUNT_REFRESH_LIMIT=25
+PLAYER_COUNT_REFRESH_MAX_RUNTIME_MS=25000
+PLAYER_COUNT_STALE_MINUTES=30
+STEAM_STORE_PRICE_STALE_HOURS=6
+GOG_PRICE_STALE_HOURS=12
+CATALOG_PRICE_STALE_HOURS=168
 ```
 
 ## Data modes
@@ -144,11 +158,25 @@ CRON_SECRET=""
 - `POST /api/admin/prices/refresh-best` (legacy disabled)
 - `POST /api/admin/prices/provider-diagnostics` (legacy disabled)
 - `POST /api/admin/player-counts/refresh`
+- `GET /api/admin/gog/status`
+- `GET /api/admin/gog/mappings`
+- `POST /api/admin/gog/mappings`
+- `POST /api/admin/gog/catalog/search`
+- `POST /api/admin/gog/catalog/discover`
+- `POST /api/admin/gog/mappings/suggest`
+- `POST /api/admin/gog/mappings/approve`
+- `POST /api/admin/gog/resolve-game`
+- `POST /api/admin/gog/prices/test`
+- `POST /api/admin/gog/prices/refresh`
 - `GET /api/admin/steam-store-prices/status`
 - `POST /api/admin/steam-store-prices/test`
 - `POST /api/admin/steam-store-prices/refresh`
+- `POST /api/admin/automation/refresh-prices`
+- `POST /api/admin/automation/backfill-catalog-prices`
 - `POST /api/games/:id/refresh-players`
-- `POST /api/cron/refresh-player-counts`
+- `GET|POST /api/cron/refresh-player-counts`
+- `GET|POST /api/cron/refresh-prices`
+- `GET|POST /api/cron/backfill-catalog-prices`
 - `GET /api/watchlist`
 - `POST /api/watchlist`
 - `DELETE /api/watchlist/:id`
@@ -179,7 +207,7 @@ The active price module is internal:
 
 GG.deals, ITAD and CheapShark are legacy/disabled providers in the active application flow. GG.deals was disabled because Vercel received Cloudflare challenge HTML instead of API JSON. The project does not bypass Cloudflare, scrape protected pages, use Playwright/Puppeteer, cookies, proxies or browser sessions.
 
-Price data now enters through GameValue-controlled sources: `manual-admin`, `csv-import`, `json-import`, `gog`, `steam-store`, `mock-seed` and future legal store APIs. `StoreOffer` stores current tracked offers, `Store` stores normalized store metadata, `PriceSource` stores the ingest source, and `GamePriceSnapshot` stores durable price history for charts, deals and GameValue Score.
+Price data now enters through GameValue-controlled sources: `manual-admin`, `csv-import`, `json-import`, `gog`, `steam-store`, `mock-seed` and future legal store APIs. `StoreOffer` stores current tracked offers, `Store` stores normalized store metadata, `PriceSource` stores the ingest source, and `GamePriceSnapshot` stores durable price history for charts, deals and GameValue Score. Catalog-only Steam Store backfill uses `CatalogStoreOffer`, which does not create tracked `Game` rows.
 
 Public summaries and scoring prefer real/internal sources in this order: GOG, Steam Store, manual/internal. Mock price rows can remain in historical storage until cleanup, but they are not treated as normal live prices in public deal summaries.
 
@@ -213,6 +241,8 @@ STEAM_STORE_CURRENCY=PLN
 STEAM_STORE_PRICE_CACHE_TTL_MINUTES=360
 STEAM_STORE_PRICE_MAX_PER_RUN=20
 ```
+
+Automated refresh configuration is documented in [docs/price-refresh-automation.md](docs/price-refresh-automation.md). The scheduler keeps imported Steam Store refreshes, mapped GOG refreshes, catalog backfill and Steam player-count refreshes in small capped batches. Use `dryRun=true` before any real write.
 
 Public price endpoints:
 

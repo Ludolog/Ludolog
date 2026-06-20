@@ -29,6 +29,19 @@ CRON_SECRET=
 PRICE_PROVIDER=gamevalue
 PRICE_MODE=internal
 ENABLE_LEGACY_PRICE_PROVIDERS=false
+PRICE_REFRESH_ENABLED=true
+PRICE_REFRESH_IMPORTED_LIMIT=20
+PRICE_REFRESH_STEAM_STORE_LIMIT=20
+PRICE_REFRESH_GOG_LIMIT=10
+PRICE_REFRESH_CATALOG_BACKFILL_ENABLED=false
+PRICE_REFRESH_CATALOG_BACKFILL_LIMIT=10
+PRICE_REFRESH_MAX_RUNTIME_MS=25000
+PLAYER_COUNT_REFRESH_LIMIT=25
+PLAYER_COUNT_REFRESH_MAX_RUNTIME_MS=25000
+PLAYER_COUNT_STALE_MINUTES=30
+STEAM_STORE_PRICE_STALE_HOURS=6
+GOG_PRICE_STALE_HOURS=12
+CATALOG_PRICE_STALE_HOURS=168
 ```
 
 Use the pooled Neon host for `DATABASE_URL` and the direct Neon host for `DIRECT_URL`. Replace `TWOJE_HASLO` only inside Vercel settings or local ignored env files.
@@ -101,6 +114,19 @@ STEAM_STORE_COUNTRY=PL
 STEAM_STORE_CURRENCY=PLN
 STEAM_STORE_PRICE_CACHE_TTL_MINUTES=360
 STEAM_STORE_PRICE_MAX_PER_RUN=20
+PRICE_REFRESH_ENABLED=true
+PRICE_REFRESH_IMPORTED_LIMIT=20
+PRICE_REFRESH_STEAM_STORE_LIMIT=20
+PRICE_REFRESH_GOG_LIMIT=10
+PRICE_REFRESH_CATALOG_BACKFILL_ENABLED=false
+PRICE_REFRESH_CATALOG_BACKFILL_LIMIT=10
+PRICE_REFRESH_MAX_RUNTIME_MS=25000
+PLAYER_COUNT_REFRESH_LIMIT=25
+PLAYER_COUNT_REFRESH_MAX_RUNTIME_MS=25000
+PLAYER_COUNT_STALE_MINUTES=30
+STEAM_STORE_PRICE_STALE_HOURS=6
+GOG_PRICE_STALE_HOURS=12
+CATALOG_PRICE_STALE_HOURS=168
 ENABLE_LEGACY_PRICE_PROVIDERS=false
 # Legacy fallbacks:
 PRICE_API_PROVIDER=gamevalue
@@ -124,7 +150,8 @@ Notes:
 - GG.deals was disabled after Vercel received Cloudflare challenge HTML instead of API JSON. Do not bypass Cloudflare with browser sessions, cookies, Playwright/Puppeteer, proxies or scraping, and do not store raw HTML as price data.
 - Admin price writes use internal sources such as `manual-admin`, `json-import`, `csv-import`, `mock-seed` and future legal partner/store feeds.
 - `ADMIN_API_SECRET` protects manual admin POST endpoints through the `x-admin-secret` header.
-- `CRON_SECRET` protects `/api/cron/refresh-player-counts` in production. Do not expose it to mobile.
+- `CRON_SECRET` protects `/api/cron/refresh-player-counts`, `/api/cron/refresh-prices` and `/api/cron/backfill-catalog-prices` in production. Do not expose it to mobile.
+- `PRICE_REFRESH_*`, `PLAYER_COUNT_*`, `STEAM_STORE_PRICE_STALE_HOURS`, `GOG_PRICE_STALE_HOURS` and `CATALOG_PRICE_STALE_HOURS` cap scheduler work and freshness checks.
 - Mobile public config uses `VITE_API_BASE_URL`; secrets must never use the `VITE_` prefix.
 
 ## 3. Deploy to Vercel
@@ -180,6 +207,12 @@ The GOG connector schema migration is stored in:
 prisma/migrations/000005_gog_connector/migration.sql
 ```
 
+The catalog Store Offer backfill migration is stored in:
+
+```text
+prisma/migrations/000007_catalog_store_offers/migration.sql
+```
+
 ## 5. Seed demo data
 
 For a demo production database:
@@ -204,6 +237,8 @@ https://apka-seven.vercel.app/api/categories/overview
 https://apka-seven.vercel.app/api/categories/popularne-teraz
 https://apka-seven.vercel.app/api/admin/steam-catalog/status
 https://apka-seven.vercel.app/api/admin/gog/status
+https://apka-seven.vercel.app/api/admin/steam-store-prices/status
+https://apka-seven.vercel.app/api/prices/status
 ```
 
 `/api/admin/status` should show non-zero game and snapshot counts after seed.
@@ -322,6 +357,22 @@ $body = '{"mode":"top","limit":25}'
 Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/refresh" -Method POST -Headers $headers -Body $body
 ```
 
+Manual dry run for the price automation scheduler:
+
+```powershell
+$body = @{ dryRun = $true; includeCatalogBackfill = $false } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/automation/refresh-prices" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
+Manual dry run for catalog price backfill:
+
+```powershell
+$body = @{ dryRun = $true } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/automation/backfill-catalog-prices" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
 GameValue Price API status:
 
 ```powershell
@@ -410,6 +461,14 @@ $body = @{ steamAppIds = @(570); limit = 1; dryRun = $true } | ConvertTo-Json -C
 Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
+Steam Store catalog backfill dry run. This writes nothing and does not import catalog rows into `Game`:
+
+```powershell
+$body = @{ mode = "catalog-backfill"; limit = 10; dryRun = $true } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/steam-store-prices/refresh" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
 Do not set `dryRun=false` until `STEAM_STORE_PRICE_ENABLED=true` is deployed and the dry run shows valid JSON-derived price data.
 
 GOG catalog discovery stores only small review entries and suggested matches. It does not create mappings automatically:
@@ -418,6 +477,18 @@ GOG catalog discovery stores only small review entries and suggested matches. It
 $body = @{ mode = "imported-games"; limit = 10 } | ConvertTo-Json -Compress
 
 Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/catalog/discover" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+```
+
+GOG mapping suggestions and manual approval:
+
+```powershell
+$body = @{ mode = "imported-games"; limit = 20 } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/mappings/suggest" -Method POST -Headers $headers -ContentType "application/json" -Body $body
+
+$body = @{ gameId = "the-witcher-3"; gogProductId = "1207658924"; confidence = "manual" } | ConvertTo-Json -Compress
+
+Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/gog/mappings/approve" -Method POST -Headers $headers -ContentType "application/json" -Body $body
 ```
 
 GOG mapped price refresh defaults to dry run. Keep it that way until approved mappings exist and the preview looks right:
@@ -461,9 +532,11 @@ Invoke-WebRequest -Uri "https://apka-seven.vercel.app/api/admin/player-counts/re
 
 Cron readiness:
 
-- `POST /api/cron/refresh-player-counts` is ready for a future Vercel Cron job.
-- In production it requires `CRON_SECRET` through the `x-cron-secret` or `authorization: Bearer ...` header.
-- Do not refresh the entire Steam catalog on every user request or every build. Catalog sync is manual/admin-only at this stage, and player-count refreshes are capped to small batches.
+- `GET|POST /api/cron/refresh-player-counts` refreshes a capped set of Steam player counts.
+- `GET|POST /api/cron/refresh-prices` refreshes capped imported Steam Store prices and mapped GOG prices.
+- `GET|POST /api/cron/backfill-catalog-prices` refreshes a capped set of catalog-only Steam Store offers in `CatalogStoreOffer`.
+- In production each cron requires `CRON_SECRET` through the `x-cron-secret` or `authorization: Bearer ...` header.
+- Do not refresh the entire Steam catalog or the entire price catalog on every user request or every build.
 
 ## 8. Build debug APK
 

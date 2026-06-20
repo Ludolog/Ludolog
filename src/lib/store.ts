@@ -566,6 +566,13 @@ export function searchSteamCatalogEntries(query: string, limit = 12): SteamCatal
     .slice(0, limit);
 }
 
+export function listSteamCatalogEntries(limit = 50): SteamCatalogEntry[] {
+  return steamCatalogEntries
+    .filter((entry) => entry.isGame && entry.isActive)
+    .sort((a, b) => a.steamAppId - b.steamAppId)
+    .slice(0, limit);
+}
+
 export function findSteamCatalogEntryBySteamAppId(steamAppId: number): SteamCatalogEntry | null {
   return steamCatalogEntries.find((entry) => entry.steamAppId === steamAppId) ?? null;
 }
@@ -621,6 +628,10 @@ export function searchGogCatalogEntries(query: string, limit = 10): GogCatalogEn
     )
     .sort((a, b) => a.title.localeCompare(b.title))
     .slice(0, limit);
+}
+
+export function findGogCatalogEntryByProductId(gogProductId: string): GogCatalogEntry | null {
+  return gogCatalogEntries.find((entry) => entry.gogProductId === gogProductId) ?? null;
 }
 
 export function upsertGogCatalogEntries(
@@ -863,6 +874,7 @@ export function getAdminStatus(): AdminStatus {
     steamStoreCacheTtlMinutes: getSteamStorePriceCacheTtlMinutes(),
     steamStoreOfferCount,
     steamStorePriceSnapshotCount,
+    catalogStoreOfferCount: 0,
     lastSteamStorePriceRefresh:
       latestByDate(priceSnapshots.filter((snapshot) => snapshot.source === "steam-store"))?.capturedAt ?? null,
     lastSteamStorePriceError: integrationLogs.find((log) => log.service === "steam-store" && log.level === "error") ?? null,
