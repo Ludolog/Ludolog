@@ -184,7 +184,7 @@ export type CatalogStoreOffer = {
   freshness: "fresh" | "stale" | "no-data";
 };
 
-export type CatalogPriceCheckStatusValue = "available" | "no-price" | "unsupported" | "error";
+export type CatalogPriceCheckStatusValue = "available" | "no-price" | "unavailable" | "unsupported" | "error";
 
 export type CatalogPriceCheckStatus = {
   id: string;

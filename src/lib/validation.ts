@@ -163,7 +163,10 @@ export const gogPriceRefreshSchema = z.object({
 export const gogCatalogPriceBackfillSchema = z.object({
   gogProductIds: z.array(z.string().trim().min(1).max(80)).max(25).optional(),
   limit: z.number().int().positive().max(25).default(10),
-  dryRun: z.boolean().default(true)
+  dryRun: z.boolean().default(true),
+  includeDlc: z.boolean().default(false),
+  includeSoundtracks: z.boolean().default(false),
+  includeBundles: z.boolean().default(false)
 });
 
 export const mockPriceCleanupRunSchema = z.object({

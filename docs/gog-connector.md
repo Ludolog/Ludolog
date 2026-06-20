@@ -38,6 +38,8 @@ The code caps `GOG_REQUEST_LIMIT_PER_HOUR` at 200 and admin refreshes are limite
 8. `POST /api/admin/gog/prices/refresh` defaults to `dryRun=true`. Dry runs return parsed price previews and do not
    write `StoreOffer` or `GamePriceSnapshot` rows.
 9. `dryRun=false` writes official GOG offers and price snapshots for approved mappings only.
+10. `POST /api/admin/gog/prices/backfill-catalog` reads existing `GogCatalogEntry` rows and writes catalog-only GOG
+    offers to `CatalogStoreOffer` without importing rows into `Game`.
 
 Written offers use:
 
@@ -49,6 +51,22 @@ Written offers use:
 - `source=gog`
 
 The persisted `DataSource` value is `gog`, and UI badges render it as `GameValue / GOG store API`.
+
+Catalog price backfill uses the stored catalog entry first. It can fall back to GOG product/catalog JSON endpoints, but
+an exact search miss for an already stored `GogCatalogEntry` is not treated as a technical failure. No-price and
+unavailable products are reported as skipped warnings and receive a 7-day `CatalogPriceCheckStatus` cooldown. Technical
+JSON/network/provider errors remain `failed`.
+
+Backfill product filters are conservative by default:
+
+- `baseGame` and `unknown` are allowed.
+- `bundle` is skipped unless `includeBundles=true`.
+- `dlc` is skipped unless `includeDlc=true`.
+- `soundtrack` is skipped unless `includeSoundtracks=true`.
+- `demo` and `tool` are always skipped.
+
+If GOG returns a different currency than `GOG_CURRENCY`, the app stores the returned currency, exposes
+`configuredCurrency`, `returnedCurrency`, `currencyMismatch` and `currencyMessage`, and does not perform FX conversion.
 
 ## Admin Endpoints
 
@@ -62,6 +80,7 @@ The persisted `DataSource` value is `gog`, and UI badges render it as `GameValue
 - `POST /api/admin/gog/catalog/discover` with `x-admin-secret`
 - `POST /api/admin/gog/prices/test` with `x-admin-secret`
 - `POST /api/admin/gog/prices/refresh` with `x-admin-secret`
+- `POST /api/admin/gog/prices/backfill-catalog` with `x-admin-secret`
 
 Example mapping:
 
@@ -101,6 +120,19 @@ Example safe refresh:
   "gameIds": ["cyberpunk-2077"],
   "limit": 1,
   "dryRun": true
+}
+```
+
+Example safe catalog backfill:
+
+```json
+{
+  "gogProductIds": ["1207658924"],
+  "limit": 1,
+  "dryRun": true,
+  "includeDlc": false,
+  "includeSoundtracks": false,
+  "includeBundles": false
 }
 ```
 

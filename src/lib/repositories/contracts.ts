@@ -124,6 +124,9 @@ export type CatalogStoreOfferStatus = {
   catalogStoreOfferCount: number;
   staleCatalogStoreOfferCount: number;
   lastCatalogStoreOfferRefresh: Date | null;
+  providerCatalogStoreOfferCount?: number;
+  providerStaleCatalogStoreOfferCount?: number;
+  providerLastCatalogStoreOfferRefresh?: Date | null;
 };
 
 export type CatalogBackfillCandidate = {
@@ -143,7 +146,7 @@ export interface CatalogStoreOfferRepository {
   upsert(input: CatalogStoreOfferInput): Promise<{ offer: CatalogStoreOffer; created: boolean }>;
   findBySteamAppIds(steamAppIds: number[]): Promise<CatalogStoreOffer[]>;
   listSteamBackfillCandidates(limit: number, staleBefore: Date): Promise<CatalogBackfillCandidate[]>;
-  status(staleBefore: Date): Promise<CatalogStoreOfferStatus>;
+  status(staleBefore: Date, provider?: string): Promise<CatalogStoreOfferStatus>;
 }
 
 export type CatalogPriceCheckStatusInput = {
@@ -159,6 +162,7 @@ export type CatalogPriceCheckStatusInput = {
 export interface CatalogPriceCheckStatusRepository {
   upsert(input: CatalogPriceCheckStatusInput): Promise<CatalogPriceCheckStatus>;
   findSteamStatuses(sourceName: string, steamAppIds: number[]): Promise<CatalogPriceCheckStatus[]>;
+  findGogStatuses(sourceName: string, gogProductIds: string[]): Promise<CatalogPriceCheckStatus[]>;
 }
 
 export type SteamCatalogUpsertInput = Omit<SteamCatalogEntry, "createdAt" | "updatedAt">;

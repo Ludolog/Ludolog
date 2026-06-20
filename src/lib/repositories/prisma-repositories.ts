@@ -1094,7 +1094,7 @@ class PrismaGogRepository implements GogRepository {
     const entries = await prisma.gogCatalogEntry.findMany({
       where: { isActive: true },
       orderBy: { syncedAt: "desc" },
-      take: Math.max(1, Math.min(50, Math.floor(limit)))
+      take: Math.max(1, Math.min(500, Math.floor(limit)))
     });
     return entries.map(mapGogCatalogEntry);
   }
@@ -1693,16 +1693,22 @@ class PrismaCatalogStoreOfferRepository implements CatalogStoreOfferRepository {
     return [...candidates.values()].sort(compareSteamBackfillCandidates).slice(0, safeLimit);
   }
 
-  async status(staleBefore: Date) {
-    const [catalogStoreOfferCount, staleCatalogStoreOfferCount, latest] = await Promise.all([
+  async status(staleBefore: Date, provider?: string) {
+    const [catalogStoreOfferCount, staleCatalogStoreOfferCount, latest, providerCatalogStoreOfferCount, providerStaleCatalogStoreOfferCount, providerLatest] = await Promise.all([
       prisma.catalogStoreOffer.count(),
       prisma.catalogStoreOffer.count({ where: { fetchedAt: { lt: staleBefore } } }),
-      prisma.catalogStoreOffer.findFirst({ orderBy: { fetchedAt: "desc" } })
+      prisma.catalogStoreOffer.findFirst({ orderBy: { fetchedAt: "desc" } }),
+      provider ? prisma.catalogStoreOffer.count({ where: { provider } }) : Promise.resolve(undefined),
+      provider ? prisma.catalogStoreOffer.count({ where: { provider, fetchedAt: { lt: staleBefore } } }) : Promise.resolve(undefined),
+      provider ? prisma.catalogStoreOffer.findFirst({ where: { provider }, orderBy: { fetchedAt: "desc" } }) : Promise.resolve(null)
     ]);
     return {
       catalogStoreOfferCount,
       staleCatalogStoreOfferCount,
-      lastCatalogStoreOfferRefresh: latest?.fetchedAt ?? null
+      lastCatalogStoreOfferRefresh: latest?.fetchedAt ?? null,
+      providerCatalogStoreOfferCount,
+      providerStaleCatalogStoreOfferCount,
+      providerLastCatalogStoreOfferRefresh: providerLatest?.fetchedAt ?? null
     };
   }
 }
@@ -1749,6 +1755,19 @@ class PrismaCatalogPriceCheckStatusRepository implements CatalogPriceCheckStatus
       where: {
         sourceName,
         steamAppId: { in: steamAppIds }
+      }
+    });
+    return statuses.map(mapCatalogPriceCheckStatus);
+  }
+
+  async findGogStatuses(sourceName: string, gogProductIds: string[]): Promise<CatalogPriceCheckStatus[]> {
+    if (gogProductIds.length === 0) {
+      return [];
+    }
+    const statuses = await prisma.catalogPriceCheckStatus.findMany({
+      where: {
+        sourceName,
+        gogProductId: { in: gogProductIds }
       }
     });
     return statuses.map(mapCatalogPriceCheckStatus);

@@ -523,7 +523,14 @@ export type ApiGogStatus = {
   currency: string;
   gogOfferCount: number;
   gogPriceSnapshotCount: number;
+  gogCatalogOfferCount: number;
+  gogStaleCatalogOfferCount: number;
+  gogNoPriceCooldownCount: number;
+  gogUnavailableCooldownCount: number;
+  gogUnsupportedCooldownCount: number;
+  gogErrorCooldownCount: number;
   lastGogPriceRefresh: DateString | null;
+  lastGogCatalogPriceRefresh: DateString | null;
   statusMessage: string | null;
   integrationLogs: ApiIntegrationLog[];
 };
@@ -613,6 +620,8 @@ export type ApiGogPriceTestRequest = {
   currency?: string;
 };
 
+export type ApiGogCatalogProductType = "baseGame" | "dlc" | "soundtrack" | "bundle" | "demo" | "tool" | "unknown";
+
 export type ApiGogPricePreview = {
   gogProductId: string;
   title: string;
@@ -625,6 +634,11 @@ export type ApiGogPricePreview = {
   regularPrice: number | null;
   currency: string;
   countryCode: string;
+  configuredCurrency: string;
+  returnedCurrency: string;
+  currencyMismatch: boolean;
+  currencyMessage: string | null;
+  productType: ApiGogCatalogProductType;
   discountPercent: number;
   drm: "DRM-free";
   externalUrl: string;
@@ -717,7 +731,7 @@ export type ApiSteamStoreBackfillCandidatePreview = {
   gameId: string | null;
   priority: number;
   reasons: string[];
-  lastStatus: "available" | "no-price" | "unsupported" | "error" | null;
+  lastStatus: "available" | "no-price" | "unavailable" | "unsupported" | "error" | null;
   nextCheckAt: DateString | null;
 };
 
@@ -865,6 +879,9 @@ export type ApiGogCatalogPriceBackfillRequest = {
   gogProductIds?: string[];
   limit?: number;
   dryRun?: boolean;
+  includeDlc?: boolean;
+  includeSoundtracks?: boolean;
+  includeBundles?: boolean;
 };
 
 export type ApiGogCatalogPriceBackfillResult = {
@@ -875,6 +892,9 @@ export type ApiGogCatalogPriceBackfillResult = {
   preview: ApiGogPricePreview | null;
   offerId: string | null;
   message: string | null;
+  status?: "refreshed" | "dry-run" | "no-price" | "unavailable" | "unsupported" | "fresh-cache" | "error";
+  productType?: ApiGogCatalogProductType;
+  nextCheckAt?: DateString | null;
 };
 
 export type ApiGogCatalogPriceBackfillResponse = {
@@ -888,10 +908,20 @@ export type ApiGogCatalogPriceBackfillResponse = {
   createdOffers: number;
   updatedOffers: number;
   skippedNoPrice: number;
+  skippedUnsupported: number;
+  skippedFreshCache: number;
   startedAt: DateString;
   finishedAt: DateString;
   durationMs: number;
   errors: Array<{ gogProductId: string; message: string }>;
+  warnings: Array<{
+    gogProductId: string;
+    title: string | null;
+    status: "no-price" | "unavailable" | "unsupported" | "fresh-cache" | "currency-mismatch";
+    productType?: ApiGogCatalogProductType;
+    nextCheckAt?: DateString | null;
+    message: string;
+  }>;
   results: ApiGogCatalogPriceBackfillResult[];
 };
 

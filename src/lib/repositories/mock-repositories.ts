@@ -350,13 +350,21 @@ class MockCatalogStoreOfferRepository implements CatalogStoreOfferRepository {
     return [...candidates.values()].sort(compareSteamBackfillCandidates).slice(0, safeLimit);
   }
 
-  async status(staleBefore: Date) {
+  async status(staleBefore: Date, provider?: string) {
     const steamCatalogOffers = catalogStoreOffers.filter((offer) => offer.provider === "steam-store");
+    const providerOffers = provider ? catalogStoreOffers.filter((offer) => offer.provider === provider) : [];
     return {
       catalogStoreOfferCount: catalogStoreOffers.length,
       staleCatalogStoreOfferCount: catalogStoreOffers.filter((offer) => offer.fetchedAt < staleBefore).length,
       lastCatalogStoreOfferRefresh:
-        steamCatalogOffers.sort((a, b) => b.fetchedAt.getTime() - a.fetchedAt.getTime())[0]?.fetchedAt ?? null
+        steamCatalogOffers.sort((a, b) => b.fetchedAt.getTime() - a.fetchedAt.getTime())[0]?.fetchedAt ?? null,
+      providerCatalogStoreOfferCount: provider ? providerOffers.length : undefined,
+      providerStaleCatalogStoreOfferCount: provider
+        ? providerOffers.filter((offer) => offer.fetchedAt < staleBefore).length
+        : undefined,
+      providerLastCatalogStoreOfferRefresh: provider
+        ? providerOffers.sort((a, b) => b.fetchedAt.getTime() - a.fetchedAt.getTime())[0]?.fetchedAt ?? null
+        : undefined
     };
   }
 }
@@ -392,6 +400,13 @@ class MockCatalogPriceCheckStatusRepository implements CatalogPriceCheckStatusRe
     const ids = new Set(steamAppIds);
     return catalogPriceCheckStatuses.filter(
       (status) => status.sourceName === sourceName && status.steamAppId !== null && ids.has(status.steamAppId)
+    );
+  }
+
+  async findGogStatuses(sourceName: string, gogProductIds: string[]): Promise<CatalogPriceCheckStatus[]> {
+    const ids = new Set(gogProductIds);
+    return catalogPriceCheckStatuses.filter(
+      (status) => status.sourceName === sourceName && status.gogProductId !== null && ids.has(status.gogProductId)
     );
   }
 }

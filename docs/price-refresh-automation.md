@@ -26,7 +26,9 @@ Catalog-only Steam and GOG prices use:
 - `CatalogStoreOffer`
 - `CatalogPriceCheckStatus`
 
-`CatalogStoreOffer` is intentionally separate from `Game`. It lets the backend store a small price backfill for synced catalog rows without creating thousands of tracked games. `CatalogPriceCheckStatus` records available/no-price/error cooldowns so the same no-price app is not retried on every run. Public search can show catalog prices when present, while import still remains an intentional user/admin action.
+`CatalogStoreOffer` is intentionally separate from `Game`. It lets the backend store a small price backfill for synced catalog rows without creating thousands of tracked games. `CatalogPriceCheckStatus` records available/no-price/unavailable/unsupported/error cooldowns so the same no-price or unsupported item is not retried on every run. Public search can show catalog prices when present, while import still remains an intentional user/admin action.
+
+GOG catalog backfill reads stored `GogCatalogEntry` rows first. If GOG returns no price, or a fallback catalog lookup cannot find an already stored product, the run reports a skipped warning and leaves a cooldown instead of counting it as `failed`. Failed is reserved for technical lookup errors such as invalid JSON, HTTP/provider errors or network timeouts.
 
 ## Environment variables
 
@@ -94,6 +96,20 @@ Safe dry run examples:
 
 Real writes should stay capped and should follow a successful dry run.
 
+GOG catalog backfill supports conservative product filters:
+
+```json
+{
+  "limit": 10,
+  "dryRun": true,
+  "includeDlc": false,
+  "includeSoundtracks": false,
+  "includeBundles": false
+}
+```
+
+If GOG returns USD while `GOG_CURRENCY=PLN`, store USD and surface `currencyMismatch=true`; do not convert currencies.
+
 ## Freshness
 
 Freshness is exposed in:
@@ -111,6 +127,7 @@ Public search results can include `catalogOffer`, `freshness`, `nextRefreshAt`, 
 - Do not run mass refreshes across all 2000 catalog entries.
 - Do not store HTML or provider challenge pages as offers or snapshots.
 - Count no-price catalog checks as skipped/no-price, not failed; failed is for technical errors.
+- Count unavailable GOG catalog products and unsupported product types as skipped warnings with cooldowns, not failed.
 - Do not delete `Game`, `SteamCatalogEntry`, `GogCatalogEntry`, `GameExternalMapping`, `PlayerCountSnapshot` or real price data during cleanup.
 - Keep secrets in Vercel or local terminal sessions only.
 - Use dry runs before `dryRun=false`.

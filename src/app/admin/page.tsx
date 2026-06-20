@@ -22,6 +22,7 @@ import { formatDate, formatNumber, formatPrice } from "@/lib/format";
 import { repositories } from "@/lib/repositories";
 import { categoryRankingService } from "@/lib/services/category-service";
 import { gameSearchService } from "@/lib/services/game-search-service";
+import { gogService } from "@/lib/services/gog-service";
 import { steamCatalogStatusService } from "@/lib/services/steam-catalog-status-service";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ const starterSteamAppIds = [
 export default async function AdminPage(): Promise<React.ReactElement> {
   const status = await repositories.diagnostics.getAdminStatus();
   const steamStatus = await steamCatalogStatusService.getStatus();
+  const gogRuntimeStatus = await gogService.status();
   const categoryOverview = await categoryRankingService.overview(4);
   const games = await gameSearchService.list();
   const gameRows = await Promise.all(
@@ -352,6 +354,19 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           <InlineStatus icon={<Database size={18} />} label="Catalog entries" value={String(status.gogCatalogEntries)} />
           <InlineStatus icon={<Database size={18} />} label="Mappings" value={String(status.gogMappings)} />
           <InlineStatus icon={<ShoppingCart size={18} />} label="GOG offers" value={String(status.gogOfferCount)} />
+          <InlineStatus icon={<ShoppingCart size={18} />} label="GOG catalog offers" value={String(gogRuntimeStatus.gogCatalogOfferCount)} />
+          <InlineStatus icon={<RefreshCw size={18} />} label="GOG no-price cooldown" value={String(gogRuntimeStatus.gogNoPriceCooldownCount)} />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="GOG unavailable cooldown"
+            value={String(gogRuntimeStatus.gogUnavailableCooldownCount)}
+          />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="GOG unsupported cooldown"
+            value={String(gogRuntimeStatus.gogUnsupportedCooldownCount)}
+          />
+          <InlineStatus icon={<RefreshCw size={18} />} label="GOG error cooldown" value={String(gogRuntimeStatus.gogErrorCooldownCount)} />
           <InlineStatus
             icon={<RefreshCw size={18} />}
             label="Last GOG sync"
@@ -361,6 +376,11 @@ export default async function AdminPage(): Promise<React.ReactElement> {
             icon={<RefreshCw size={18} />}
             label="Last GOG price"
             value={status.lastGogPriceRefresh ? formatDate(status.lastGogPriceRefresh) : "n/a"}
+          />
+          <InlineStatus
+            icon={<RefreshCw size={18} />}
+            label="Last GOG catalog price"
+            value={gogRuntimeStatus.lastGogCatalogPriceRefresh ? formatDate(gogRuntimeStatus.lastGogCatalogPriceRefresh) : "n/a"}
           />
         </div>
         {status.lastGogError ? (
@@ -451,7 +471,14 @@ export default async function AdminPage(): Promise<React.ReactElement> {
           <AdminActionButton
             endpoint="/api/admin/gog/prices/backfill-catalog"
             label="Dry run GOG catalog prices"
-            body={{ gogProductIds: ["1207658924"], limit: 1, dryRun: true }}
+            body={{
+              gogProductIds: ["1207658924"],
+              limit: 1,
+              dryRun: true,
+              includeDlc: false,
+              includeSoundtracks: false,
+              includeBundles: false
+            }}
             editableBody
             requireSecret
           />

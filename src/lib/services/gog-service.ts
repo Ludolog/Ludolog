@@ -1,4 +1,5 @@
 import {
+  getCatalogPriceStaleHours,
   getGogApiBaseUrl,
   getGogCatalogBaseUrl,
   getGogCountryCode,
@@ -11,6 +12,7 @@ import {
 import { repositories } from "@/lib/repositories";
 import type { CatalogStoreOfferInput } from "@/lib/repositories/contracts";
 import type {
+  CatalogPriceCheckStatusValue,
   Game,
   GameExternalMapping,
   GamePriceSnapshot,
@@ -24,6 +26,7 @@ import type {
 import type {
   ApiGogCatalogDiscoverRequest,
   ApiGogCatalogDiscoverResponse,
+  ApiGogCatalogProductType,
   ApiGogCatalogSuggestedMapping,
   ApiGogCatalogPriceBackfillRequest,
   ApiGogCatalogPriceBackfillResponse,
@@ -85,6 +88,11 @@ type NormalizedGogPrice = {
   regularPrice: number | null;
   currency: string;
   countryCode: string;
+  configuredCurrency: string;
+  returnedCurrency: string;
+  currencyMismatch: boolean;
+  currencyMessage: string | null;
+  productType: ApiGogCatalogProductType;
   discountPercent: number;
   externalUrl: string;
   available: boolean;
@@ -211,6 +219,47 @@ export class GogPriceConnector {
     throw new GogConnectorError(`GOG product ${input.gogProductId} was not found in catalog search results.`, "not_found");
   }
 
+  async getCatalogProductForEntry(entry: GogCatalogEntry): Promise<GogCatalogProduct> {
+    const rawProduct = catalogEntryRawProduct(entry);
+    if (rawProduct && productHasUsablePrice(rawProduct)) {
+      return rawProduct;
+    }
+
+    let metadataProduct: GogCatalogProduct | null = null;
+    try {
+      const metadata = await this.getProductMetadata(entry.gogProductId);
+      metadataProduct = metadataToCatalogProduct(metadata, entry);
+      if (metadataProduct && productHasUsablePrice(metadataProduct)) {
+        return metadataProduct;
+      }
+    } catch (error) {
+      if (!(error instanceof GogConnectorError && (error.errorType === "not_found" || error.httpStatus === 404))) {
+        throw error;
+      }
+    }
+
+    const query = entry.slug || entry.title || entry.gogProductId;
+    const products = await this.catalogConnector.search(query, 20);
+    const exact = products.find((product) => String(product.id) === entry.gogProductId);
+    if (exact) {
+      return exact;
+    }
+
+    const slug = normalizeSlug(entry.slug || query);
+    const slugMatch = products.find((product) => normalizeSlug(product.slug) === slug && String(product.id) === entry.gogProductId);
+    if (slugMatch) {
+      return slugMatch;
+    }
+
+    if (rawProduct) {
+      return rawProduct;
+    }
+    if (metadataProduct) {
+      return metadataProduct;
+    }
+    throw new GogConnectorError(`GOG product ${entry.gogProductId} is unavailable in catalog price lookup.`, "not_found");
+  }
+
   private get apiBaseUrl(): string {
     return this.options.apiBaseUrl ?? getGogApiBaseUrl();
   }
@@ -256,7 +305,9 @@ export class GogPriceNormalizer {
     const slug = product.slug?.trim() ?? "";
     const price = moneyAmount(product.price?.finalMoney?.amount);
     const regularPrice = moneyAmount(product.price?.baseMoney?.amount);
-    const currency = product.price?.finalMoney?.currency ?? product.price?.baseMoney?.currency ?? fallbackCurrency;
+    const configuredCurrency = fallbackCurrency.toUpperCase();
+    const returnedCurrency = String(product.price?.finalMoney?.currency ?? product.price?.baseMoney?.currency ?? configuredCurrency).toUpperCase();
+    const currencyMismatch = returnedCurrency !== configuredCurrency;
 
     if (!gogProductId || !title || !slug) {
       throw new GogConnectorError("GOG product JSON is missing id, title or slug.", "invalid_response");
@@ -272,8 +323,15 @@ export class GogPriceNormalizer {
       slug,
       price,
       regularPrice,
-      currency,
+      currency: returnedCurrency,
       countryCode,
+      configuredCurrency,
+      returnedCurrency,
+      currencyMismatch,
+      currencyMessage: currencyMismatch
+        ? `GOG returned ${returnedCurrency} while ${configuredCurrency} is configured. Stored without FX conversion.`
+        : null,
+      productType: classifyGogProduct(product),
       discountPercent: discountPercent(product.price?.discount, price, regularPrice),
       externalUrl: product.storeLink ?? `https://www.gog.com/game/${slug}`,
       available: true,
@@ -291,23 +349,24 @@ export class GogProductMapper {
     return entries.map((entry) => {
       const entryTitle = normalizeTitle(entry.title);
       const entrySlug = normalizeSlug(entry.slug);
-      if (entrySlug === gameSlug || entryTitle === gameTitle) {
+      const weakProduct = isWeakGogProduct(entry);
+      const productType = classifyGogCatalogEntry(entry);
+      if (!weakProduct && productType !== "bundle" && (entrySlug === gameSlug || entryTitle === gameTitle)) {
         return { ...entry, confidence: "exact", reason: "Normalized title or slug is an exact match." };
       }
 
       const entryTokens = meaningfulTitleTokens(entryTitle);
       const overlap = tokenOverlap(gameTokens, entryTokens);
-      const weakProduct = isWeakGogProduct(entry);
       const containsWholeGameTitle = containsTitlePhrase(entryTitle, gameTitle);
 
+      if (!weakProduct && productType === "bundle" && containsWholeGameTitle && overlap >= 0.75) {
+        return { ...entry, confidence: "title-match", reason: "Bundle or complete-edition candidate contains the game title. Manual review required." };
+      }
       if (!weakProduct && containsWholeGameTitle && overlap >= 0.75) {
         return { ...entry, confidence: "title-match", reason: "Candidate title contains the full game title with strong token overlap." };
       }
       if (!weakProduct && overlap >= 0.85) {
         return { ...entry, confidence: "title-match", reason: "Candidate title has strong token overlap with the game title." };
-      }
-      if (!weakProduct && overlap >= 0.6 && gameTokens.length >= 2) {
-        return { ...entry, confidence: "unknown", reason: "Plausible but incomplete title overlap. Manual review required." };
       }
       return {
         ...entry,
@@ -328,14 +387,22 @@ export class GogService {
   private readonly mapper = new GogProductMapper();
 
   async status() {
-    const [repositoryStatus, logs, gogOfferCount, gogPriceSnapshotCount, lastGogPriceRefresh] = await Promise.all([
+    const [repositoryStatus, logs, gogOfferCount, gogPriceSnapshotCount, lastGogPriceRefresh, catalogOfferStatus, catalogEntries] = await Promise.all([
       repositories.gog.status(),
       repositories.diagnostics.listIntegrationLogs(30),
       repositories.games.countOffersBySource("gog"),
       repositories.snapshots.countPriceSnapshotsBySource("gog"),
-      latestGogPriceRefresh()
+      latestGogPriceRefresh(),
+      repositories.catalogOffers.status(new Date(Date.now() - getCatalogPriceStaleHours() * 60 * 60 * 1000), "gog"),
+      repositories.gog.listCatalogEntries(500)
     ]);
     const gogLogs = logs.filter((log) => log.service === "gog");
+    const now = new Date();
+    const catalogStatuses = await repositories.catalogPriceChecks.findGogStatuses(
+      "gog",
+      catalogEntries.map((entry) => entry.gogProductId)
+    );
+    const activeCooldowns = catalogStatuses.filter((status) => status.nextCheckAt > now);
 
     return {
       gogEnabled: isGogEnabled(),
@@ -350,7 +417,14 @@ export class GogService {
       currency: getGogCurrency(),
       gogOfferCount,
       gogPriceSnapshotCount,
+      gogCatalogOfferCount: catalogOfferStatus.providerCatalogStoreOfferCount ?? 0,
+      gogStaleCatalogOfferCount: catalogOfferStatus.providerStaleCatalogStoreOfferCount ?? 0,
+      gogNoPriceCooldownCount: activeCooldowns.filter((status) => status.status === "no-price").length,
+      gogUnavailableCooldownCount: activeCooldowns.filter((status) => status.status === "unavailable").length,
+      gogUnsupportedCooldownCount: activeCooldowns.filter((status) => status.status === "unsupported").length,
+      gogErrorCooldownCount: activeCooldowns.filter((status) => status.status === "error").length,
       lastGogPriceRefresh,
+      lastGogCatalogPriceRefresh: catalogOfferStatus.providerLastCatalogStoreOfferRefresh ?? null,
       statusMessage: isGogEnabled() ? null : "GOG connector disabled by environment.",
       integrationLogs: gogLogs
     };
@@ -557,10 +631,13 @@ export class GogService {
       countryCode: input.countryCode ?? getGogCountryCode(),
       currency: input.currency ?? getGogCurrency()
     });
-    const product = await connector.getCatalogProduct({
-      gogProductId: input.gogProductId,
-      externalSlug: input.externalSlug
-    });
+    const catalogEntry = await repositories.gog.findCatalogByProductId(input.gogProductId);
+    const product = catalogEntry
+      ? await connector.getCatalogProductForEntry(catalogEntry)
+      : await connector.getCatalogProduct({
+          gogProductId: input.gogProductId,
+          externalSlug: input.externalSlug
+        });
     const normalized = this.normalizer.normalize(product, input.countryCode ?? getGogCountryCode(), input.currency ?? getGogCurrency());
 
     return {
@@ -649,11 +726,14 @@ export class GogService {
           continue;
         }
 
-        const product = await this.priceConnector.getCatalogProduct({
-          gogProductId: mapping.externalId,
-          externalSlug: mapping.externalSlug,
-          title: game.title
-        });
+        const catalogEntry = await repositories.gog.findCatalogByProductId(mapping.externalId);
+        const product = catalogEntry
+          ? await this.priceConnector.getCatalogProductForEntry(catalogEntry)
+          : await this.priceConnector.getCatalogProduct({
+              gogProductId: mapping.externalId,
+              externalSlug: mapping.externalSlug,
+              title: game.title
+            });
         const normalized = this.normalizer.normalize(product);
         const preview = normalizedToPreview(normalized);
         if (result.dryRun) {
@@ -713,48 +793,182 @@ export class GogService {
     return result;
   }
 
+  async fetchPriceForCatalogEntry(entry: GogCatalogEntry): Promise<NormalizedGogPrice> {
+    const product = await this.priceConnector.getCatalogProductForEntry(entry);
+    return this.normalizer.normalize(product);
+  }
+
   async backfillCatalogPrices(input: ApiGogCatalogPriceBackfillRequest): Promise<ApiGogCatalogPriceBackfillResponse> {
     ensureEnabled();
     const started = Date.now();
     const startedAt = new Date(started);
     const limit = clampPositive(input.limit ?? 10, 1, 25);
+    const requestedProductIds = input.gogProductIds?.slice(0, limit) ?? null;
+    const fetchedEntries =
+      requestedProductIds && requestedProductIds.length > 0
+        ? await repositories.gog.findCatalogByProductIds(requestedProductIds)
+        : await repositories.gog.listCatalogEntries(Math.max(limit * 5, limit));
+    const entriesByProductId = new Map(fetchedEntries.map((entry) => [entry.gogProductId, entry]));
     const entries =
-      input.gogProductIds && input.gogProductIds.length > 0
-        ? await repositories.gog.findCatalogByProductIds(input.gogProductIds.slice(0, limit))
-        : await repositories.gog.listCatalogEntries(limit);
+      requestedProductIds && requestedProductIds.length > 0
+        ? requestedProductIds.map((gogProductId) => entriesByProductId.get(gogProductId)).filter((entry): entry is GogCatalogEntry => entry !== undefined)
+        : fetchedEntries;
+    const missingProductIds = requestedProductIds?.filter((gogProductId) => !entriesByProductId.has(gogProductId)) ?? [];
+    const statuses = new Map(
+      (await repositories.catalogPriceChecks.findGogStatuses("gog", entries.map((entry) => entry.gogProductId))).map((status) => [
+        status.gogProductId,
+        status
+      ])
+    );
     const result: ApiGogCatalogPriceBackfillResponse = {
       provider: "gamevalue",
       sourceName: "gog",
       dryRun: input.dryRun ?? true,
-      requested: entries.length,
+      requested: 0,
       refreshed: 0,
       skipped: 0,
       failed: 0,
       createdOffers: 0,
       updatedOffers: 0,
       skippedNoPrice: 0,
+      skippedUnsupported: 0,
+      skippedFreshCache: 0,
       startedAt: startedAt.toISOString(),
       finishedAt: startedAt.toISOString(),
       durationMs: 0,
       errors: [],
+      warnings: [],
       results: []
     };
 
+    for (const gogProductId of missingProductIds) {
+      if (result.requested >= limit) {
+        break;
+      }
+      result.requested += 1;
+      const message = `GOG catalog entry ${gogProductId} is not stored locally. Run catalog search/discovery before price backfill.`;
+      const nextCheckAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      result.skipped += 1;
+      result.skippedNoPrice += 1;
+      result.warnings.push({
+        gogProductId,
+        title: null,
+        status: "unavailable",
+        nextCheckAt: nextCheckAt.toISOString(),
+        message
+      });
+      if (!result.dryRun) {
+        await this.markCatalogPriceCheck({
+          gogProductId,
+          status: "unavailable",
+          checkedAt: new Date(),
+          nextCheckAt,
+          message
+        });
+      }
+      result.results.push({
+        gogProductId,
+        title: null,
+        refreshed: false,
+        skipped: true,
+        preview: null,
+        offerId: null,
+        message,
+        status: "unavailable",
+        nextCheckAt: nextCheckAt.toISOString()
+      });
+    }
+
     for (const entry of entries) {
+      if (result.requested >= limit) {
+        break;
+      }
+      result.requested += 1;
       if (Date.now() - started > getPriceRefreshMaxRuntimeMs()) {
         const message = "GOG catalog price backfill stopped at max runtime.";
         result.failed += 1;
         result.errors.push({ gogProductId: entry.gogProductId, message });
         break;
       }
-      try {
-        const product = await this.priceConnector.getCatalogProduct({
+
+      const productType = classifyGogCatalogEntry(entry);
+      const unsupportedMessage = unsupportedGogProductMessage(productType, input);
+      if (unsupportedMessage) {
+        const nextCheckAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        result.skipped += 1;
+        result.skippedUnsupported += 1;
+        result.warnings.push({
           gogProductId: entry.gogProductId,
-          externalSlug: entry.slug,
-          title: entry.title
+          title: entry.title,
+          status: "unsupported",
+          productType,
+          nextCheckAt: nextCheckAt.toISOString(),
+          message: unsupportedMessage
         });
-        const normalized = this.normalizer.normalize(product);
+        if (!result.dryRun) {
+          await this.markCatalogPriceCheck({
+            gogProductId: entry.gogProductId,
+            status: "unsupported",
+            checkedAt: new Date(),
+            nextCheckAt,
+            message: unsupportedMessage
+          });
+        }
+        result.results.push({
+          gogProductId: entry.gogProductId,
+          title: entry.title,
+          refreshed: false,
+          skipped: true,
+          preview: null,
+          offerId: null,
+          message: unsupportedMessage,
+          status: "unsupported",
+          productType,
+          nextCheckAt: nextCheckAt.toISOString()
+        });
+        continue;
+      }
+
+      const cachedStatus = statuses.get(entry.gogProductId);
+      if (cachedStatus && cachedStatus.nextCheckAt > new Date()) {
+        const message = `Skipped active GOG catalog price cooldown: ${cachedStatus.status}.`;
+        result.skipped += 1;
+        result.skippedFreshCache += 1;
+        result.warnings.push({
+          gogProductId: entry.gogProductId,
+          title: entry.title,
+          status: "fresh-cache",
+          productType,
+          nextCheckAt: cachedStatus.nextCheckAt.toISOString(),
+          message
+        });
+        result.results.push({
+          gogProductId: entry.gogProductId,
+          title: entry.title,
+          refreshed: false,
+          skipped: true,
+          preview: null,
+          offerId: null,
+          message,
+          status: "fresh-cache",
+          productType,
+          nextCheckAt: cachedStatus.nextCheckAt.toISOString()
+        });
+        continue;
+      }
+
+      try {
+        const normalized = await this.fetchPriceForCatalogEntry(entry);
         const preview = normalizedToPreview(normalized);
+        if (preview.currencyMismatch) {
+          result.warnings.push({
+            gogProductId: entry.gogProductId,
+            title: entry.title,
+            status: "currency-mismatch",
+            productType: preview.productType,
+            message: preview.currencyMessage ?? "GOG returned a currency different from the configured currency."
+          });
+        }
         if (result.dryRun) {
           result.skipped += 1;
           result.results.push({
@@ -764,7 +978,9 @@ export class GogService {
             skipped: true,
             preview,
             offerId: null,
-            message: "Dry run only; no catalog GOG price data was written."
+            message: "Dry run only; no catalog GOG price data was written.",
+            status: "dry-run",
+            productType: preview.productType
           });
           continue;
         }
@@ -786,19 +1002,30 @@ export class GogService {
           skipped: false,
           preview,
           offerId: written.offer.id,
-          message: null
+          message: null,
+          status: "refreshed",
+          productType: preview.productType
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown GOG catalog price backfill error.";
         if (error instanceof GogConnectorError && error.errorType === "no_price_data") {
+          const nextCheckAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
           result.skipped += 1;
           result.skippedNoPrice += 1;
+          result.warnings.push({
+            gogProductId: entry.gogProductId,
+            title: entry.title,
+            status: "no-price",
+            productType,
+            nextCheckAt: nextCheckAt.toISOString(),
+            message
+          });
           if (!result.dryRun) {
             await this.markCatalogPriceCheck({
               gogProductId: entry.gogProductId,
               status: "no-price",
               checkedAt: new Date(),
-              nextCheckAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              nextCheckAt,
               message
             });
           }
@@ -809,7 +1036,45 @@ export class GogService {
             skipped: true,
             preview: null,
             offerId: null,
+            message,
+            status: "no-price",
+            productType,
+            nextCheckAt: nextCheckAt.toISOString()
+          });
+          continue;
+        }
+        if (error instanceof GogConnectorError && error.errorType === "not_found") {
+          const nextCheckAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          result.skipped += 1;
+          result.skippedNoPrice += 1;
+          result.warnings.push({
+            gogProductId: entry.gogProductId,
+            title: entry.title,
+            status: "unavailable",
+            productType,
+            nextCheckAt: nextCheckAt.toISOString(),
             message
+          });
+          if (!result.dryRun) {
+            await this.markCatalogPriceCheck({
+              gogProductId: entry.gogProductId,
+              status: "unavailable",
+              checkedAt: new Date(),
+              nextCheckAt,
+              message
+            });
+          }
+          result.results.push({
+            gogProductId: entry.gogProductId,
+            title: entry.title,
+            refreshed: false,
+            skipped: true,
+            preview: null,
+            offerId: null,
+            message,
+            status: "unavailable",
+            productType,
+            nextCheckAt: nextCheckAt.toISOString()
           });
           continue;
         }
@@ -830,7 +1095,9 @@ export class GogService {
           skipped: false,
           preview: null,
           offerId: null,
-          message
+          message,
+          status: "error",
+          productType
         });
         await logGog("warning", `GOG catalog price backfill failed. gogProductId=${entry.gogProductId}, message=${safeLogText(message)}.`);
       }
@@ -842,7 +1109,7 @@ export class GogService {
 
     await logGog(
       result.failed > 0 ? "warning" : "info",
-      `GOG catalog price backfill finished. dryRun=${result.dryRun}, requested=${result.requested}, refreshed=${result.refreshed}, skipped=${result.skipped}, skippedNoPrice=${result.skippedNoPrice}, failed=${result.failed}, durationMs=${result.durationMs}.`
+      `GOG catalog price backfill finished. dryRun=${result.dryRun}, requested=${result.requested}, refreshed=${result.refreshed}, skipped=${result.skipped}, skippedNoPrice=${result.skippedNoPrice}, skippedUnsupported=${result.skippedUnsupported}, skippedFreshCache=${result.skippedFreshCache}, failed=${result.failed}, durationMs=${result.durationMs}.`
     );
 
     return result;
@@ -850,7 +1117,7 @@ export class GogService {
 
   private async markCatalogPriceCheck(input: {
     gogProductId: string;
-    status: "available" | "no-price" | "error";
+    status: Extract<CatalogPriceCheckStatusValue, "available" | "no-price" | "unavailable" | "unsupported" | "error">;
     checkedAt: Date;
     nextCheckAt?: Date;
     message: string | null;
@@ -858,7 +1125,12 @@ export class GogService {
     const nextCheckAt =
       input.nextCheckAt ??
       new Date(
-        input.checkedAt.getTime() + (input.status === "available" ? getGogPriceStaleHours() * 60 * 60 * 1000 : 6 * 60 * 60 * 1000)
+        input.checkedAt.getTime() +
+          (input.status === "available"
+            ? getGogPriceStaleHours() * 60 * 60 * 1000
+            : input.status === "error"
+              ? 6 * 60 * 60 * 1000
+              : 7 * 24 * 60 * 60 * 1000)
       );
     await repositories.catalogPriceChecks.upsert({
       sourceName: "gog",
@@ -1033,8 +1305,12 @@ function buildCatalogGogStoreOffer(entry: GogCatalogEntry, normalized: Normalize
     rawProviderData: {
       gogProductId: normalized.gogProductId,
       fetchedAt: now.toISOString(),
-      productType: entry.productType,
-      slug: normalized.slug
+      productType: normalized.productType,
+      slug: normalized.slug,
+      configuredCurrency: normalized.configuredCurrency,
+      returnedCurrency: normalized.returnedCurrency,
+      currencyMismatch: normalized.currencyMismatch,
+      currencyMessage: normalized.currencyMessage
     },
     fetchedAt: now
   };
@@ -1064,6 +1340,117 @@ function catalogProductToEntry(product: GogCatalogProduct, syncedAt: Date): GogC
   };
 }
 
+function catalogEntryRawProduct(entry: GogCatalogEntry): GogCatalogProduct | null {
+  if (!isRecord(entry.rawData)) {
+    return null;
+  }
+  return {
+    ...entry.rawData,
+    id: entry.gogProductId,
+    title: typeof entry.rawData.title === "string" ? entry.rawData.title : entry.title,
+    slug: typeof entry.rawData.slug === "string" ? entry.rawData.slug : entry.slug,
+    productType: typeof entry.rawData.productType === "string" ? entry.rawData.productType : entry.productType ?? undefined,
+    storeLink:
+      typeof entry.rawData.storeLink === "string"
+        ? entry.rawData.storeLink
+        : typeof entry.url === "string"
+          ? entry.url
+          : `https://www.gog.com/game/${entry.slug}`
+  } as GogCatalogProduct;
+}
+
+function metadataToCatalogProduct(metadata: GogProductResponse, entry: GogCatalogEntry): GogCatalogProduct | null {
+  if (!isRecord(metadata)) {
+    return null;
+  }
+  return {
+    ...metadata,
+    id: metadata.id ?? entry.gogProductId,
+    title: metadata.title ?? entry.title,
+    slug: metadata.slug ?? entry.slug,
+    productType: typeof metadata.productType === "string" ? metadata.productType : entry.productType ?? undefined,
+    storeLink: metadata.links?.product_card ?? metadata.links?.purchase_link ?? entry.url ?? `https://www.gog.com/game/${entry.slug}`
+  };
+}
+
+function productHasUsablePrice(product: GogCatalogProduct): boolean {
+  return moneyAmount(product.price?.finalMoney?.amount) !== null;
+}
+
+function classifyGogCatalogEntry(entry: GogCatalogEntry): ApiGogCatalogProductType {
+  const rawProduct = catalogEntryRawProduct(entry);
+  return classifyGogProduct(
+    rawProduct
+      ? { ...rawProduct, id: entry.gogProductId, title: rawProduct.title ?? entry.title, slug: rawProduct.slug ?? entry.slug }
+      : { id: entry.gogProductId, title: entry.title, slug: entry.slug, productType: entry.productType ?? undefined }
+  );
+}
+
+function classifyGogProduct(product: GogCatalogProduct): ApiGogCatalogProductType {
+  const titleText = `${normalizeTitle(product.title)} ${normalizeSlug(product.slug).replace(/-/g, " ")}`;
+  const productTypeText = String(product.productType ?? "").toLowerCase();
+  const text = `${titleText} ${productTypeText}`;
+  if (hasAnyTerm(text, ["soundtrack", "ost"])) {
+    return "soundtrack";
+  }
+  if (hasAnyTerm(text, ["demo", "trial"])) {
+    return "demo";
+  }
+  if (hasAnyTerm(text, ["dedicated server", "server", "sdk", "tool", "editor"])) {
+    return "tool";
+  }
+  if (
+    hasAnyTerm(text, [
+      " dlc ",
+      "expansion",
+      "expansion pass",
+      "season pass",
+      "hearts of stone",
+      "blood and wine",
+      "pakiet dodatkow",
+      "pakiet dodatk",
+      "dodatek"
+    ])
+  ) {
+    return "dlc";
+  }
+  if (hasAnyTerm(titleText, ["bundle", "complete edition", "goty", "game of the year", "collection", " pack "])) {
+    return "bundle";
+  }
+  if (productTypeText === "game") {
+    return "baseGame";
+  }
+  return "unknown";
+}
+
+function unsupportedGogProductMessage(
+  productType: ApiGogCatalogProductType,
+  input: ApiGogCatalogPriceBackfillRequest
+): string | null {
+  if (productType === "dlc") {
+    return input.includeDlc ? null : "Skipped GOG catalog product because it looks like DLC or an expansion.";
+  }
+  if (productType === "soundtrack") {
+    return input.includeSoundtracks ? null : "Skipped GOG catalog product because it looks like a soundtrack.";
+  }
+  if (productType === "bundle") {
+    return input.includeBundles ? null : "Skipped GOG catalog product because it looks like a bundle or complete edition.";
+  }
+  if (productType === "demo" || productType === "tool") {
+    return `Skipped GOG catalog product because it looks like a ${productType}.`;
+  }
+  return null;
+}
+
+function hasAnyTerm(text: string, terms: string[]): boolean {
+  const padded = ` ${text} `;
+  return terms.some((term) => padded.includes(term));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function normalizedToPreview(normalized: NormalizedGogPrice): ApiGogPricePreview {
   return {
     gogProductId: normalized.gogProductId,
@@ -1077,6 +1464,11 @@ function normalizedToPreview(normalized: NormalizedGogPrice): ApiGogPricePreview
     regularPrice: normalized.regularPrice,
     currency: normalized.currency,
     countryCode: normalized.countryCode,
+    configuredCurrency: normalized.configuredCurrency,
+    returnedCurrency: normalized.returnedCurrency,
+    currencyMismatch: normalized.currencyMismatch,
+    currencyMessage: normalized.currencyMessage,
+    productType: normalized.productType,
     discountPercent: normalized.discountPercent,
     drm: "DRM-free" as const,
     externalUrl: normalized.externalUrl,
@@ -1283,20 +1675,12 @@ function containsTitlePhrase(entryTitle: string, gameTitle: string): boolean {
 }
 
 function isWeakGogProduct(entry: GogCatalogEntry): boolean {
+  const productType = classifyGogCatalogEntry(entry);
+  if (["dlc", "soundtrack", "demo", "tool"].includes(productType)) {
+    return true;
+  }
   const text = `${normalizeTitle(entry.title)} ${normalizeSlug(entry.slug).replace(/-/g, " ")} ${entry.productType ?? ""}`.toLowerCase();
-  return [
-    "demo",
-    "dlc",
-    "soundtrack",
-    "ost",
-    "artbook",
-    "wallpaper",
-    "bonus",
-    "trailer",
-    "server",
-    "tool",
-    "sdk"
-  ].some((term) => text.includes(term));
+  return ["artbook", "wallpaper", "bonus", "trailer"].some((term) => text.includes(term));
 }
 
 function bodyLooksLikeHtml(body: string): boolean {

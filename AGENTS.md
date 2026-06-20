@@ -29,11 +29,13 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 - GOG connector exists.
 - GOG catalog discovery stores review entries and suggestions, not automatic mappings.
 - GOG price refresh defaults to dry run.
+- GOG catalog price backfill reads existing `GogCatalogEntry` records first and treats missing/no-price catalog prices as skipped cooldown states, not technical failures.
+- GOG catalog prices may return a currency different from `GOG_CURRENCY`; store the returned currency and report the mismatch. Do not perform FX conversion.
 - GOG catalog price backfill stores catalog-only offers in `CatalogStoreOffer`, not `Game`.
 - Steam Store price connector exists and is experimental.
 - Price refresh automation exists for small Steam Store, GOG and catalog backfill batches.
 - `CatalogStoreOffer` stores catalog-only Steam Store backfill prices without importing rows into `Game`.
-- `CatalogPriceCheckStatus` stores no-price and error cooldowns for catalog price backfills.
+- `CatalogPriceCheckStatus` stores available, no-price, unavailable, unsupported and error cooldowns for catalog price backfills.
 - GG.deals, ITAD, and CheapShark are legacy/disabled and are not active price providers.
 
 ## Technical Decisions
@@ -51,6 +53,7 @@ GameValue Radar is a web and Android app for analyzing PC games. Its core value 
 - Do not run mass price refreshes over the full Steam catalog.
 - Use `CatalogStoreOffer` for catalog price backfill instead of creating tracked `Game` records.
 - GOG mapping suggestions require manual approval before price writes.
+- GOG soundtrack, DLC, demo, tool and bundle-like catalog entries are skipped by default during catalog price backfill unless an admin explicitly enables that product type in the request.
 
 ## Secrets And Safety
 

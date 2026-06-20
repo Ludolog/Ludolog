@@ -181,6 +181,10 @@ The internal price layer adds:
 GOG catalog discovery can search imported/top tracked games or explicit queries and store `GogCatalogEntry` rows for
 review. It returns suggested and uncertain mappings separately, but it never creates `GameExternalMapping` records on
 its own. GOG price refresh defaults to `dryRun=true`, returning parsed price previews without writing offers or snapshots.
+GOG catalog price backfill now uses stored `GogCatalogEntry` rows before fallback lookup, writes catalog-only
+`CatalogStoreOffer` rows, and treats no-price/unavailable/unsupported catalog states as skipped warnings with cooldowns
+instead of technical failures. GOG currency mismatches are reported and stored as returned by GOG; the app does not do FX
+conversion.
 
 `SteamStorePriceService` is the second real/experimental connector. It is disabled by default, uses Steam Store `appdetails` JSON only, keeps admin batches small and writes `source=steam-store` offers/snapshots only when explicitly invoked. It rejects non-JSON responses and never stores HTML.
 
