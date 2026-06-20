@@ -59,10 +59,10 @@ All cron endpoints require `CRON_SECRET` through `Authorization: Bearer ...` or 
 
 Current `vercel.json` schedules:
 
-- player counts every 30 minutes,
-- imported/mapped price refresh every 6 hours.
+- player counts once daily,
+- imported/mapped price refresh once daily.
 
-Catalog backfill has a protected cron endpoint but is not scheduled by default. Run it manually from admin automation while `PRICE_REFRESH_CATALOG_BACKFILL_ENABLED=false`, then add a schedule later only after dry runs and production limits are understood.
+Vercel Hobby accounts only allow daily cron frequency. Catalog backfill has a protected cron endpoint but is not scheduled by default. Run it manually from admin automation while `PRICE_REFRESH_CATALOG_BACKFILL_ENABLED=false`, then add a schedule later only after dry runs, production limits and plan constraints are understood.
 
 ## Admin endpoints
 

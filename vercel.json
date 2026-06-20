@@ -6,11 +6,11 @@
   "crons": [
     {
       "path": "/api/cron/refresh-player-counts",
-      "schedule": "*/30 * * * *"
+      "schedule": "7 3 * * *"
     },
     {
       "path": "/api/cron/refresh-prices",
-      "schedule": "0 */6 * * *"
+      "schedule": "17 3 * * *"
     }
   ]
 }
